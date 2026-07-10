@@ -1,0 +1,13 @@
+name: live-photo-agent-gpu
+channels:
+  - defaults
+dependencies:
+  - python=3.11
+  - pip
+  - ffmpeg
+  - pip:
+      - --extra-index-url https://download.pytorch.org/whl/cu121
+      - -e .[dev]
+      - torch==2.5.1+cu121
+      - transformers==4.46.3
+      - accelerate>=0.34,<1.0

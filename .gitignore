@@ -1,0 +1,9 @@
+.venv/
+__pycache__/
+.pytest_cache/
+.agent_memory.json
+models/
+*.egg-info/
+tests/_last_plan_raw_output.txt
+tests/evals/planner_eval_report.json
+tests/evals/planner_eval_failures.jsonl
