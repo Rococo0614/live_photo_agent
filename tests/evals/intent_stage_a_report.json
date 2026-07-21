@@ -1,0 +1,906 @@
+{
+  "total_evaluated": 100,
+  "correct": 76,
+  "accuracy": 0.76,
+  "model_dir": "/home/vivo/live_photo_agent/models/bge/bge-small-zh-v1.5",
+  "input_mode": "stage_a(user_text+raw_intent)",
+  "top_confusions": [
+    {
+      "expected": "underspecified_autonomy",
+      "predicted": "cover_selection_pipeline",
+      "count": 2
+    },
+    {
+      "expected": "style_ambiguity",
+      "predicted": "subject_focused_recommendation",
+      "count": 2
+    },
+    {
+      "expected": "time_scope_ambiguity",
+      "predicted": "curate_selected_assets",
+      "count": 2
+    },
+    {
+      "expected": "reference_missing",
+      "predicted": "cover_selection_pipeline",
+      "count": 2
+    },
+    {
+      "expected": "style_copy_boundary",
+      "predicted": "subject_focused_recommendation",
+      "count": 2
+    },
+    {
+      "expected": "style_normalization",
+      "predicted": "selected_color_export",
+      "count": 1
+    },
+    {
+      "expected": "ambiguous_quality_goal",
+      "predicted": "adaptive_cover_recommendation",
+      "count": 1
+    },
+    {
+      "expected": "timing_conflict",
+      "predicted": "motion_ranking",
+      "count": 1
+    },
+    {
+      "expected": "horizontal_triptych_export",
+      "predicted": "cover_selection_pipeline",
+      "count": 1
+    },
+    {
+      "expected": "portrait_cover_workflow",
+      "predicted": "subject_focused_recommendation",
+      "count": 1
+    },
+    {
+      "expected": "title_overlay",
+      "predicted": "overlay_no_bgm_export",
+      "count": 1
+    },
+    {
+      "expected": "style_normalization",
+      "predicted": "score_then_color_export",
+      "count": 1
+    },
+    {
+      "expected": "subject_style_export",
+      "predicted": "selected_color_export",
+      "count": 1
+    },
+    {
+      "expected": "ambiguous_quality_goal",
+      "predicted": "curate_selected_assets",
+      "count": 1
+    },
+    {
+      "expected": "output_form_ambiguity",
+      "predicted": "subject_focused_recommendation",
+      "count": 1
+    },
+    {
+      "expected": "export_conflict",
+      "predicted": "adaptive_cover_recommendation",
+      "count": 1
+    },
+    {
+      "expected": "emotion_goal_ambiguous",
+      "predicted": "adaptive_cover_recommendation",
+      "count": 1
+    },
+    {
+      "expected": "object_removal_boundary",
+      "predicted": "adaptive_cover_recommendation",
+      "count": 1
+    },
+    {
+      "expected": "inpainting_boundary",
+      "predicted": "adaptive_cover_recommendation",
+      "count": 1
+    }
+  ],
+  "details": [
+    {
+      "case_id": "LP001",
+      "expected_intent": "search_and_recommend",
+      "raw_intent": "Retrieve and curate seaside sunset live photos.",
+      "predicted_intent": "search_and_recommend",
+      "score": 0.821174,
+      "matched": true
+    },
+    {
+      "case_id": "LP002",
+      "expected_intent": "curate_selected_assets",
+      "raw_intent": "cover_selection",
+      "predicted_intent": "curate_selected_assets",
+      "score": 0.801893,
+      "matched": true
+    },
+    {
+      "case_id": "LP003",
+      "expected_intent": "triptych_editing",
+      "raw_intent": "curate and edit a fast-paced three-segment short video highlighting urban nightscapes",
+      "predicted_intent": "triptych_editing",
+      "score": 0.774754,
+      "matched": true
+    },
+    {
+      "case_id": "LP004",
+      "expected_intent": "motion_ranking",
+      "raw_intent": "sort_live_photos_by_dynamic_quality_score",
+      "predicted_intent": "motion_ranking",
+      "score": 0.724941,
+      "matched": true
+    },
+    {
+      "case_id": "LP005",
+      "expected_intent": "subject_focused_recommendation",
+      "raw_intent": "提取人物主体清晰的素材并推荐",
+      "predicted_intent": "subject_focused_recommendation",
+      "score": 0.801127,
+      "matched": true
+    },
+    {
+      "case_id": "LP006",
+      "expected_intent": "style_normalization",
+      "raw_intent": "color_enhance",
+      "predicted_intent": "selected_color_export",
+      "score": 0.752349,
+      "matched": false
+    },
+    {
+      "case_id": "LP007",
+      "expected_intent": "stability_preview_export",
+      "raw_intent": "motion_stabilization_and_export",
+      "predicted_intent": "stability_preview_export",
+      "score": 0.753276,
+      "matched": true
+    },
+    {
+      "case_id": "LP008",
+      "expected_intent": "multi_theme_retrieval",
+      "raw_intent": "检索并筛选符合指定主题的候选资产",
+      "predicted_intent": "multi_theme_retrieval",
+      "score": 0.701949,
+      "matched": true
+    },
+    {
+      "case_id": "LP009",
+      "expected_intent": "cover_selection_pipeline",
+      "raw_intent": "cover_frame_selection",
+      "predicted_intent": "cover_selection_pipeline",
+      "score": 0.834525,
+      "matched": true
+    },
+    {
+      "case_id": "LP010",
+      "expected_intent": "export_configuration",
+      "raw_intent": "export",
+      "predicted_intent": "export_configuration",
+      "score": 0.759222,
+      "matched": true
+    },
+    {
+      "case_id": "LP011",
+      "expected_intent": "ambiguous_request",
+      "raw_intent": "curate and prepare live photos for export",
+      "predicted_intent": "ambiguous_request",
+      "score": 0.671709,
+      "matched": true
+    },
+    {
+      "case_id": "LP012",
+      "expected_intent": "ambiguous_quality_goal",
+      "raw_intent": "curate and export the highest quality live photo sequence based on user request",
+      "predicted_intent": "adaptive_cover_recommendation",
+      "score": 0.670564,
+      "matched": false
+    },
+    {
+      "case_id": "LP013",
+      "expected_intent": "underspecified_autonomy",
+      "raw_intent": "auto_curate",
+      "predicted_intent": "cover_selection_pipeline",
+      "score": 0.677117,
+      "matched": false
+    },
+    {
+      "case_id": "LP014",
+      "expected_intent": "style_ambiguity",
+      "raw_intent": "curate visually appealing live photos with restrained aesthetics",
+      "predicted_intent": "subject_focused_recommendation",
+      "score": 0.69247,
+      "matched": false
+    },
+    {
+      "case_id": "LP015",
+      "expected_intent": "output_form_ambiguity",
+      "raw_intent": "为用户生成适合朋友圈发布的动态照片或短视频内容",
+      "predicted_intent": "output_form_ambiguity",
+      "score": 0.671104,
+      "matched": true
+    },
+    {
+      "case_id": "LP016",
+      "expected_intent": "speed_only_request",
+      "raw_intent": "快速返回结果",
+      "predicted_intent": "speed_only_request",
+      "score": 0.673169,
+      "matched": true
+    },
+    {
+      "case_id": "LP017",
+      "expected_intent": "aesthetic_ambiguity",
+      "raw_intent": "通过视觉增强和编辑手段提升所选或匹配资产的氛围感",
+      "predicted_intent": "aesthetic_ambiguity",
+      "score": 0.652681,
+      "matched": true
+    },
+    {
+      "case_id": "LP018",
+      "expected_intent": "missing_constraints_short_video",
+      "raw_intent": "create_short_film",
+      "predicted_intent": "missing_constraints_short_video",
+      "score": 0.713322,
+      "matched": true
+    },
+    {
+      "case_id": "LP019",
+      "expected_intent": "time_scope_ambiguity",
+      "raw_intent": "curate or edit live photos from today's captures",
+      "predicted_intent": "curate_selected_assets",
+      "score": 0.666565,
+      "matched": false
+    },
+    {
+      "case_id": "LP020",
+      "expected_intent": "reference_missing",
+      "raw_intent": "reproduce previous live photo editing style",
+      "predicted_intent": "cover_selection_pipeline",
+      "score": 0.684069,
+      "matched": false
+    },
+    {
+      "case_id": "LP021",
+      "expected_intent": "constraint_conflict",
+      "raw_intent": "找到最稳定但不启用防抖处理的镜头",
+      "predicted_intent": "constraint_conflict",
+      "score": 0.745813,
+      "matched": true
+    },
+    {
+      "case_id": "LP022",
+      "expected_intent": "export_conflict",
+      "raw_intent": "export",
+      "predicted_intent": "export_conflict",
+      "score": 0.687363,
+      "matched": true
+    },
+    {
+      "case_id": "LP023",
+      "expected_intent": "timing_conflict",
+      "raw_intent": "apply slow motion effect to selected live photos while ensuring total duration ≤ 1000ms",
+      "predicted_intent": "motion_ranking",
+      "score": 0.656844,
+      "matched": false
+    },
+    {
+      "case_id": "LP024",
+      "expected_intent": "tool_constraint_conflict",
+      "raw_intent": "筛选并输出符合主体清晰要求的live photo，禁止分割或抽帧操作",
+      "predicted_intent": "tool_constraint_conflict",
+      "score": 0.766558,
+      "matched": true
+    },
+    {
+      "case_id": "LP025",
+      "expected_intent": "selection_scope_conflict",
+      "raw_intent": "从全库补充素材以配合用户选定的两张资产，形成完整素材集",
+      "predicted_intent": "selection_scope_conflict",
+      "score": 0.768073,
+      "matched": true
+    },
+    {
+      "case_id": "LP026",
+      "expected_intent": "emotion_based_retrieval",
+      "raw_intent": "curate",
+      "predicted_intent": "emotion_based_retrieval",
+      "score": 0.750794,
+      "matched": true
+    },
+    {
+      "case_id": "LP027",
+      "expected_intent": "horizontal_triptych_export",
+      "raw_intent": "concatenate",
+      "predicted_intent": "cover_selection_pipeline",
+      "score": 0.699906,
+      "matched": false
+    },
+    {
+      "case_id": "LP028",
+      "expected_intent": "rhythm_preview",
+      "raw_intent": "curate and preview the most dynamically engaging live photo assets",
+      "predicted_intent": "rhythm_preview",
+      "score": 0.719265,
+      "matched": true
+    },
+    {
+      "case_id": "LP029",
+      "expected_intent": "portrait_cover_workflow",
+      "raw_intent": "segment_by_subject_then_recommend_cover",
+      "predicted_intent": "subject_focused_recommendation",
+      "score": 0.753948,
+      "matched": false
+    },
+    {
+      "case_id": "LP030",
+      "expected_intent": "selected_color_export",
+      "raw_intent": "color_enhance",
+      "predicted_intent": "selected_color_export",
+      "score": 0.790029,
+      "matched": true
+    },
+    {
+      "case_id": "LP031",
+      "expected_intent": "mute_export",
+      "raw_intent": "生成无音频的视频输出",
+      "predicted_intent": "mute_export",
+      "score": 0.683516,
+      "matched": true
+    },
+    {
+      "case_id": "LP032",
+      "expected_intent": "title_overlay",
+      "raw_intent": "add_text_overlay",
+      "predicted_intent": "title_overlay",
+      "score": 0.713224,
+      "matched": true
+    },
+    {
+      "case_id": "LP033",
+      "expected_intent": "slow_pacing_edit",
+      "raw_intent": "adjust playback speed of selected or matched live photos to 0.8x",
+      "predicted_intent": "slow_pacing_edit",
+      "score": 0.712225,
+      "matched": true
+    },
+    {
+      "case_id": "LP034",
+      "expected_intent": "stabilize_then_concat",
+      "raw_intent": "stabilize_shaky_clips_before_concatenation",
+      "predicted_intent": "stabilize_then_concat",
+      "score": 0.725725,
+      "matched": true
+    },
+    {
+      "case_id": "LP035",
+      "expected_intent": "uniform_trim_compare",
+      "raw_intent": "裁剪每段视频的前1.2秒用于对比",
+      "predicted_intent": "uniform_trim_compare",
+      "score": 0.685537,
+      "matched": true
+    },
+    {
+      "case_id": "LP036",
+      "expected_intent": "selected_vertical_preview",
+      "raw_intent": "curate and export a short vertical preview video from selected assets with minimalist subtitles",
+      "predicted_intent": "selected_vertical_preview",
+      "score": 0.808677,
+      "matched": true
+    },
+    {
+      "case_id": "LP037",
+      "expected_intent": "adaptive_cover_recommendation",
+      "raw_intent": "cover_priority_recommendation",
+      "predicted_intent": "adaptive_cover_recommendation",
+      "score": 0.81106,
+      "matched": true
+    },
+    {
+      "case_id": "LP038",
+      "expected_intent": "overlay_no_bgm_export",
+      "raw_intent": "create a short sample video with caption and no background music",
+      "predicted_intent": "overlay_no_bgm_export",
+      "score": 0.777965,
+      "matched": true
+    },
+    {
+      "case_id": "LP039",
+      "expected_intent": "score_then_color_export",
+      "raw_intent": "筛选动态质量高的5个live photo，统一调色后导出为视频",
+      "predicted_intent": "score_then_color_export",
+      "score": 0.790463,
+      "matched": true
+    },
+    {
+      "case_id": "LP040",
+      "expected_intent": "compare_concat_export",
+      "raw_intent": "curate and concatenate selected or matched assets into a side-by-side comparison video, then export it.",
+      "predicted_intent": "compare_concat_export",
+      "score": 0.736136,
+      "matched": true
+    },
+    {
+      "case_id": "LP041",
+      "expected_intent": "privacy_export",
+      "raw_intent": "privacy_protection",
+      "predicted_intent": "privacy_export",
+      "score": 0.751319,
+      "matched": true
+    },
+    {
+      "case_id": "LP042",
+      "expected_intent": "unsupported_transformation",
+      "raw_intent": "图像编辑 - 人物替换为卡通风格",
+      "predicted_intent": "unsupported_transformation",
+      "score": 0.761341,
+      "matched": true
+    },
+    {
+      "case_id": "LP043",
+      "expected_intent": "super_resolution_expectation",
+      "raw_intent": "enhance_quality",
+      "predicted_intent": "super_resolution_expectation",
+      "score": 0.754118,
+      "matched": true
+    },
+    {
+      "case_id": "LP044",
+      "expected_intent": "audio_generation_boundary",
+      "raw_intent": "生成配乐并根据节拍对齐视频片段",
+      "predicted_intent": "audio_generation_boundary",
+      "score": 0.781062,
+      "matched": true
+    },
+    {
+      "case_id": "LP045",
+      "expected_intent": "style_copy_boundary",
+      "raw_intent": "recreate a visually and structurally identical live photo video as a popular influencer",
+      "predicted_intent": "subject_focused_recommendation",
+      "score": 0.654337,
+      "matched": false
+    },
+    {
+      "case_id": "LP046",
+      "expected_intent": "object_removal_boundary",
+      "raw_intent": "subject_segmentation",
+      "predicted_intent": "object_removal_boundary",
+      "score": 0.718944,
+      "matched": true
+    },
+    {
+      "case_id": "LP047",
+      "expected_intent": "style_transfer_boundary",
+      "raw_intent": "style_conversion",
+      "predicted_intent": "style_transfer_boundary",
+      "score": 0.678503,
+      "matched": true
+    },
+    {
+      "case_id": "LP048",
+      "expected_intent": "voiceover_generation_boundary",
+      "raw_intent": "generate a narrative voiceover for live photos",
+      "predicted_intent": "voiceover_generation_boundary",
+      "score": 0.757905,
+      "matched": true
+    },
+    {
+      "case_id": "LP049",
+      "expected_intent": "cloud_sync_boundary",
+      "raw_intent": "sync_and_share",
+      "predicted_intent": "cloud_sync_boundary",
+      "score": 0.759971,
+      "matched": true
+    },
+    {
+      "case_id": "LP050",
+      "expected_intent": "image_generation_boundary",
+      "raw_intent": "generate_new_travel_photos",
+      "predicted_intent": "image_generation_boundary",
+      "score": 0.774771,
+      "matched": true
+    },
+    {
+      "case_id": "LP051",
+      "expected_intent": "search_and_recommend",
+      "raw_intent": "retrieval",
+      "predicted_intent": "search_and_recommend",
+      "score": 0.749154,
+      "matched": true
+    },
+    {
+      "case_id": "LP052",
+      "expected_intent": "curate_selected_assets",
+      "raw_intent": "cover_selection",
+      "predicted_intent": "curate_selected_assets",
+      "score": 0.759195,
+      "matched": true
+    },
+    {
+      "case_id": "LP053",
+      "expected_intent": "triptych_editing",
+      "raw_intent": "create_fast_paced_city_triple_edit_and_export",
+      "predicted_intent": "triptych_editing",
+      "score": 0.687541,
+      "matched": true
+    },
+    {
+      "case_id": "LP054",
+      "expected_intent": "motion_ranking",
+      "raw_intent": "rank live photos by motion quality and recommend top candidates",
+      "predicted_intent": "motion_ranking",
+      "score": 0.739195,
+      "matched": true
+    },
+    {
+      "case_id": "LP055",
+      "expected_intent": "portrait_cover_workflow",
+      "raw_intent": "subject_segmentation followed by select_cover_frame",
+      "predicted_intent": "portrait_cover_workflow",
+      "score": 0.741672,
+      "matched": true
+    },
+    {
+      "case_id": "LP056",
+      "expected_intent": "selected_color_export",
+      "raw_intent": "color_enhance",
+      "predicted_intent": "selected_color_export",
+      "score": 0.79271,
+      "matched": true
+    },
+    {
+      "case_id": "LP057",
+      "expected_intent": "stability_preview_export",
+      "raw_intent": "stabilize and concatenate live photos into a preview video",
+      "predicted_intent": "stability_preview_export",
+      "score": 0.732808,
+      "matched": true
+    },
+    {
+      "case_id": "LP058",
+      "expected_intent": "cover_selection_pipeline",
+      "raw_intent": "extract_key_frames followed by select_cover_frame with auto_adaptive strategy",
+      "predicted_intent": "cover_selection_pipeline",
+      "score": 0.744247,
+      "matched": true
+    },
+    {
+      "case_id": "LP059",
+      "expected_intent": "overlay_no_bgm_export",
+      "raw_intent": "用户希望为选定的动态照片添加标题，不添加背景音乐，并导出最终视频。",
+      "predicted_intent": "overlay_no_bgm_export",
+      "score": 0.750311,
+      "matched": true
+    },
+    {
+      "case_id": "LP060",
+      "expected_intent": "export_configuration",
+      "raw_intent": "export",
+      "predicted_intent": "export_configuration",
+      "score": 0.762425,
+      "matched": true
+    },
+    {
+      "case_id": "LP061",
+      "expected_intent": "multi_theme_retrieval",
+      "raw_intent": "retrieval_and_summary",
+      "predicted_intent": "multi_theme_retrieval",
+      "score": 0.724202,
+      "matched": true
+    },
+    {
+      "case_id": "LP062",
+      "expected_intent": "selected_vertical_preview",
+      "raw_intent": "edit selected assets by trimming, adjusting speed, and exporting as MP4",
+      "predicted_intent": "selected_vertical_preview",
+      "score": 0.711465,
+      "matched": true
+    },
+    {
+      "case_id": "LP063",
+      "expected_intent": "score_then_color_export",
+      "raw_intent": "perform dynamic scoring, color enhancement, and export on live photos",
+      "predicted_intent": "score_then_color_export",
+      "score": 0.743761,
+      "matched": true
+    },
+    {
+      "case_id": "LP064",
+      "expected_intent": "title_overlay",
+      "raw_intent": "Generate video with text overlay and export as MP4 without audio mixing",
+      "predicted_intent": "overlay_no_bgm_export",
+      "score": 0.743531,
+      "matched": false
+    },
+    {
+      "case_id": "LP065",
+      "expected_intent": "style_normalization",
+      "raw_intent": "stabilize then color enhance then export",
+      "predicted_intent": "score_then_color_export",
+      "score": 0.70944,
+      "matched": false
+    },
+    {
+      "case_id": "LP066",
+      "expected_intent": "adaptive_cover_recommendation",
+      "raw_intent": "extract key frames from live photos and select cover frames based on motion quality and visual saliency",
+      "predicted_intent": "adaptive_cover_recommendation",
+      "score": 0.745829,
+      "matched": true
+    },
+    {
+      "case_id": "LP067",
+      "expected_intent": "compare_concat_export",
+      "raw_intent": "export selected assets as side-by-side comparison",
+      "predicted_intent": "compare_concat_export",
+      "score": 0.7157,
+      "matched": true
+    },
+    {
+      "case_id": "LP068",
+      "expected_intent": "search_plan_summarize",
+      "raw_intent": "semantic_retrieval_then_edit_plan_then_summary",
+      "predicted_intent": "search_plan_summarize",
+      "score": 0.753233,
+      "matched": true
+    },
+    {
+      "case_id": "LP069",
+      "expected_intent": "subject_style_export",
+      "raw_intent": "对用户选中的素材执行主体分割、调色并导出为视频",
+      "predicted_intent": "selected_color_export",
+      "score": 0.720464,
+      "matched": false
+    },
+    {
+      "case_id": "LP070",
+      "expected_intent": "motion_only_recommendation",
+      "raw_intent": "dynamic_scoring_and_recommendation",
+      "predicted_intent": "motion_only_recommendation",
+      "score": 0.713083,
+      "matched": true
+    },
+    {
+      "case_id": "LP071",
+      "expected_intent": "ambiguous_request",
+      "raw_intent": "asset_inventory_scan",
+      "predicted_intent": "ambiguous_request",
+      "score": 0.657163,
+      "matched": true
+    },
+    {
+      "case_id": "LP072",
+      "expected_intent": "ambiguous_quality_goal",
+      "raw_intent": "curate and produce the most visually appealing live photo output",
+      "predicted_intent": "curate_selected_assets",
+      "score": 0.686501,
+      "matched": false
+    },
+    {
+      "case_id": "LP073",
+      "expected_intent": "underspecified_autonomy",
+      "raw_intent": "auto_execute",
+      "predicted_intent": "cover_selection_pipeline",
+      "score": 0.630628,
+      "matched": false
+    },
+    {
+      "case_id": "LP074",
+      "expected_intent": "style_ambiguity",
+      "raw_intent": "curate a refined live photo selection with subtle enhancements, avoiding over-processing.",
+      "predicted_intent": "subject_focused_recommendation",
+      "score": 0.66929,
+      "matched": false
+    },
+    {
+      "case_id": "LP075",
+      "expected_intent": "output_form_ambiguity",
+      "raw_intent": "curate and prepare a live photo for social sharing",
+      "predicted_intent": "subject_focused_recommendation",
+      "score": 0.668119,
+      "matched": false
+    },
+    {
+      "case_id": "LP076",
+      "expected_intent": "time_scope_ambiguity",
+      "raw_intent": "curate and prepare today's live photos for export",
+      "predicted_intent": "curate_selected_assets",
+      "score": 0.645036,
+      "matched": false
+    },
+    {
+      "case_id": "LP077",
+      "expected_intent": "reference_missing",
+      "raw_intent": "Reproduce the previous live photo output style or curation",
+      "predicted_intent": "cover_selection_pipeline",
+      "score": 0.692621,
+      "matched": false
+    },
+    {
+      "case_id": "LP078",
+      "expected_intent": "constraint_conflict",
+      "raw_intent": "找到最稳定的live photo，但不要应用防抖处理",
+      "predicted_intent": "constraint_conflict",
+      "score": 0.707677,
+      "matched": true
+    },
+    {
+      "case_id": "LP079",
+      "expected_intent": "export_conflict",
+      "raw_intent": "Find or generate a live photo that meets 4K resolution and under 5MB file size constraints.",
+      "predicted_intent": "adaptive_cover_recommendation",
+      "score": 0.638379,
+      "matched": false
+    },
+    {
+      "case_id": "LP080",
+      "expected_intent": "timing_conflict",
+      "raw_intent": "生成一个慢动作视频，总时长不超过1秒",
+      "predicted_intent": "timing_conflict",
+      "score": 0.709064,
+      "matched": true
+    },
+    {
+      "case_id": "LP081",
+      "expected_intent": "tool_constraint_conflict",
+      "raw_intent": "确保主体清晰，但禁止进行抽帧和分割操作",
+      "predicted_intent": "tool_constraint_conflict",
+      "score": 0.806006,
+      "matched": true
+    },
+    {
+      "case_id": "LP082",
+      "expected_intent": "selection_scope_conflict",
+      "raw_intent": "Prioritize user-selected assets and supplement with additional assets from the full library to meet a completeness requirement.",
+      "predicted_intent": "selection_scope_conflict",
+      "score": 0.669169,
+      "matched": true
+    },
+    {
+      "case_id": "LP083",
+      "expected_intent": "friend_share_ambiguous",
+      "raw_intent": "quick_social_share",
+      "predicted_intent": "friend_share_ambiguous",
+      "score": 0.719753,
+      "matched": true
+    },
+    {
+      "case_id": "LP084",
+      "expected_intent": "cinematic_ambiguity",
+      "raw_intent": "Generate a cinematic-style video from live photos.",
+      "predicted_intent": "cinematic_ambiguity",
+      "score": 0.66069,
+      "matched": true
+    },
+    {
+      "case_id": "LP085",
+      "expected_intent": "emotion_goal_ambiguous",
+      "raw_intent": "create an emotionally resonant live photo compilation or edit",
+      "predicted_intent": "adaptive_cover_recommendation",
+      "score": 0.67544,
+      "matched": false
+    },
+    {
+      "case_id": "LP086",
+      "expected_intent": "privacy_export",
+      "raw_intent": "privacy_protection",
+      "predicted_intent": "privacy_export",
+      "score": 0.747979,
+      "matched": true
+    },
+    {
+      "case_id": "LP087",
+      "expected_intent": "unsupported_transformation",
+      "raw_intent": "edit",
+      "predicted_intent": "unsupported_transformation",
+      "score": 0.690911,
+      "matched": true
+    },
+    {
+      "case_id": "LP088",
+      "expected_intent": "super_resolution_expectation",
+      "raw_intent": "提升指定或所有低清视频资产的画质至4K电影级分辨率与视觉质量",
+      "predicted_intent": "super_resolution_expectation",
+      "score": 0.781546,
+      "matched": true
+    },
+    {
+      "case_id": "LP089",
+      "expected_intent": "audio_generation_boundary",
+      "raw_intent": "auto_generate_music_and_sync_with_visuals",
+      "predicted_intent": "audio_generation_boundary",
+      "score": 0.695353,
+      "matched": true
+    },
+    {
+      "case_id": "LP090",
+      "expected_intent": "style_copy_boundary",
+      "raw_intent": "Reproduce the visual and stylistic output of popular influencers based on library assets.",
+      "predicted_intent": "subject_focused_recommendation",
+      "score": 0.627448,
+      "matched": false
+    },
+    {
+      "case_id": "LP091",
+      "expected_intent": "object_removal_boundary",
+      "raw_intent": "remove all pedestrians from live photos",
+      "predicted_intent": "adaptive_cover_recommendation",
+      "score": 0.699047,
+      "matched": false
+    },
+    {
+      "case_id": "LP092",
+      "expected_intent": "style_transfer_boundary",
+      "raw_intent": "将现有live photo转换为动漫风格的视频输出",
+      "predicted_intent": "style_transfer_boundary",
+      "score": 0.701765,
+      "matched": true
+    },
+    {
+      "case_id": "LP093",
+      "expected_intent": "voiceover_generation_boundary",
+      "raw_intent": "生成与当前库中资产相关的故事旁白内容",
+      "predicted_intent": "voiceover_generation_boundary",
+      "score": 0.721794,
+      "matched": true
+    },
+    {
+      "case_id": "LP094",
+      "expected_intent": "cloud_sync_boundary",
+      "raw_intent": "upload_and_share",
+      "predicted_intent": "cloud_sync_boundary",
+      "score": 0.715637,
+      "matched": true
+    },
+    {
+      "case_id": "LP095",
+      "expected_intent": "image_generation_boundary",
+      "raw_intent": "从现有库中检索并生成十张高质量旅拍照片",
+      "predicted_intent": "image_generation_boundary",
+      "score": 0.776052,
+      "matched": true
+    },
+    {
+      "case_id": "LP096",
+      "expected_intent": "frame_interpolation_boundary",
+      "raw_intent": "increase frame rate of live photos to 120fps",
+      "predicted_intent": "frame_interpolation_boundary",
+      "score": 0.736798,
+      "matched": true
+    },
+    {
+      "case_id": "LP097",
+      "expected_intent": "deblur_boundary",
+      "raw_intent": "修复模糊镜头",
+      "predicted_intent": "deblur_boundary",
+      "score": 0.697317,
+      "matched": true
+    },
+    {
+      "case_id": "LP098",
+      "expected_intent": "audio_separation_boundary",
+      "raw_intent": "audio_separation",
+      "predicted_intent": "audio_separation_boundary",
+      "score": 0.79416,
+      "matched": true
+    },
+    {
+      "case_id": "LP099",
+      "expected_intent": "inpainting_boundary",
+      "raw_intent": "content_enhancement",
+      "predicted_intent": "adaptive_cover_recommendation",
+      "score": 0.684569,
+      "matched": false
+    },
+    {
+      "case_id": "LP100",
+      "expected_intent": "style_clone_boundary",
+      "raw_intent": "复刻品牌广告视觉风格",
+      "predicted_intent": "style_clone_boundary",
+      "score": 0.697869,
+      "matched": true
+    }
+  ]
+}

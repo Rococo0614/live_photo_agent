@@ -57,6 +57,7 @@ def test_execute_end_to_end(tmp_path: Path, monkeypatch) -> None:
         text="帮我找出海边日落的 live photo，并给我一个朋友圈精选建议",
         library_root=library_root,
         selected_asset_ids=[],
+        guided_tool_names=[ToolName.SCAN_LIBRARY, ToolName.SEARCH_BY_TEXT, ToolName.SUMMARIZE_RESULTS],
     )
 
     response = agent.execute(request)

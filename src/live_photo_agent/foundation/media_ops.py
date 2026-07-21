@@ -4,7 +4,11 @@ import json
 import math
 import shutil
 import subprocess
+import tempfile
 from pathlib import Path
+
+JPEG_EOI = b"\xff\xd9"
+FTYP_MAGIC = b"ftyp"
 
 
 class MediaOpsError(RuntimeError):
@@ -294,6 +298,152 @@ class MediaOps:
         self._run(cmd)
         return output_path
 
+    def compose_videos_spatial(
+        self,
+        video_paths: list[Path],
+        output_path: Path,
+        *,
+        canvas: str = "1080x1920",
+        layout: str = "auto",
+    ) -> Path:
+        self._ensure_binaries()
+        if not video_paths:
+            raise MediaOpsError("no_clips_to_compose")
+        if "x" not in canvas:
+            raise MediaOpsError("invalid_canvas")
+
+        width_raw, height_raw = canvas.split("x", maxsplit=1)
+        if not width_raw.isdigit() or not height_raw.isdigit():
+            raise MediaOpsError("invalid_canvas")
+
+        canvas_w = int(width_raw)
+        canvas_h = int(height_raw)
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+
+        # Single clip: normalize to canvas to keep downstream deterministic.
+        if len(video_paths) == 1:
+            cmd = [
+                str(self._ffmpeg),
+                "-y",
+                "-i",
+                str(video_paths[0]),
+                "-vf",
+                self._cover_filter(canvas_w, canvas_h),
+                "-c:v",
+                "libx264",
+                "-preset",
+                "veryfast",
+                "-crf",
+                "20",
+                "-pix_fmt",
+                "yuv420p",
+                "-an",
+                str(output_path),
+            ]
+            self._run(cmd)
+            return output_path
+
+        normalized_layout = layout.strip().lower()
+        if normalized_layout in {"timeline", "temporal"}:
+            return self.concat_videos(video_paths, output_path)
+
+        if normalized_layout in {"horizontal", "left_right", "lr", "row"}:
+            mode = "horizontal"
+        elif normalized_layout in {"vertical", "top_bottom", "tb", "column"}:
+            mode = "vertical"
+        elif normalized_layout in {"triptych_portrait", "portrait"}:
+            mode = "triptych_portrait"
+        elif normalized_layout in {"triptych_landscape", "landscape"}:
+            mode = "triptych_landscape"
+        else:
+            mode = "triptych_portrait" if canvas_h >= canvas_w else "triptych_landscape"
+
+        # For 2 clips, prefer strict split modes.
+        if len(video_paths) == 2 and mode in {"triptych_portrait", "triptych_landscape"}:
+            mode = "vertical" if canvas_h >= canvas_w else "horizontal"
+
+        filter_parts: list[str] = []
+        input_count = len(video_paths)
+
+        if mode == "horizontal":
+            tile_w = max(canvas_w // input_count, 2)
+            tile_h = canvas_h
+            for idx in range(input_count):
+                filter_parts.append(f"[{idx}:v]{self._cover_filter(tile_w, tile_h)}[v{idx}]")
+            xstack_layout = "|".join(f"{idx * tile_w}_0" for idx in range(input_count))
+            filter_parts.append("".join(f"[v{idx}]" for idx in range(input_count)) + f"xstack=inputs={input_count}:layout={xstack_layout}[outv]")
+        elif mode == "vertical":
+            tile_w = canvas_w
+            tile_h = max(canvas_h // input_count, 2)
+            for idx in range(input_count):
+                filter_parts.append(f"[{idx}:v]{self._cover_filter(tile_w, tile_h)}[v{idx}]")
+            xstack_layout = "|".join(f"0_{idx * tile_h}" for idx in range(input_count))
+            filter_parts.append("".join(f"[v{idx}]" for idx in range(input_count)) + f"xstack=inputs={input_count}:layout={xstack_layout}[outv]")
+        elif mode == "triptych_landscape" and input_count >= 3:
+            left_w = max(canvas_w // 2, 2)
+            right_w = canvas_w - left_w
+            right_h = max(canvas_h // 2, 2)
+
+            filter_parts.extend(
+                [
+                    f"[0:v]{self._cover_filter(left_w, canvas_h)}[v0]",
+                    f"[1:v]{self._cover_filter(right_w, right_h)}[v1]",
+                    f"[2:v]{self._cover_filter(right_w, canvas_h - right_h)}[v2]",
+                    f"color=c=black:s={canvas_w}x{canvas_h}:d=1[base]",
+                    "[base][v0]overlay=0:0[tmp1]",
+                    f"[tmp1][v1]overlay={left_w}:0[tmp2]",
+                    f"[tmp2][v2]overlay={left_w}:{right_h}[outv]",
+                ]
+            )
+        else:
+            # Default triptych portrait: one top panel + two bottom panels.
+            top_h = max(canvas_h // 2, 2)
+            bottom_h = canvas_h - top_h
+            bottom_w = max(canvas_w // 2, 2)
+
+            filter_parts.extend(
+                [
+                    f"[0:v]{self._cover_filter(canvas_w, top_h)}[v0]",
+                    f"[1:v]{self._cover_filter(bottom_w, bottom_h)}[v1]",
+                    f"[2:v]{self._cover_filter(canvas_w - bottom_w, bottom_h)}[v2]",
+                    f"color=c=black:s={canvas_w}x{canvas_h}:d=1[base]",
+                    "[base][v0]overlay=0:0[tmp1]",
+                    f"[tmp1][v1]overlay=0:{top_h}[tmp2]",
+                    f"[tmp2][v2]overlay={bottom_w}:{top_h}[outv]",
+                ]
+            )
+
+        cmd = [str(self._ffmpeg), "-y"]
+        for path in video_paths[:3]:
+            cmd.extend(["-i", str(path)])
+        cmd.extend(
+            [
+                "-filter_complex",
+                ";".join(filter_parts),
+                "-map",
+                "[outv]",
+                "-c:v",
+                "libx264",
+                "-preset",
+                "veryfast",
+                "-crf",
+                "20",
+                "-pix_fmt",
+                "yuv420p",
+                "-an",
+                "-shortest",
+                str(output_path),
+            ]
+        )
+        self._run(cmd)
+        return output_path
+
+    def _cover_filter(self, target_w: int, target_h: int) -> str:
+        return (
+            f"scale={target_w}:{target_h}:force_original_aspect_ratio=increase,"
+            f"crop={target_w}:{target_h}"
+        )
+
     def add_text_overlay(self, video_path: Path, output_path: Path, text: str, style: str) -> Path:
         self._ensure_binaries()
         style_map = {
@@ -358,6 +508,181 @@ class MediaOps:
         self._run(cmd)
         return output_path
 
+    def extract_cover_jpeg(self, video_path: Path, output_path: Path, timestamp_ms: int | None = None) -> Path:
+        self._ensure_binaries()
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        timestamp_sec = max((timestamp_ms or 0) / 1000.0, 0.0)
+        cmd = [
+            str(self._ffmpeg),
+            "-y",
+            "-ss",
+            f"{timestamp_sec:.3f}",
+            "-i",
+            str(video_path),
+            "-frames:v",
+            "1",
+            "-q:v",
+            "2",
+            str(output_path),
+        ]
+        self._run(cmd)
+        return output_path
+
+    def pack_motion_photo_jpg(
+        self,
+        image_path: Path,
+        video_path: Path,
+        output_path: Path,
+        presentation_timestamp_ms: int | None = None,
+    ) -> Path:
+        if not image_path.exists():
+            raise MediaOpsError(f"image_not_found: {image_path}")
+        if not video_path.exists():
+            raise MediaOpsError(f"video_not_found: {video_path}")
+
+        image_data = image_path.read_bytes()
+        if not image_data.startswith(b"\xff\xd8"):
+            raise MediaOpsError("invalid_jpeg_for_live_photo")
+
+        video_data = video_path.read_bytes()
+        video_data = self._modify_vivo_gallery_identifier(video_data)
+        presentation_us = max(int((presentation_timestamp_ms or 0) * 1000), 0)
+        patched_image = image_data
+
+        try:
+            import pyexiv2
+
+            xmp_payload = self._build_motion_xmp(video_size=len(video_data), presentation_timestamp_us=presentation_us)
+            with pyexiv2.ImageData(image_data) as image:
+                image.modify_raw_xmp(xmp_payload)
+                patched_image = image.get_bytes()
+        except Exception as exc:  # noqa: BLE001
+            raise MediaOpsError(
+                "pyexiv2_missing_or_xmp_write_failed: live photo packaging requires pyexiv2 and writable XMP"
+            ) from exc
+
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        output_path.write_bytes(patched_image + video_data)
+        return output_path
+
+    def normalize_motion_photo_video(self, input_video: Path, output_video: Path) -> Path:
+        """Normalize video to phone-friendly motion-photo stream layout with AAC audio."""
+        self._ensure_binaries()
+        output_video.parent.mkdir(parents=True, exist_ok=True)
+        has_audio = self._video_has_audio(input_video)
+
+        cmd = [
+            str(self._ffmpeg),
+            "-hide_banner",
+            "-loglevel",
+            "error",
+            "-y",
+            "-i",
+            str(input_video),
+        ]
+
+        if has_audio:
+            cmd.extend(
+                [
+                    "-map",
+                    "0:v:0",
+                    "-map",
+                    "0:a:0",
+                    "-c:v",
+                    "copy",
+                    "-c:a",
+                    "aac",
+                    "-b:a",
+                    "96k",
+                ]
+            )
+        else:
+            cmd.extend(
+                [
+                    "-f",
+                    "lavfi",
+                    "-i",
+                    "anullsrc=channel_layout=stereo:sample_rate=48000",
+                    "-map",
+                    "0:v:0",
+                    "-map",
+                    "1:a:0",
+                    "-c:v",
+                    "copy",
+                    "-c:a",
+                    "aac",
+                    "-b:a",
+                    "96k",
+                    "-shortest",
+                ]
+            )
+
+        cmd.extend(
+            [
+                "-movflags",
+                "+faststart",
+                "-brand",
+                "mp42",
+                "-metadata",
+                "com.android.version=16",
+                str(output_video),
+            ]
+        )
+        self._run(cmd)
+        return output_video
+
+    def validate_motion_photo_jpg(self, motion_photo_path: Path) -> dict[str, object]:
+        """Validate compatibility-critical conditions for phone live-photo recognition."""
+        checks: dict[str, bool] = {
+            "jpeg_header": False,
+            "xmp_motionphoto": False,
+            "embedded_mp4": False,
+            "embedded_video_stream": False,
+            "embedded_audio_stream": False,
+            "major_brand_mp42": False,
+            "android_version_metadata": False,
+        }
+
+        if not motion_photo_path.exists() or not motion_photo_path.is_file():
+            return {"valid": False, "checks": checks, "missing": ["file_exists"]}
+
+        data = motion_photo_path.read_bytes()
+        checks["jpeg_header"] = data.startswith(b"\xff\xd8")
+        checks["xmp_motionphoto"] = (b"GCamera:MotionPhoto=\"1\"" in data) or (b"VCamera:VMotionPhotoVersion" in data)
+
+        mp4_bytes = self._extract_embedded_mp4_bytes(data)
+        checks["embedded_mp4"] = mp4_bytes is not None
+        if mp4_bytes is None:
+            return {
+                "valid": False,
+                "checks": checks,
+                "missing": [key for key, ok in checks.items() if not ok],
+            }
+
+        with tempfile.NamedTemporaryFile(suffix=".mp4", delete=True) as tmp:
+            tmp.write(mp4_bytes)
+            tmp.flush()
+            probe = self._probe_streams_and_format(Path(tmp.name))
+
+        stream_types = [str(item.get("codec_type", "")) for item in probe.get("streams", []) if isinstance(item, dict)]
+        checks["embedded_video_stream"] = "video" in stream_types
+        checks["embedded_audio_stream"] = "audio" in stream_types
+
+        tags = probe.get("format_tags", {})
+        if not isinstance(tags, dict):
+            tags = {}
+        major_brand = str(tags.get("major_brand", "")).lower()
+        compatible_brands = str(tags.get("compatible_brands", "")).lower()
+        checks["major_brand_mp42"] = ("mp42" in major_brand) or ("mp42" in compatible_brands)
+        checks["android_version_metadata"] = str(tags.get("com.android.version", "")) == "16"
+
+        missing = [key for key, ok in checks.items() if not ok]
+        return {
+            "valid": len(missing) == 0,
+            "checks": checks,
+            "missing": missing,
+        }
+
     def _ensure_binaries(self) -> None:
         if not self._ffmpeg or not self._ffprobe:
             raise MediaOpsError("ffmpeg_or_ffprobe_missing")
@@ -381,3 +706,117 @@ class MediaOps:
             return float(text)
         except ValueError:
             return 0.0
+
+    def _build_motion_xmp(self, video_size: int, presentation_timestamp_us: int) -> str:
+        return (
+            "<x:xmpmeta xmlns:x=\"adobe:ns:meta/\" x:xmptk=\"Adobe XMP Core 5.1.0-jc003\">"
+            "<rdf:RDF xmlns:rdf=\"http://www.w3.org/1999/02/22-rdf-syntax-ns#\">"
+            "<rdf:Description rdf:about=\"\" "
+            "xmlns:GCamera=\"http://ns.google.com/photos/1.0/camera/\" "
+            "xmlns:VCamera=\"http://ns.vivo.com/photos/1.0/camera/\" "
+            "xmlns:Container=\"http://ns.google.com/photos/1.0/container/\" "
+            "xmlns:Item=\"http://ns.google.com/photos/1.0/container/item/\" "
+            "GCamera:MotionPhoto=\"1\" "
+            "GCamera:MotionPhotoVersion=\"1\" "
+            f"GCamera:MotionPhotoPresentationTimestampUs=\"{presentation_timestamp_us}\" "
+            "VCamera:VMotionPhotoVersion=\"1\" "
+            "VCamera:VMotionPhotoSource=\"1\" "
+            "VCamera:VMediaKitVersion=\"1.0.0.5\">"
+            "<Container:Directory><rdf:Seq>"
+            "<rdf:li rdf:parseType=\"Resource\"><Container:Item Item:Mime=\"image/jpeg\" Item:Semantic=\"Primary\" Item:Length=\"0\" Item:Padding=\"0\"/></rdf:li>"
+            f"<rdf:li rdf:parseType=\"Resource\"><Container:Item Item:Mime=\"video/mp4\" Item:Semantic=\"MotionPhoto\" Item:Length=\"{video_size}\" Item:Padding=\"0\"/></rdf:li>"
+            "</rdf:Seq></Container:Directory></rdf:Description></rdf:RDF></x:xmpmeta>"
+        )
+
+    def _extract_embedded_mp4_bytes(self, data: bytes) -> bytes | None:
+        if len(data) < 16:
+            return None
+        eoi_index = data.rfind(JPEG_EOI)
+        if eoi_index == -1:
+            return None
+        jpeg_end = eoi_index + len(JPEG_EOI)
+        ftyp_offset = data.find(FTYP_MAGIC, jpeg_end)
+        if ftyp_offset == -1:
+            return None
+        candidate_start = max(ftyp_offset - 4, 0)
+        mp4_start = ftyp_offset
+        if candidate_start + 8 <= len(data) and data[candidate_start + 4 : candidate_start + 8] == FTYP_MAGIC:
+            box_size = int.from_bytes(data[candidate_start : candidate_start + 4], byteorder="big", signed=False)
+            if box_size >= 8:
+                mp4_start = candidate_start
+        if mp4_start < jpeg_end:
+            return None
+        return data[mp4_start:]
+
+    def _probe_streams_and_format(self, video_path: Path) -> dict[str, object]:
+        cmd = [
+            str(self._ffprobe),
+            "-v",
+            "error",
+            "-show_streams",
+            "-show_format",
+            "-of",
+            "json",
+            str(video_path),
+        ]
+        result = self._run(cmd)
+        try:
+            payload = json.loads(result.stdout)
+        except json.JSONDecodeError:
+            return {"streams": [], "format_tags": {}}
+
+        streams = payload.get("streams", [])
+        if not isinstance(streams, list):
+            streams = []
+        format_info = payload.get("format", {})
+        if not isinstance(format_info, dict):
+            format_info = {}
+        tags = format_info.get("tags", {})
+        if not isinstance(tags, dict):
+            tags = {}
+        return {"streams": streams, "format_tags": tags}
+
+    def _video_has_audio(self, video_path: Path) -> bool:
+        cmd = [
+            str(self._ffprobe),
+            "-v",
+            "error",
+            "-select_streams",
+            "a",
+            "-show_entries",
+            "stream=index",
+            "-of",
+            "json",
+            str(video_path),
+        ]
+        result = self._run(cmd)
+        try:
+            parsed = json.loads(result.stdout)
+        except json.JSONDecodeError:
+            return False
+        streams = parsed.get("streams", [])
+        return isinstance(streams, list) and len(streams) > 0
+
+    def _modify_vivo_gallery_identifier(self, video_data: bytes) -> bytes:
+        """Patch vivo-specific identifier when present, otherwise append compatibility block."""
+        new_val = b"motionphoto00010000000000000"
+        key_prefix = b'"com.android.camera.livephoto":"'
+        payload = bytearray(video_data)
+
+        start_index = payload.find(key_prefix)
+        if start_index != -1:
+            value_start_pos = start_index + len(key_prefix)
+            end_pos = value_start_pos + len(new_val)
+            if end_pos <= len(payload):
+                payload[value_start_pos:end_pos] = new_val
+                return bytes(payload)
+
+        vivo_media_ext_hex = (
+            "00 00 00 A8 75 75 69 64 76 69 76 6F 4D 65 64 69 61 45 78 74 49 6E 66 6F 76 69 76 6F "
+            "7B 22 63 6F 6D 2E 61 6E 64 72 6F 69 64 2E 63 61 6D 65 72 61 2E 6C 69 76 65 70 68 6F "
+            "74 6F 22 3A 22 6D 6F 74 69 6F 6E 70 68 6F 74 6F 30 30 30 31 30 30 30 30 30 30 30 30 "
+            "30 30 30 30 30 22 2C 22 76 65 72 73 69 6F 6E 22 3A 32 31 30 38 7D 00 00 00 4E 63 61 "
+            "6D 65 72 61 6C 62 75 6D 21 00 00 00 2F 6D 6F 74 69 6F 6E 70 68 6F 74 6F 30 30 30 31 "
+            "30 30 30 30 30 30 30 30 30 30 30 30 30 FF FF FF FF 1B 2A 39 48 57 66 75 84 93 A2 B3"
+        )
+        return bytes(payload) + bytes.fromhex(vivo_media_ext_hex)

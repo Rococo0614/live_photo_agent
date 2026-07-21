@@ -7,6 +7,7 @@ from typing import Any
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
+from .capability.contracts import TOOL_CONTRACTS
 from .config import settings
 from .models import AgentRequest, ExecutionPlan, ToolName
 
@@ -31,6 +32,55 @@ class ToolSpec:
 class LocalHFPlannerRuntime:
     tokenizer: Any
     model: Any
+
+
+def _resolve_hf_model_dir(raw_model_dir: Path) -> Path:
+    """Resolve Hugging Face cache roots to a concrete snapshot directory."""
+    if (raw_model_dir / "config.json").exists():
+        return raw_model_dir
+
+    snapshots_dir = raw_model_dir / "snapshots"
+    if not snapshots_dir.exists() or not snapshots_dir.is_dir():
+        raise RuntimeError(
+            f"LPA_LOCAL_MODEL_DIR does not look like a model directory: {raw_model_dir}"
+        )
+
+    ref_main = raw_model_dir / "refs" / "main"
+    if ref_main.exists():
+        ref_value = ref_main.read_text(encoding="utf-8").strip()
+        if ref_value:
+            candidate = snapshots_dir / ref_value
+            if candidate.exists() and candidate.is_dir() and (candidate / "config.json").exists():
+                return candidate
+
+    candidates = sorted(path for path in snapshots_dir.iterdir() if path.is_dir())
+    for candidate in candidates:
+        if (candidate / "config.json").exists():
+            return candidate
+
+    raise RuntimeError(
+        f"No usable snapshot found under {snapshots_dir}. Expected config.json in at least one snapshot directory."
+    )
+
+
+def _ensure_torch_autocast_compat(torch_module: Any) -> None:
+    """Patch torch.is_autocast_enabled for transformers versions expecting a device_type arg."""
+    original = getattr(torch_module, "is_autocast_enabled", None)
+    if original is None:
+        return
+    if getattr(original, "_lpa_device_type_compat", False):
+        return
+
+    def _compat_is_autocast_enabled(device_type: str | None = None) -> bool:
+        try:
+            if device_type is None:
+                return bool(original())
+            return bool(original(device_type))
+        except TypeError:
+            return bool(original())
+
+    setattr(_compat_is_autocast_enabled, "_lpa_device_type_compat", True)
+    torch_module.is_autocast_enabled = _compat_is_autocast_enabled
 
 
 TOOL_SPECS: tuple[ToolSpec, ...] = (
@@ -83,11 +133,14 @@ TOOL_SPECS: tuple[ToolSpec, ...] = (
             "asset_ids": "Optional list of target asset IDs.",
             "frame_interval_ms": "Frame extraction interval in milliseconds.",
             "max_frames": "Maximum frames per asset.",
+            "sampling_strategy": "Sampling mode: uniform or auto_adaptive based on clip dynamics.",
         },
         output_schema={
             "frame_count": "int",
             "frames_by_asset": "object<string,string[]>",
             "frame_interval_ms": "int",
+            "sampling_strategy": "string",
+            "effective_settings": "object<string,object>",
         },
     ),
     ToolSpec(
@@ -121,7 +174,7 @@ TOOL_SPECS: tuple[ToolSpec, ...] = (
         when_to_use="Use when final output requires cover recommendation.",
         arguments={
             "asset_ids": "Optional list of target asset IDs.",
-            "strategy": "Cover frame policy, e.g. sharpest.",
+            "strategy": "Cover frame policy: auto_adaptive, sharpest, vibrant, first, middle, or last.",
         },
         output_schema={"cover_frames": "object<string,string>", "strategy": "string"},
     ),
@@ -175,6 +228,8 @@ TOOL_SPECS: tuple[ToolSpec, ...] = (
         arguments={
             "asset_ids": "Optional list of target asset IDs.",
             "order": "Optional explicit concatenation order.",
+            "layout": "Composition mode: timeline, horizontal, vertical, triptych_portrait, or triptych_landscape.",
+            "canvas": "Canvas size for spatial composition, e.g. 1080x1920.",
         },
         output_schema={"timeline_id": "string", "segment_count": "int"},
     ),
@@ -217,6 +272,9 @@ TOOL_SPECS: tuple[ToolSpec, ...] = (
 class QwenPlanner:
     def __init__(self) -> None:
         self._local_runtime: LocalHFPlannerRuntime | None = None
+
+    def reset_runtime(self) -> None:
+        self._local_runtime = None
 
     def create_plan(self, request: AgentRequest, library_summary: dict[str, object]) -> ExecutionPlan:
         backend = self._resolve_backend()
@@ -265,6 +323,10 @@ class QwenPlanner:
         headers = {"Content-Type": "application/json"}
         if settings.qwen_auth_token:
             headers["Authorization"] = f"Bearer {settings.qwen_auth_token}"
+        if settings.qwen_workspace_id:
+            # Different docs use different capitalization; include both for compatibility.
+            headers["X-DashScope-WorkSpace"] = settings.qwen_workspace_id
+            headers["X-DashScope-Workspace"] = settings.qwen_workspace_id
 
         request_obj = Request(url=endpoint, data=body, headers=headers, method="POST")
         try:
@@ -335,14 +397,17 @@ class QwenPlanner:
         if device_raw not in {"cpu", "cuda", "mps", "auto"}:
             raise RuntimeError("LPA_LOCAL_DEVICE must be one of: cpu, cuda, mps, auto")
 
-        tokenizer = AutoTokenizer.from_pretrained(str(Path(model_dir)), trust_remote_code=True)
+        model_path = _resolve_hf_model_dir(Path(model_dir))
+        _ensure_torch_autocast_compat(torch)
+
+        tokenizer = AutoTokenizer.from_pretrained(str(model_path), trust_remote_code=True)
         model_kwargs: dict[str, object] = {
             "trust_remote_code": True,
             "dtype": dtype_map[dtype_raw],
         }
         model_kwargs["device_map"] = "auto" if device_raw == "auto" else device_raw
 
-        model = AutoModelForCausalLM.from_pretrained(str(Path(model_dir)), **model_kwargs)
+        model = AutoModelForCausalLM.from_pretrained(str(model_path), **model_kwargs)
 
         # Avoid noisy warnings when do_sample=False.
         if hasattr(model, "generation_config"):
@@ -378,75 +443,65 @@ class QwenPlanner:
                 "allowed_arguments": list(spec.arguments.keys()),
                 "argument_help": spec.arguments,
                 "output_schema": spec.output_schema,
+                "preconditions": list(contract.preconditions),
+                "side_effects": list(contract.side_effects),
+                "failure_modes": list(contract.failure_modes),
+                "idempotent": contract.idempotent,
+                "security_scope": contract.security_scope,
+                "timeout_budget_ms": contract.timeout_budget_ms,
+                "quality_metrics": list(contract.quality_metrics),
             }
             for spec in TOOL_SPECS
+            for contract in [TOOL_CONTRACTS[spec.name]]
         ]
         return {
             "model": settings.qwen_model,
-            "response_format": "json",
+            "response_format": {"type": "json_object"},
             "messages": [
                 {
                     "role": "system",
                     "content": (
                         "You are the planning brain of a live photo agent. "
                         "Return only valid JSON that matches the ExecutionPlan schema. "
-                        "Use only tools from tool_catalog. No prose."
+                        "Use only tools from tool_catalog. "
+                        "If guided_tool_names is non-empty, prefer those tools when they fit the request and explain any omission in tool_calls.reason. "
+                        "If library_summary.reusable_strategies is provided, treat it as prior successful candidates "
+                        "and adapt only when it fits the current request; do not copy blindly. "
+                        "Do not infer hidden rules or default workflow stages beyond tool boundaries. "
+                        "No prose."
                     ),
                 },
                 {
                     "role": "user",
-                    "content": {
-                        "request": {
-                            "text": request.text,
-                            "selected_asset_ids": request.selected_asset_ids,
-                            "library_root": str(request.library_root),
+                    "content": json.dumps(
+                        {
+                            "request": {
+                                "text": request.text,
+                                "selected_asset_ids": request.selected_asset_ids,
+                                "guided_tool_names": [tool.value for tool in request.guided_tool_names],
+                                "library_root": str(request.library_root),
+                            },
+                            "library_summary": library_summary,
+                            "tool_catalog": tool_catalog,
+                            "execution_plan_schema": {
+                                "user_goal": "string",
+                                "intent": "string",
+                                "selected_asset_ids": ["string"],
+                                "required_context": ["string"],
+                                "need_clarification": "boolean(default=false)",
+                                "clarification_questions": ["string"],
+                                "blocking_missing_info": ["string"],
+                                "tool_calls": [
+                                    {
+                                        "tool": tool_choices,
+                                        "reason": "string",
+                                        "arguments": {"key": "value"},
+                                    }
+                                ],
+                            },
                         },
-                        "library_summary": library_summary,
-                        "tool_catalog": tool_catalog,
-                        "execution_rules": [
-                            "Generate plan only from the user request and provided context.",
-                            "If request is underspecified or ambiguous, set need_clarification=true and provide clarification_questions before any tool execution.",
-                            "When selected_asset_ids is empty, do not include filter_selected.",
-                            "When selected_asset_ids is non-empty, include filter_selected before summarize_results.",
-                            "Only use tool arguments listed in tool_catalog.allowed_arguments.",
-                            "Prefer minimal sufficient tool calls.",
-                            "Start from scan_library.",
-                            "The final step should be summarize_results.",
-                        ],
-                        "architecture_layers": {
-                            "layer_1_flow": [
-                                "input",
-                                "intent",
-                                "context",
-                                "recommend",
-                                "tool_selection",
-                                "output",
-                            ],
-                            "layer_2_capability": ["L0", "L1", "L2"],
-                            "layer_3_foundation": [
-                                "version_management",
-                                "live_photo_assets",
-                                "session_memory",
-                                "multimodal_memory",
-                            ],
-                        },
-                        "execution_plan_schema": {
-                            "user_goal": "string",
-                            "intent": "string",
-                            "selected_asset_ids": ["string"],
-                            "required_context": ["string"],
-                            "need_clarification": "boolean(default=false)",
-                            "clarification_questions": ["string"],
-                            "blocking_missing_info": ["string"],
-                            "tool_calls": [
-                                {
-                                    "tool": tool_choices,
-                                    "reason": "string",
-                                    "arguments": {"key": "value"},
-                                }
-                            ],
-                        },
-                    },
+                        ensure_ascii=False,
+                    ),
                 },
             ],
         }
@@ -512,18 +567,26 @@ class QwenPlanner:
                 "allowed_arguments": list(spec.arguments.keys()),
                 "argument_help": spec.arguments,
                 "output_schema": spec.output_schema,
+                "preconditions": list(contract.preconditions),
+                "side_effects": list(contract.side_effects),
+                "failure_modes": list(contract.failure_modes),
+                "idempotent": contract.idempotent,
+                "security_scope": contract.security_scope,
+                "timeout_budget_ms": contract.timeout_budget_ms,
+                "quality_metrics": list(contract.quality_metrics),
             }
             for spec in TOOL_SPECS
+            for contract in [TOOL_CONTRACTS[spec.name]]
         ]
         messages = [
             QwenMessage(
                 role="system",
                 content=(
                     "You are the planning brain of a live photo agent. "
-                    "Your job is to understand the user goal, determine required context, "
-                    "arrange a fixed but adaptable execution pipeline, and return only JSON "
-                    "matching the ExecutionPlan schema. Do not answer the user directly. "
-                    "Do not invent tools outside the provided catalog."
+                    "Your job is to understand the user goal and return only JSON matching "
+                    "the ExecutionPlan schema. Do not answer the user directly. "
+                    "Do not invent tools outside the provided catalog or hidden workflow rules. "
+                    "If guided_tool_names is non-empty, prefer those tools when they fit the request."
                 ),
             ),
             QwenMessage(
@@ -532,16 +595,9 @@ class QwenPlanner:
                     {
                         "text": request.text,
                         "selected_asset_ids": request.selected_asset_ids,
+                        "guided_tool_names": [tool.value for tool in request.guided_tool_names],
                         "library_summary": library_summary,
                         "tool_catalog": tool_catalog,
-                        "execution_rules": [
-                            "Start from the current library inventory.",
-                            "Prioritize selected assets when provided.",
-                            "When request is ambiguous, ask clarification questions first.",
-                            "Use the user goal to drive retrieval and candidate narrowing.",
-                            "Produce the smallest sufficient tool sequence.",
-                            "Return valid JSON only.",
-                        ],
                     },
                     ensure_ascii=False,
                 ),

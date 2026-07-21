@@ -1,2 +1,0 @@
-file '/home/vivo/live_photo_agent/tests/_smoke_artifacts/stabilized/city_walk_01.mp4'
-file '/home/vivo/live_photo_agent/tests/_smoke_artifacts/stabilized/beach_sunset_01.mp4'

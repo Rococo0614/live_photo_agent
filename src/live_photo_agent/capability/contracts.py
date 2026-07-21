@@ -89,7 +89,7 @@ TOOL_CONTRACTS: dict[ToolName, ToolContract] = {
     ToolName.EXTRACT_KEY_FRAMES: ToolContract(
         level="L0",
         purpose="Extract representative frames from a motion clip for downstream scoring.",
-        allowed_arguments=("asset_ids", "frame_interval_ms", "max_frames"),
+        allowed_arguments=("asset_ids", "frame_interval_ms", "max_frames", "sampling_strategy"),
         output_fields=("frame_count", "frames_by_asset"),
         preconditions=("motion clips available for assets",),
         side_effects=("context.key_frames overwritten",),
@@ -192,8 +192,8 @@ TOOL_CONTRACTS: dict[ToolName, ToolContract] = {
     ),
     ToolName.CONCAT_CLIPS: ToolContract(
         level="L0",
-        purpose="Concatenate ordered clip segments into a single timeline.",
-        allowed_arguments=("asset_ids", "order"),
+        purpose="Compose clips either on timeline or spatial canvas (triptych defaults to vertical 3-up).",
+        allowed_arguments=("asset_ids", "order", "layout", "canvas"),
         output_fields=("timeline_id", "segment_count"),
         preconditions=("segments available",),
         side_effects=("context.timeline overwritten",),
@@ -231,7 +231,7 @@ TOOL_CONTRACTS: dict[ToolName, ToolContract] = {
     ),
     ToolName.EXPORT_MP4: ToolContract(
         level="L0",
-        purpose="Export final timeline into mp4 output file.",
+        purpose="Export preview mp4 and pack final live-photo jpg container when possible.",
         allowed_arguments=("output_name", "resolution"),
         output_fields=("output_path", "duration_ms"),
         preconditions=("timeline available",),
@@ -280,6 +280,7 @@ class CapabilityLayer:
                 "asset_ids": "string[]?",
                 "frame_interval_ms": "int(default=400)",
                 "max_frames": "int(default=8)",
+                "sampling_strategy": "string(default=uniform, options=uniform|auto_adaptive|adaptive)",
             },
             ToolName.ESTIMATE_MOTION_SCORE: {"asset_ids": "string[]?"},
             ToolName.SUBJECT_SEGMENTATION: {
@@ -288,7 +289,7 @@ class CapabilityLayer:
             },
             ToolName.SELECT_COVER_FRAME: {
                 "asset_ids": "string[]?",
-                "strategy": "string(default=sharpest)",
+                "strategy": "string(default=auto_adaptive, options=auto_adaptive|sharpest|vibrant|first|middle|last)",
             },
             ToolName.CLIP_TRIM: {
                 "asset_ids": "string[]?",
@@ -307,6 +308,8 @@ class CapabilityLayer:
             ToolName.CONCAT_CLIPS: {
                 "asset_ids": "string[]?",
                 "order": "string[]?",
+                "layout": "string(default=auto, options=auto|timeline|horizontal|vertical|triptych_portrait|triptych_landscape)",
+                "canvas": "string(default=1080x1920)",
             },
             ToolName.ADD_TEXT_OVERLAY: {
                 "text": "string",
@@ -338,6 +341,8 @@ class CapabilityLayer:
                 "frame_count": "int",
                 "frames_by_asset": "object<string,string[]>",
                 "frame_interval_ms": "int",
+                "sampling_strategy": "string",
+                "effective_settings": "object<string,object>",
             },
             ToolName.ESTIMATE_MOTION_SCORE: {"motion_scores": "object<string,float>"},
             ToolName.SUBJECT_SEGMENTATION: {
@@ -361,57 +366,8 @@ class CapabilityLayer:
 
     def normalize_plan(self, plan: ExecutionPlan, request: AgentRequest) -> ExecutionPlan:
         calls = [self._normalize_call(call) for call in plan.tool_calls]
-
-        if not request.selected_asset_ids:
-            calls = [call for call in calls if call.tool != ToolName.FILTER_SELECTED]
-        else:
-            has_filter = any(call.tool == ToolName.FILTER_SELECTED for call in calls)
-            if not has_filter:
-                calls.insert(
-                    1 if calls and calls[0].tool == ToolName.SCAN_LIBRARY else 0,
-                    ToolCall(
-                        tool=ToolName.FILTER_SELECTED,
-                        reason="Selected assets are explicitly provided and must be prioritized.",
-                        arguments={"selected_asset_ids": request.selected_asset_ids},
-                    ),
-                )
-
-        if not request.selected_asset_ids and not any(call.tool == ToolName.SEARCH_BY_TEXT for call in calls):
-            calls.insert(
-                1 if calls and calls[0].tool == ToolName.SCAN_LIBRARY else 0,
-                ToolCall(
-                    tool=ToolName.SEARCH_BY_TEXT,
-                    reason="No explicit selection provided, semantic retrieval is required.",
-                    arguments={"query": request.text},
-                ),
-            )
-
-        scan_calls = [call for call in calls if call.tool == ToolName.SCAN_LIBRARY]
-        other_calls = [call for call in calls if call.tool != ToolName.SCAN_LIBRARY]
-        if scan_calls:
-            calls = [scan_calls[0], *other_calls]
-        else:
-            calls = [
-                ToolCall(
-                    tool=ToolName.SCAN_LIBRARY,
-                    reason="Live photo workflow starts with inventory scan.",
-                    arguments={"library_root": str(request.library_root)},
-                ),
-                *other_calls,
-            ]
-
-        summarize_calls = [call for call in calls if call.tool == ToolName.SUMMARIZE_RESULTS]
-        calls = [call for call in calls if call.tool != ToolName.SUMMARIZE_RESULTS]
-        if summarize_calls:
-            calls.append(summarize_calls[-1])
-        else:
-            calls.append(
-                ToolCall(
-                    tool=ToolName.SUMMARIZE_RESULTS,
-                    reason="Final response must be summarized for the user.",
-                    arguments={"response_style": "concise"},
-                )
-            )
+        calls = self._apply_sequence_guards(calls, request)
+        calls = self._apply_request_layout_constraints(calls, request)
 
         return ExecutionPlan(
             user_goal=plan.user_goal,
@@ -424,6 +380,99 @@ class CapabilityLayer:
             blocking_missing_info=[str(item) for item in plan.blocking_missing_info],
         )
 
+    def _apply_sequence_guards(self, calls: list[ToolCall], request: AgentRequest) -> list[ToolCall]:
+        if not calls:
+            return []
+
+        normalized = list(calls)
+
+        # Guard 1: scan_library should be first so all later tools have asset context.
+        scan_index = next((idx for idx, call in enumerate(normalized) if call.tool == ToolName.SCAN_LIBRARY), -1)
+        if scan_index == -1:
+            normalized.insert(
+                0,
+                ToolCall(
+                    tool=ToolName.SCAN_LIBRARY,
+                    reason="Ensure asset inventory context is initialized before other tools.",
+                    arguments={"library_root": str(request.library_root)},
+                ),
+            )
+        elif scan_index > 0:
+            scan_call = normalized.pop(scan_index)
+            normalized.insert(0, scan_call)
+
+        # Guard 2: remove filter_selected when request has no selected ids.
+        if not request.selected_asset_ids:
+            normalized = [call for call in normalized if call.tool != ToolName.FILTER_SELECTED]
+
+        sequence = [call.tool for call in normalized]
+
+        # Guard 3: select_cover_frame depends on key frame extraction.
+        if ToolName.SELECT_COVER_FRAME in sequence and ToolName.EXTRACT_KEY_FRAMES not in sequence:
+            cover_idx = sequence.index(ToolName.SELECT_COVER_FRAME)
+            normalized.insert(
+                cover_idx,
+                ToolCall(
+                    tool=ToolName.EXTRACT_KEY_FRAMES,
+                    reason="Provide frame candidates required by select_cover_frame.",
+                    arguments={},
+                ),
+            )
+            sequence = [call.tool for call in normalized]
+
+        # Guard 4: export_mp4 depends on concat_clips.
+        if ToolName.EXPORT_MP4 in sequence and ToolName.CONCAT_CLIPS not in sequence:
+            export_idx = sequence.index(ToolName.EXPORT_MP4)
+            normalized.insert(
+                export_idx,
+                ToolCall(
+                    tool=ToolName.CONCAT_CLIPS,
+                    reason="Build timeline before export_mp4.",
+                    arguments={},
+                ),
+            )
+            sequence = [call.tool for call in normalized]
+
+        # Guard 5: summarize_results should be the final reporting step.
+        summarize_index = next((idx for idx, call in enumerate(normalized) if call.tool == ToolName.SUMMARIZE_RESULTS), -1)
+        if summarize_index != -1 and summarize_index != len(normalized) - 1:
+            summarize_call = normalized.pop(summarize_index)
+            normalized.append(summarize_call)
+
+        return normalized
+
+    def _apply_request_layout_constraints(self, calls: list[ToolCall], request: AgentRequest) -> list[ToolCall]:
+        direction_layout = self._requested_concat_layout(request.text)
+        if not direction_layout:
+            return calls
+
+        constrained: list[ToolCall] = []
+        for call in calls:
+            if call.tool != ToolName.CONCAT_CLIPS:
+                constrained.append(call)
+                continue
+            updated_args = dict(call.arguments)
+            updated_args["layout"] = direction_layout
+            constrained.append(
+                ToolCall(
+                    tool=call.tool,
+                    reason=call.reason,
+                    arguments=updated_args,
+                )
+            )
+        return constrained
+
+    def _requested_concat_layout(self, text: str) -> str:
+        lowered = text.lower()
+        horizontal_markers = ["左右", "左边", "右边", "横", "horizontal", "left", "right"]
+        vertical_markers = ["上下", "上面", "下面", "上中下", "竖", "vertical", "top", "bottom"]
+
+        if any(marker in lowered for marker in horizontal_markers):
+            return "triptych_landscape"
+        if any(marker in lowered for marker in vertical_markers):
+            return "vertical"
+        return ""
+
     def _normalize_call(self, call: ToolCall) -> ToolCall:
         contract = TOOL_CONTRACTS[call.tool]
         args = {
@@ -431,12 +480,5 @@ class CapabilityLayer:
             for key, value in call.arguments.items()
             if key in contract.allowed_arguments
         }
-
-        if call.tool == ToolName.SEARCH_BY_TEXT and "query" not in args:
-            args["query"] = ""
-        if call.tool == ToolName.DRAFT_EDIT_PLAN and "style" not in args:
-            args["style"] = "social_highlight"
-        if call.tool == ToolName.SUMMARIZE_RESULTS and "response_style" not in args:
-            args["response_style"] = "concise"
 
         return ToolCall(tool=call.tool, reason=call.reason, arguments=args)

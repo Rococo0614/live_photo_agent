@@ -6,12 +6,25 @@ from pathlib import Path
 from pydantic import BaseModel, Field
 
 
+class AssetPreprocessSummary(BaseModel):
+    version: str = "v1"
+    media_format: str
+    capture_time: str | None = None
+    content_tags: list[str] = Field(default_factory=list)
+    content_summary: str = ""
+    quality_signals: dict[str, object] = Field(default_factory=dict)
+    editability_signals: dict[str, object] = Field(default_factory=dict)
+    source: str = "scan"
+    updated_at: str | None = None
+
+
 class LivePhotoAsset(BaseModel):
     asset_id: str
     image_path: Path
     motion_path: Path | None = None
     tags: list[str] = Field(default_factory=list)
     metadata: dict[str, str] = Field(default_factory=dict)
+    preprocess_summary: AssetPreprocessSummary | None = None
 
 
 class ToolName(str, Enum):
@@ -58,6 +71,9 @@ class AgentRequest(BaseModel):
     text: str
     library_root: Path
     selected_asset_ids: list[str] = Field(default_factory=list)
+    guided_tool_names: list[ToolName] = Field(default_factory=list)
+    input_image_paths: list[Path] = Field(default_factory=list)
+    input_video_paths: list[Path] = Field(default_factory=list)
 
 
 class ToolResult(BaseModel):

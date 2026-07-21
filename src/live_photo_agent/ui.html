@@ -1,0 +1,934 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Live Photo Agent Console</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #0b1020;
+      --panel: rgba(13, 19, 39, 0.88);
+      --line: rgba(172, 190, 255, 0.18);
+      --text: #edf2ff;
+      --muted: #a9b4d0;
+      --accent: #7dd3fc;
+      --accent-strong: #38bdf8;
+      --shadow: 0 24px 80px rgba(2, 6, 23, 0.45);
+    }
+
+    * { box-sizing: border-box; }
+    html, body { min-height: 100%; }
+    body {
+      margin: 0;
+      font-family: "Trebuchet MS", "Gill Sans", "Lucida Grande", sans-serif;
+      color: var(--text);
+      background:
+        radial-gradient(circle at top left, rgba(56, 189, 248, 0.24), transparent 30%),
+        radial-gradient(circle at 85% 10%, rgba(129, 140, 248, 0.18), transparent 24%),
+        linear-gradient(180deg, #08101d 0%, #09111f 42%, #050914 100%);
+    }
+
+    .shell { max-width: 1480px; margin: 0 auto; padding: 28px 20px 36px; }
+    .hero {
+      display: grid;
+      grid-template-columns: minmax(0, 1.5fr) minmax(320px, 0.9fr);
+      gap: 16px;
+      align-items: stretch;
+      margin-bottom: 16px;
+    }
+
+    .panel {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 22px;
+      box-shadow: var(--shadow);
+      backdrop-filter: blur(20px);
+    }
+
+    .hero-copy { padding: 28px; position: relative; overflow: hidden; }
+    .hero-copy::after {
+      content: "";
+      position: absolute;
+      inset: auto -80px -80px auto;
+      width: 240px;
+      height: 240px;
+      border-radius: 50%;
+      background: radial-gradient(circle, rgba(125, 211, 252, 0.28), transparent 65%);
+      pointer-events: none;
+    }
+
+    .eyebrow {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 12px;
+      border-radius: 999px;
+      background: rgba(125, 211, 252, 0.1);
+      color: var(--accent);
+      font-size: 12px;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+
+    h1 {
+      margin: 16px 0 10px;
+      font-family: Georgia, "Times New Roman", serif;
+      font-size: clamp(32px, 4vw, 58px);
+      line-height: 1;
+      letter-spacing: -0.04em;
+    }
+
+    .subtitle { margin: 0; max-width: 62ch; color: var(--muted); font-size: 15px; line-height: 1.75; }
+    .hero-meta { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 20px; }
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 12px;
+      border-radius: 14px;
+      background: rgba(255, 255, 255, 0.04);
+      border: 1px solid var(--line);
+      color: var(--text);
+      font-size: 13px;
+    }
+
+    .hero-stats {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 12px;
+      padding: 18px;
+      background: linear-gradient(180deg, rgba(17, 25, 54, 0.95), rgba(8, 12, 27, 0.95));
+    }
+
+    .stat {
+      padding: 18px;
+      border-radius: 18px;
+      background: linear-gradient(180deg, rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0.02));
+      border: 1px solid rgba(255, 255, 255, 0.08);
+    }
+
+    .stat-value { display: block; font-size: 30px; font-weight: 700; letter-spacing: -0.05em; }
+    .stat-label { display: block; margin-top: 4px; color: var(--muted); font-size: 13px; }
+
+    .workspace {
+      display: grid;
+      grid-template-columns: 280px minmax(0, 1.35fr) minmax(360px, 1fr);
+      gap: 16px;
+      align-items: start;
+    }
+
+    .sidebar, .content, .chat { padding: 18px; }
+    .section-title { margin: 0 0 14px; font-size: 14px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
+    .field { display: grid; gap: 8px; margin-bottom: 14px; }
+    .field label { font-size: 12px; color: var(--muted); letter-spacing: 0.04em; }
+    input, select, textarea, button {
+      font: inherit;
+      border-radius: 14px;
+      border: 1px solid var(--line);
+      color: var(--text);
+      background: rgba(6, 10, 22, 0.72);
+    }
+    input, select, textarea { width: 100%; padding: 12px 14px; }
+    textarea { min-height: 110px; resize: vertical; line-height: 1.6; }
+    button {
+      cursor: pointer;
+      padding: 12px 16px;
+      transition: transform 0.15s ease, border-color 0.15s ease, background 0.15s ease;
+    }
+    button:hover { transform: translateY(-1px); border-color: rgba(125, 211, 252, 0.45); }
+    button.primary {
+      border: 0;
+      background: linear-gradient(135deg, var(--accent-strong), #6366f1);
+      color: #fff;
+      font-weight: 700;
+      box-shadow: 0 16px 28px rgba(56, 189, 248, 0.24);
+    }
+
+    .album-list, .asset-grid, .results-layout { display: grid; gap: 12px; }
+    .chip-list {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin: 10px 0 14px;
+    }
+    .chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 10px;
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.04);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      color: var(--text);
+      font-size: 12px;
+    }
+    .chip.selected {
+      border-color: rgba(125, 211, 252, 0.5);
+      background: rgba(56, 189, 248, 0.12);
+      color: #d7f8ff;
+    }
+    .album-card, .asset-card, .result-card {
+      padding: 14px;
+      border-radius: 18px;
+      background: rgba(255, 255, 255, 0.035);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+    }
+    .album-card { display: flex; justify-content: space-between; gap: 10px; align-items: center; }
+    .album-card.active { border-color: rgba(125, 211, 252, 0.55); background: rgba(56, 189, 248, 0.12); }
+    .album-name { font-weight: 700; }
+    .album-meta, .asset-meta, .micro { color: var(--muted); font-size: 12px; }
+
+    .tool-grid {
+      display: grid;
+      gap: 10px;
+      max-height: 360px;
+      overflow: auto;
+      padding-right: 4px;
+    }
+    .config-panel {
+      display: grid;
+      gap: 8px;
+      margin-top: 20px;
+      padding: 12px;
+      border-radius: 14px;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      background: rgba(255, 255, 255, 0.02);
+    }
+    .config-inline {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+    }
+    .tool-card {
+      text-align: left;
+      width: 100%;
+      padding: 12px;
+      border-radius: 16px;
+      background: rgba(255, 255, 255, 0.03);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      transition: border-color 0.15s ease, background 0.15s ease, transform 0.15s ease;
+    }
+    .tool-card:hover { transform: translateY(-1px); border-color: rgba(125, 211, 252, 0.45); }
+    .tool-card.selected { border-color: rgba(125, 211, 252, 0.65); background: rgba(56, 189, 248, 0.1); }
+    .tool-card-header { display: flex; justify-content: space-between; gap: 10px; align-items: flex-start; }
+    .tool-name { font-weight: 700; }
+    .tool-purpose { margin-top: 8px; color: var(--text); font-size: 12px; line-height: 1.55; }
+    .tool-schema { margin-top: 8px; color: var(--muted); font-size: 11px; line-height: 1.5; }
+    .tool-details { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 8px; }
+    .tool-pill {
+      display: inline-flex;
+      align-items: center;
+      padding: 4px 8px;
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.04);
+      color: var(--muted);
+      font-size: 11px;
+    }
+
+    .asset-grid {
+      grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+      align-items: stretch;
+    }
+    .asset-card {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      min-height: 100%;
+      padding: 12px;
+      overflow: hidden;
+    }
+    .asset-thumb {
+      position: relative;
+      aspect-ratio: 4 / 3;
+      border-radius: 14px;
+      overflow: hidden;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      background: linear-gradient(180deg, rgba(125, 211, 252, 0.16), rgba(255, 255, 255, 0.02));
+    }
+    .asset-thumb img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      display: block;
+    }
+    .asset-thumb-placeholder {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 100%;
+      height: 100%;
+      color: var(--muted);
+      font-size: 12px;
+      text-align: center;
+      padding: 12px;
+    }
+    .asset-card-body { display: grid; gap: 8px; }
+    .asset-top { display: flex; justify-content: space-between; gap: 10px; align-items: start; }
+    .asset-name { font-weight: 700; word-break: break-word; }
+    .asset-tags { display: flex; flex-wrap: wrap; gap: 6px; }
+    .asset-path { color: var(--muted); font-size: 11px; word-break: break-word; line-height: 1.45; }
+    .tag {
+      display: inline-flex;
+      align-items: center;
+      padding: 5px 8px;
+      border-radius: 999px;
+      background: rgba(125, 211, 252, 0.12);
+      color: var(--accent);
+      font-size: 11px;
+    }
+
+    .result-card pre {
+      margin: 0;
+      white-space: pre-wrap;
+      word-break: break-word;
+      color: #dbeafe;
+      font-family: "SFMono-Regular", Consolas, monospace;
+      font-size: 12px;
+      line-height: 1.6;
+    }
+
+    .summary-grid {
+      display: grid;
+      gap: 10px;
+    }
+    .summary-section {
+      padding: 12px;
+      border-radius: 14px;
+      background: rgba(255, 255, 255, 0.035);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+    }
+    .summary-title {
+      margin-bottom: 6px;
+      color: var(--muted);
+      font-size: 11px;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+    .summary-body {
+      color: var(--text);
+      font-size: 13px;
+      line-height: 1.6;
+      word-break: break-word;
+    }
+
+    .controls { display: flex; gap: 10px; flex-wrap: wrap; }
+    .controls button { flex: 1 1 140px; }
+
+    .empty-state {
+      padding: 22px;
+      border-radius: 18px;
+      color: var(--muted);
+      border: 1px dashed rgba(125, 211, 252, 0.28);
+      background: rgba(125, 211, 252, 0.06);
+    }
+
+    @media (max-width: 1200px) {
+      .hero, .workspace { grid-template-columns: 1fr; }
+    }
+
+    @media (max-width: 720px) {
+      .shell { padding: 16px 12px 28px; }
+      .hero-copy, .hero-stats, .sidebar, .content, .chat { padding: 16px; }
+      .hero-stats { grid-template-columns: 1fr; }
+      .asset-grid { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <div class="shell">
+    <section class="hero">
+      <div class="panel hero-copy">
+        <div class="eyebrow">Live Photo Agent Console</div>
+        <h1>让资产、模型和生成过程在一个页面里看得见。</h1>
+        <p class="subtitle">你可以先浏览当前相册资产，按相册切换和勾选素材，再输入一句需求，让系统直接展示 planner、工具编排和最终生成结果。</p>
+        <div class="hero-meta">
+          <div class="badge"><span>库根目录</span><strong id="libraryRootLabel">-</strong></div>
+          <div class="badge"><span>模型</span><strong id="modelLabel">-</strong></div>
+          <div class="badge"><span>后端</span><strong id="backendLabel">-</strong></div>
+        </div>
+      </div>
+      <div class="panel hero-stats">
+        <div class="stat"><span class="stat-value" id="assetCount">0</span><span class="stat-label">当前资产</span></div>
+        <div class="stat"><span class="stat-value" id="albumCount">0</span><span class="stat-label">相册分组</span></div>
+        <div class="stat"><span class="stat-value" id="livePhotoCount">0</span><span class="stat-label">Live Photo</span></div>
+        <div class="stat"><span class="stat-value" id="motionReadyCount">0</span><span class="stat-label">带运动段</span></div>
+      </div>
+    </section>
+
+    <section class="workspace">
+      <aside class="panel sidebar">
+        <h2 class="section-title">资产概览</h2>
+        <div class="field">
+          <label for="libraryRootInput">库根目录</label>
+          <input id="libraryRootInput" placeholder="/home/you/DCIM">
+        </div>
+        <div class="controls">
+          <button id="refreshButton">刷新资产</button>
+          <button id="selectAllButton">全选当前相册</button>
+        </div>
+        <div class="field" style="margin-top: 14px;">
+          <label for="albumSelect">选择相册</label>
+          <select id="albumSelect"></select>
+        </div>
+        <div id="albumList" class="album-list"></div>
+
+        <div class="config-panel">
+          <h2 class="section-title" style="margin: 0;">大脑配置</h2>
+          <div class="field" style="margin: 0;">
+            <label for="plannerBackendSelect">Backend</label>
+            <select id="plannerBackendSelect">
+              <option value="auto">auto</option>
+              <option value="endpoint">endpoint</option>
+              <option value="local_hf">local_hf</option>
+            </select>
+          </div>
+          <div class="field" style="margin: 0;">
+            <label for="plannerModelInput">Model</label>
+            <input id="plannerModelInput" placeholder="Qwen/Qwen3-VL-8B">
+          </div>
+          <div class="field" style="margin: 0;">
+            <label for="plannerEndpointInput">Endpoint URL</label>
+            <input id="plannerEndpointInput" placeholder="https://.../chat/completions">
+          </div>
+          <div class="field" style="margin: 0;">
+            <label for="plannerTokenInput">Endpoint Token</label>
+            <input id="plannerTokenInput" type="password" placeholder="可选，留空不改">
+          </div>
+          <div class="field" style="margin: 0;">
+            <label for="plannerWorkspaceInput">Workspace ID</label>
+            <input id="plannerWorkspaceInput" placeholder="可选">
+          </div>
+          <div class="config-inline">
+            <div class="field" style="margin: 0;">
+              <label for="plannerTimeoutInput">Timeout(s)</label>
+              <input id="plannerTimeoutInput" type="number" step="1" min="1" placeholder="60">
+            </div>
+            <div class="field" style="margin: 0;">
+              <label for="plannerMaxTokensInput">Max New Tokens</label>
+              <input id="plannerMaxTokensInput" type="number" step="1" min="1" placeholder="384">
+            </div>
+          </div>
+          <div class="field" style="margin: 0;">
+            <label for="plannerLocalModelDirInput">Local Model Dir</label>
+            <input id="plannerLocalModelDirInput" placeholder="/path/to/local/model">
+          </div>
+          <div class="config-inline">
+            <div class="field" style="margin: 0;">
+              <label for="plannerLocalDeviceInput">Local Device</label>
+              <input id="plannerLocalDeviceInput" placeholder="cpu/cuda/auto">
+            </div>
+            <div class="field" style="margin: 0;">
+              <label for="plannerLocalDtypeInput">Local DType</label>
+              <input id="plannerLocalDtypeInput" placeholder="float32/float16/bfloat16/auto">
+            </div>
+          </div>
+          <div class="controls">
+            <button id="plannerApplyButton">应用配置</button>
+            <button id="plannerResetButton">恢复默认</button>
+          </div>
+          <pre id="plannerConfigPreview">等待加载配置。</pre>
+        </div>
+
+        <h2 class="section-title" style="margin-top: 20px;">工具规划</h2>
+        <div class="micro">点选工具后，会作为 guidance 发送给 planner，帮助它优先编排这些工具。</div>
+        <div id="guidedToolsPreview" class="chip-list"></div>
+        <div id="toolCatalog" class="tool-grid"></div>
+      </aside>
+
+      <main class="panel content">
+        <h2 class="section-title">当前资产卡片</h2>
+        <div id="assetGrid" class="asset-grid"></div>
+      </main>
+
+      <section class="panel chat">
+        <h2 class="section-title">聊天与生成</h2>
+        <div class="field">
+          <label for="chatInput">用户输入</label>
+          <textarea id="chatInput" placeholder="例如：帮我从当前相册里挑一组适合做三拼的 live photo，输出一个适合朋友圈的版本。"></textarea>
+        </div>
+        <div class="controls">
+          <button id="generateButton" class="primary">开始生成</button>
+          <button id="clearButton">清空结果</button>
+        </div>
+        <div class="results-layout" style="margin-top: 16px;">
+          <div class="result-card">
+            <div class="micro">大脑规划</div>
+            <div id="planPreview" class="summary-grid">等待生成。</div>
+          </div>
+          <div class="result-card">
+            <div class="micro">选中的资产与工具</div>
+            <pre id="selectedAssetPreview">[]</pre>
+          </div>
+          <div class="result-card">
+            <div class="micro">生成效果展示</div>
+            <div id="resultPreview" class="summary-grid">等待生成。</div>
+          </div>
+          <div class="result-card">
+            <div class="micro">规划与执行轨迹</div>
+            <pre id="tracePreview">-</pre>
+          </div>
+        </div>
+      </section>
+    </section>
+  </div>
+
+  <script>
+    const state = {
+      bootstrap: null,
+      selectedAssetIds: new Set(),
+      selectedToolNames: new Set(),
+      activeAlbum: '__all__',
+    };
+
+    const els = {
+      libraryRootLabel: document.getElementById('libraryRootLabel'),
+      modelLabel: document.getElementById('modelLabel'),
+      backendLabel: document.getElementById('backendLabel'),
+      assetCount: document.getElementById('assetCount'),
+      albumCount: document.getElementById('albumCount'),
+      livePhotoCount: document.getElementById('livePhotoCount'),
+      motionReadyCount: document.getElementById('motionReadyCount'),
+      libraryRootInput: document.getElementById('libraryRootInput'),
+      albumSelect: document.getElementById('albumSelect'),
+      albumList: document.getElementById('albumList'),
+      plannerBackendSelect: document.getElementById('plannerBackendSelect'),
+      plannerModelInput: document.getElementById('plannerModelInput'),
+      plannerEndpointInput: document.getElementById('plannerEndpointInput'),
+      plannerTokenInput: document.getElementById('plannerTokenInput'),
+      plannerWorkspaceInput: document.getElementById('plannerWorkspaceInput'),
+      plannerTimeoutInput: document.getElementById('plannerTimeoutInput'),
+      plannerMaxTokensInput: document.getElementById('plannerMaxTokensInput'),
+      plannerLocalModelDirInput: document.getElementById('plannerLocalModelDirInput'),
+      plannerLocalDeviceInput: document.getElementById('plannerLocalDeviceInput'),
+      plannerLocalDtypeInput: document.getElementById('plannerLocalDtypeInput'),
+      plannerApplyButton: document.getElementById('plannerApplyButton'),
+      plannerResetButton: document.getElementById('plannerResetButton'),
+      plannerConfigPreview: document.getElementById('plannerConfigPreview'),
+      assetGrid: document.getElementById('assetGrid'),
+      toolCatalog: document.getElementById('toolCatalog'),
+      guidedToolsPreview: document.getElementById('guidedToolsPreview'),
+      chatInput: document.getElementById('chatInput'),
+      planPreview: document.getElementById('planPreview'),
+      selectedAssetPreview: document.getElementById('selectedAssetPreview'),
+      resultPreview: document.getElementById('resultPreview'),
+      tracePreview: document.getElementById('tracePreview'),
+      refreshButton: document.getElementById('refreshButton'),
+      selectAllButton: document.getElementById('selectAllButton'),
+      generateButton: document.getElementById('generateButton'),
+      clearButton: document.getElementById('clearButton'),
+    };
+
+    function escapeHtml(value) {
+      return String(value)
+        .replaceAll('&', '&amp;')
+        .replaceAll('<', '&lt;')
+        .replaceAll('>', '&gt;')
+        .replaceAll('"', '&quot;')
+        .replaceAll("'", '&#39;');
+    }
+
+    function summarizeAsset(asset) {
+      return {
+        asset_id: asset.asset_id,
+        album_name: asset.metadata?.album_name ?? '.',
+        image_path: asset.image_path,
+        motion_path: asset.motion_path,
+        tags: asset.tags ?? [],
+        has_motion: asset.motion_path ? 'yes' : 'no',
+        is_live_photo: asset.metadata?.is_live_photo ?? 'false',
+      };
+    }
+
+    function currentToolCatalog() {
+      return (state.bootstrap?.tool_catalog ?? []).slice();
+    }
+
+    function mediaUrl(path) {
+      if (!path) {
+        return '';
+      }
+      return `/api/ui/media?path=${encodeURIComponent(path)}`;
+    }
+
+    function getSelectedAssetIds() {
+      return Array.from(state.selectedAssetIds).sort();
+    }
+
+    function setSelectedAssetIds(ids) {
+      state.selectedAssetIds = new Set(ids);
+      renderSelectedPreview();
+      renderAssets();
+      renderAlbums();
+    }
+
+    function setSelectedToolNames(names) {
+      state.selectedToolNames = new Set(names);
+      renderToolGuidance();
+      renderToolCatalog();
+      renderSelectedPreview();
+    }
+
+    function setActiveAlbum(albumName) {
+      state.activeAlbum = albumName;
+      renderAssets();
+      renderAlbums();
+    }
+
+    function currentAssets() {
+      return (state.bootstrap?.assets ?? []).slice();
+    }
+
+    function currentAlbums() {
+      return (state.bootstrap?.albums ?? []).slice();
+    }
+
+    function filteredAssets() {
+      if (state.activeAlbum === '__all__') {
+        return currentAssets();
+      }
+      return currentAssets().filter((asset) => (asset.metadata?.album_name ?? '.') === state.activeAlbum);
+    }
+
+    function renderSummary() {
+      const summary = state.bootstrap?.summary ?? { asset_count: 0, album_count: 0, live_photo_count: 0, motion_ready_count: 0 };
+      els.libraryRootLabel.textContent = state.bootstrap?.library_root ?? '-';
+      const runtime = state.plannerConfig?.runtime_info ?? state.bootstrap?.planner ?? {};
+      els.modelLabel.textContent = runtime.planner_model ?? state.bootstrap?.planner?.planner_model ?? '-';
+      els.backendLabel.textContent = runtime.planner_backend ?? state.bootstrap?.planner?.planner_backend ?? '-';
+      els.assetCount.textContent = summary.asset_count ?? 0;
+      els.albumCount.textContent = summary.album_count ?? 0;
+      els.livePhotoCount.textContent = summary.live_photo_count ?? 0;
+      els.motionReadyCount.textContent = summary.motion_ready_count ?? 0;
+      els.libraryRootInput.value = state.bootstrap?.library_root ?? '';
+      document.title = `${state.bootstrap?.app_name ?? 'Live Photo Agent'} · Console`;
+      renderToolGuidance();
+      renderToolCatalog();
+    }
+
+    function populatePlannerConfigForm(config) {
+      const data = config ?? {};
+      els.plannerBackendSelect.value = data.planner_backend ?? 'auto';
+      els.plannerModelInput.value = data.qwen_model ?? '';
+      els.plannerEndpointInput.value = data.qwen_endpoint ?? '';
+      els.plannerTokenInput.value = '';
+      els.plannerWorkspaceInput.value = data.qwen_workspace_id ?? '';
+      els.plannerTimeoutInput.value = data.qwen_timeout_seconds ?? '';
+      els.plannerMaxTokensInput.value = data.local_max_new_tokens ?? '';
+      els.plannerLocalModelDirInput.value = data.local_model_dir ?? '';
+      els.plannerLocalDeviceInput.value = data.local_device ?? '';
+      els.plannerLocalDtypeInput.value = data.local_dtype ?? '';
+
+      els.plannerConfigPreview.textContent = JSON.stringify({
+        runtime_info: data.runtime_info,
+        qwen_endpoint: data.qwen_endpoint,
+        qwen_auth_token_configured: data.qwen_auth_token_configured,
+        local_model_dir: data.local_model_dir,
+      }, null, 2);
+    }
+
+    async function fetchPlannerConfig() {
+      const response = await fetch('/api/ui/planner-config');
+      if (!response.ok) {
+        throw new Error(`planner-config failed: ${response.status}`);
+      }
+      const config = await response.json();
+      state.plannerConfig = config;
+      populatePlannerConfigForm(config);
+      renderSummary();
+    }
+
+    async function applyPlannerConfig() {
+      const payload = {
+        planner_backend: els.plannerBackendSelect.value,
+        qwen_model: els.plannerModelInput.value.trim(),
+        qwen_endpoint: els.plannerEndpointInput.value.trim(),
+        qwen_workspace_id: els.plannerWorkspaceInput.value.trim(),
+        local_model_dir: els.plannerLocalModelDirInput.value.trim(),
+        local_device: els.plannerLocalDeviceInput.value.trim(),
+        local_dtype: els.plannerLocalDtypeInput.value.trim(),
+      };
+      const timeout = Number(els.plannerTimeoutInput.value);
+      const maxTokens = Number(els.plannerMaxTokensInput.value);
+      if (!Number.isNaN(timeout) && timeout > 0) {
+        payload.qwen_timeout_seconds = timeout;
+      }
+      if (!Number.isNaN(maxTokens) && maxTokens > 0) {
+        payload.local_max_new_tokens = maxTokens;
+      }
+
+      const token = els.plannerTokenInput.value.trim();
+      if (token) {
+        payload.qwen_auth_token = token;
+      }
+
+      const response = await fetch('/api/ui/planner-config', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      if (!response.ok) {
+        const text = await response.text();
+        throw new Error(text || `planner-config apply failed: ${response.status}`);
+      }
+      const config = await response.json();
+      state.plannerConfig = config;
+      populatePlannerConfigForm(config);
+      renderSummary();
+    }
+
+    async function resetPlannerConfig() {
+      const response = await fetch('/api/ui/planner-config', { method: 'DELETE' });
+      if (!response.ok) {
+        const text = await response.text();
+        throw new Error(text || `planner-config reset failed: ${response.status}`);
+      }
+      const config = await response.json();
+      state.plannerConfig = config;
+      populatePlannerConfigForm(config);
+      renderSummary();
+    }
+
+    function renderAlbums() {
+      const albums = currentAlbums();
+      els.albumSelect.innerHTML = ['<option value="__all__">全部相册</option>']
+        .concat(albums.map((album) => `<option value="${escapeHtml(album.album_name)}">${escapeHtml(album.album_name)} (${album.asset_count})</option>`))
+        .join('');
+      els.albumSelect.value = state.activeAlbum;
+
+      els.albumList.innerHTML = albums.length === 0
+        ? '<div class="empty-state">当前没有扫描到资产。你可以先切换库根目录再刷新。</div>'
+        : albums.map((album) => {
+            const active = state.activeAlbum === album.album_name ? 'active' : '';
+            return `
+              <button class="album-card ${active}" data-album="${escapeHtml(album.album_name)}" type="button">
+                <div>
+                  <div class="album-name">${escapeHtml(album.album_name)}</div>
+                  <div class="album-meta">${album.asset_count} 项 · ${album.live_photo_count} 张 live photo · ${album.motion_ready_count} 个带运动段</div>
+                </div>
+                <div class="micro">${album.asset_ids.length} ids</div>
+              </button>
+            `;
+          }).join('');
+
+      els.albumList.querySelectorAll('[data-album]').forEach((node) => {
+        node.addEventListener('click', () => setActiveAlbum(node.dataset.album));
+      });
+    }
+
+    function renderAssets() {
+      const assets = filteredAssets();
+      if (assets.length === 0) {
+        els.assetGrid.innerHTML = '<div class="empty-state">没有资产可展示。</div>';
+        return;
+      }
+
+      els.assetGrid.innerHTML = assets.map((asset) => {
+        const checked = state.selectedAssetIds.has(asset.asset_id) ? 'checked' : '';
+        const tags = (asset.tags ?? []).slice(0, 5).map((tag) => `<span class="tag">${escapeHtml(tag)}</span>`).join('');
+        const thumbnail = asset.image_path ? `<img src="${mediaUrl(asset.image_path)}" alt="${escapeHtml(asset.asset_id)}">` : '<div class="asset-thumb-placeholder">没有预览</div>';
+        return `
+          <label class="asset-card">
+            <div class="asset-thumb">
+              ${thumbnail}
+            </div>
+            <div class="asset-card-body">
+              <div class="asset-top">
+                <div>
+                  <div class="asset-name">${escapeHtml(asset.asset_id)}</div>
+                  <div class="asset-meta">${escapeHtml(asset.metadata?.album_name ?? '.')}${asset.motion_path ? ' · motion' : ''}</div>
+                </div>
+                <input type="checkbox" data-asset-id="${escapeHtml(asset.asset_id)}" ${checked}>
+              </div>
+              <div class="asset-tags">${tags || '<span class="tag">untagged</span>'}</div>
+              <div class="asset-path">${asset.image_path ? escapeHtml(asset.image_path) : ''}</div>
+            </div>
+          </label>
+        `;
+      }).join('');
+
+      els.assetGrid.querySelectorAll('input[type="checkbox"][data-asset-id]').forEach((checkbox) => {
+        checkbox.addEventListener('change', () => {
+          if (checkbox.checked) {
+            state.selectedAssetIds.add(checkbox.dataset.assetId);
+          } else {
+            state.selectedAssetIds.delete(checkbox.dataset.assetId);
+          }
+          renderSelectedPreview();
+          renderAlbums();
+        });
+      });
+    }
+
+    function renderToolGuidance() {
+      const selected = Array.from(state.selectedToolNames).sort();
+      els.guidedToolsPreview.innerHTML = selected.length === 0
+        ? '<span class="chip">未选择工具 guidance</span>'
+        : selected.map((toolName) => `<span class="chip selected">${escapeHtml(toolName)}</span>`).join('');
+    }
+
+    function renderToolCatalog() {
+      const catalog = currentToolCatalog();
+      if (catalog.length === 0) {
+        els.toolCatalog.innerHTML = '<div class="empty-state">没有可展示的工具目录。</div>';
+        return;
+      }
+
+      els.toolCatalog.innerHTML = catalog.map((tool) => {
+        const selected = state.selectedToolNames.has(tool.tool) ? 'selected' : '';
+        const inputSchema = Object.entries(tool.input_schema ?? {})
+          .map(([key, value]) => `${key}: ${value}`)
+          .join('\n');
+        const outputSchema = Object.entries(tool.output_schema ?? {})
+          .map(([key, value]) => `${key}: ${value}`)
+          .join('\n');
+        return `
+          <button class="tool-card ${selected}" type="button" data-tool-name="${escapeHtml(tool.tool)}">
+            <div class="tool-card-header">
+              <div>
+                <div class="tool-name">${escapeHtml(tool.tool)}</div>
+                <div class="micro">${escapeHtml(tool.level)} · ${escapeHtml(tool.security_scope ?? 'unknown')}</div>
+              </div>
+              <div class="tool-pill">${tool.idempotent ? 'idempotent' : 'stateful'}</div>
+            </div>
+            <div class="tool-purpose">${escapeHtml(tool.purpose ?? '')}</div>
+            <div class="tool-details">
+              <span class="tool-pill">preconditions ${escapeHtml((tool.preconditions ?? []).length)}</span>
+              <span class="tool-pill">outputs ${escapeHtml((tool.output_fields ?? []).length)}</span>
+              <span class="tool-pill">failure ${escapeHtml((tool.failure_modes ?? []).length)}</span>
+            </div>
+            <div class="tool-schema"><strong>输入</strong>\n${escapeHtml(inputSchema || '—')}</div>
+            <div class="tool-schema"><strong>输出</strong>\n${escapeHtml(outputSchema || '—')}</div>
+          </button>
+        `;
+      }).join('');
+
+      els.toolCatalog.querySelectorAll('[data-tool-name]').forEach((node) => {
+        node.addEventListener('click', () => {
+          const toolName = node.dataset.toolName;
+          const next = new Set(state.selectedToolNames);
+          if (next.has(toolName)) {
+            next.delete(toolName);
+          } else {
+            next.add(toolName);
+          }
+          setSelectedToolNames(Array.from(next));
+        });
+      });
+    }
+
+    function renderSelectedPreview() {
+      const selected = currentAssets().filter((asset) => state.selectedAssetIds.has(asset.asset_id)).map(summarizeAsset);
+      els.selectedAssetPreview.textContent = JSON.stringify({
+        selected_asset_ids: getSelectedAssetIds(),
+        guided_tool_names: Array.from(state.selectedToolNames).sort(),
+        selected_assets: selected,
+      }, null, 2);
+    }
+
+    function renderResult(response) {
+      const clarification = (response.plan?.clarification_questions ?? []).length
+        ? response.plan.clarification_questions.map((item) => `<li>${escapeHtml(item)}</li>`).join('')
+        : '<div class="summary-body">无</div>';
+      const toolCalls = (response.plan?.tool_calls ?? []).length
+        ? response.plan.tool_calls.map((call) => `<div class="summary-body"><strong>${escapeHtml(call.tool)}</strong> · ${escapeHtml(call.reason)}</div>`).join('')
+        : '<div class="summary-body">无</div>';
+
+      els.planPreview.innerHTML = [
+        `<div class="summary-section"><div class="summary-title">Intent</div><div class="summary-body">${escapeHtml(response.plan?.intent ?? '-')}</div></div>`,
+        `<div class="summary-section"><div class="summary-title">Clarification</div><div class="summary-body">${clarification}</div></div>`,
+        `<div class="summary-section"><div class="summary-title">Tools</div><div class="summary-body">${toolCalls}</div></div>`,
+      ].join('');
+
+      els.resultPreview.innerHTML = [
+        `<div class="summary-section"><div class="summary-title">输出结果</div><div class="summary-body">${escapeHtml(response.final_response ?? '-')}</div></div>`,
+        `<div class="summary-section"><div class="summary-title">工具输出</div><div class="summary-body">${escapeHtml((response.tool_results ?? []).map((item) => `${item.tool}: ${item.success ? 'ok' : 'fail'}`).join(' · ') || '无')}</div></div>`,
+      ].join('');
+      els.tracePreview.textContent = JSON.stringify({
+        pipeline_trace: response.pipeline_trace,
+        context: {
+          preprocess: response.context?.preprocess,
+          graph_observability: response.context?.graph_observability,
+          summary: response.context?.summary,
+        },
+      }, null, 2);
+    }
+
+    async function refreshBootstrap() {
+      const libraryRoot = els.libraryRootInput.value.trim();
+      const url = libraryRoot ? `/api/ui/bootstrap?library_root=${encodeURIComponent(libraryRoot)}` : '/api/ui/bootstrap';
+      const response = await fetch(url);
+      if (!response.ok) {
+        throw new Error(`bootstrap failed: ${response.status}`);
+      }
+      state.bootstrap = await response.json();
+      state.activeAlbum = '__all__';
+      if (state.bootstrap.assets.length > 0) {
+        state.selectedAssetIds = new Set(state.bootstrap.assets.slice(0, Math.min(3, state.bootstrap.assets.length)).map((asset) => asset.asset_id));
+      }
+      renderSummary();
+      renderAlbums();
+      renderAssets();
+      renderSelectedPreview();
+      renderToolCatalog();
+      await fetchPlannerConfig();
+    }
+
+    async function runGeneration() {
+      const payload = {
+        user_id: 'web-demo',
+        text: els.chatInput.value.trim() || '请根据当前资产给我一个可展示的生成结果。',
+        library_root: els.libraryRootInput.value.trim() || state.bootstrap?.library_root,
+        selected_asset_ids: getSelectedAssetIds(),
+        guided_tool_names: Array.from(state.selectedToolNames).sort(),
+        input_image_paths: [],
+        input_video_paths: [],
+      };
+
+      els.generateButton.disabled = true;
+      els.generateButton.textContent = '生成中...';
+      try {
+        const response = await fetch('/agent/execute', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
+        if (!response.ok) {
+          const body = await response.text();
+          throw new Error(body || `execute failed: ${response.status}`);
+        }
+        const data = await response.json();
+        renderResult(data);
+      } catch (error) {
+        els.resultPreview.textContent = String(error);
+      } finally {
+        els.generateButton.disabled = false;
+        els.generateButton.textContent = '开始生成';
+      }
+    }
+
+    els.refreshButton.addEventListener('click', () => refreshBootstrap().catch((error) => { els.resultPreview.textContent = String(error); }));
+    els.selectAllButton.addEventListener('click', () => {
+      const assets = filteredAssets();
+      setSelectedAssetIds(assets.map((asset) => asset.asset_id));
+    });
+    els.albumSelect.addEventListener('change', () => setActiveAlbum(els.albumSelect.value));
+    els.generateButton.addEventListener('click', () => runGeneration());
+    els.clearButton.addEventListener('click', () => {
+      els.planPreview.textContent = '等待生成。';
+      els.resultPreview.textContent = '等待生成。';
+      els.tracePreview.textContent = '-';
+    });
+    els.plannerApplyButton.addEventListener('click', () => applyPlannerConfig().catch((error) => { els.resultPreview.textContent = String(error); }));
+    els.plannerResetButton.addEventListener('click', () => resetPlannerConfig().catch((error) => { els.resultPreview.textContent = String(error); }));
+
+    refreshBootstrap().catch((error) => {
+      els.resultPreview.textContent = String(error);
+      els.assetGrid.innerHTML = '<div class="empty-state">页面初始化失败，请检查后端是否启动。</div>';
+    });
+
+    renderToolGuidance();
+    renderToolCatalog();
+  </script>
+</body>
+</html>

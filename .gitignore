@@ -2,6 +2,13 @@
 __pycache__/
 .pytest_cache/
 .agent_memory.json
+.album_catalog.json
+.album_operations.jsonl
+.asset_feature_index.json
+.graph_runs.jsonl
+.live_photo_motion_cache/
+.agent_work/
+data/
 models/
 *.egg-info/
 tests/_last_plan_raw_output.txt

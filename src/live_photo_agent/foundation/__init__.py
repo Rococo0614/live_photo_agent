@@ -1,6 +1,7 @@
 from .library import LibraryService
 from .media_ops import MediaOps, MediaOpsError
 from .memory import MemoryService
+from .preprocess_index import OfflinePreprocessIndexer, OfflinePreprocessReport
 from .state import FoundationLayer
 
 __all__ = [
@@ -9,4 +10,6 @@ __all__ = [
     "MediaOps",
     "MediaOpsError",
     "MemoryService",
+    "OfflinePreprocessIndexer",
+    "OfflinePreprocessReport",
 ]
