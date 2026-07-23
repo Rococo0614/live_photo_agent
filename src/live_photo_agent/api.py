@@ -1,15 +1,30 @@
+import os
 from pathlib import Path
 
 from fastapi import FastAPI
 from fastapi import HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from fastapi.responses import HTMLResponse
 from fastapi.responses import FileResponse
 
 from .config import settings
+from .foundation import LibraryService, OfflinePreprocessIndexer
+from .foundation.memory import MemoryService
 from .models import AgentRequest, AgentResponse
 from .orchestrator import LivePhotoAgent
 from .ui import build_ui_bootstrap, load_index_html
+
+# ---------------------------------------------------------------------------
+# LangSmith tracing — auto-enabled when LANGCHAIN_TRACING_V2=true is set
+# (via .env or shell). No-op if the env var is absent or langsmith not installed.
+# ---------------------------------------------------------------------------
+if os.environ.get("LANGCHAIN_TRACING_V2", "").lower() == "true":
+    try:
+        from langsmith import Client as _LangSmithClient  # noqa: F401
+        _project = os.environ.get("LANGCHAIN_PROJECT", "live-photo-agent")
+        print(f"[LangSmith] tracing enabled → project: {_project}")
+    except ImportError:
+        print("[LangSmith] langsmith package not installed, tracing skipped")
 
 
 app = FastAPI(title=settings.app_name)
@@ -152,4 +167,93 @@ def ui_media(path: str) -> FileResponse:
 
 @app.post("/agent/execute", response_model=AgentResponse)
 def execute_agent(request: AgentRequest) -> AgentResponse:
+    # Convert str paths to Path objects for handler
+    request.library_root = Path(request.library_root) if isinstance(request.library_root, str) else request.library_root
+    request.input_image_paths = [Path(p) if isinstance(p, str) else p for p in request.input_image_paths]
+    request.input_video_paths = [Path(p) if isinstance(p, str) else p for p in request.input_video_paths]
     return agent.execute(request)
+
+
+# ---------------------------------------------------------------------------
+# Album sync
+# ---------------------------------------------------------------------------
+
+class AlbumSyncRequest(BaseModel):
+    library_root: str
+    force: bool = False
+
+
+@app.post("/api/album/sync")
+def album_sync(request: AlbumSyncRequest) -> dict[str, object]:
+    """Scan the library root and rebuild the offline preprocess index.
+
+    1. Scans assets and builds quality signals.
+    2. Enriches semantic signals via VLM (skips already-done rows).
+
+    Rows whose fingerprint is unchanged AND already have VLM semantic signals
+    are reused as-is.  Everything else is re-enriched.
+    Set ``force=true`` to unconditionally rebuild every row.
+    """
+    library_root = Path(request.library_root).expanduser().resolve()
+    if not library_root.exists() or not library_root.is_dir():
+        raise HTTPException(status_code=400, detail=f"library_root not found: {library_root}")
+    indexer = OfflinePreprocessIndexer(library_service=LibraryService())
+    # Step 1: Scan + quality signals (fast)
+    report = indexer.build(library_root=library_root, force_rebuild=request.force)
+    # Step 2: VLM enrichment (slow, prints progress)
+    indexer.enrich_semantics_pass(force=request.force)
+    return report.to_dict()
+
+
+# ---------------------------------------------------------------------------
+# Memory / feedback
+# ---------------------------------------------------------------------------
+
+class FeedbackRequest(BaseModel):
+    session_id: str = ""
+    asset_ids: list[str] = Field(default_factory=list)
+    accepted: bool = True
+    comment: str = ""
+
+
+@app.post("/api/memory/feedback")
+def memory_feedback(request: FeedbackRequest) -> dict[str, object]:
+    """Record explicit user acceptance / rejection for the last agent turn.
+
+    This patches the most recent session-memory entry whose ``accepted`` field
+    has not yet been set by a feedback call, then persists ``strategy_memory``
+    so future planner suggestions reflect the outcome.
+    """
+    memory = MemoryService(settings.memory_file)
+    state = memory._load_state()  # noqa: SLF001  (internal helper, intentional)
+
+    session_entries = state.get("session_memory", [])
+    updated = False
+    for entry in reversed(session_entries):
+        if not isinstance(entry, dict):
+            continue
+        if entry.get("_feedback_recorded"):
+            continue
+        entry["accepted"] = request.accepted
+        entry["_feedback_recorded"] = True
+        if request.comment:
+            entry["feedback_comment"] = request.comment
+        if request.asset_ids:
+            entry["feedback_asset_ids"] = request.asset_ids
+        updated = True
+        break
+
+    if updated:
+        from datetime import datetime, timezone
+        import json
+        state["session_memory"] = session_entries
+        settings.memory_file.parent.mkdir(parents=True, exist_ok=True)
+        settings.memory_file.write_text(
+            json.dumps(state, ensure_ascii=False, indent=2), encoding="utf-8"
+        )
+
+    return {
+        "recorded": updated,
+        "accepted": request.accepted,
+        "session_memory_size": len(session_entries),
+    }

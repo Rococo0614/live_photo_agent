@@ -648,6 +648,14 @@ class PlannerGraphRunner:
         if ToolName.SELECT_COVER_FRAME in sequence and ToolName.EXTRACT_KEY_FRAMES not in sequence:
             errors.append("select_cover_frame 之前应先执行 extract_key_frames。")
 
+        if ToolName.SET_DISPLAY_FRAME in sequence and ToolName.EXTRACT_KEY_FRAMES not in sequence:
+            if not any(
+                call.arguments.get("timestamp_ms") is not None or call.arguments.get("frame_path")
+                for call in plan.tool_calls
+                if call.tool == ToolName.SET_DISPLAY_FRAME
+            ):
+                errors.append("set_display_frame 未指定 timestamp_ms/frame_path 时，应先执行 extract_key_frames 以获取候选帧。")
+
         if ToolName.EXPORT_MP4 in sequence and ToolName.CONCAT_CLIPS not in sequence:
             errors.append("export_mp4 前应包含 concat_clips。")
 

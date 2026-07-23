@@ -38,6 +38,7 @@ class ToolRegistry:
             ToolName.ADD_TEXT_OVERLAY: self.l0.add_text_overlay,
             ToolName.MIX_AUDIO_BGM: self.l0.mix_audio_bgm,
             ToolName.EXPORT_MP4: self.l0.export_mp4,
+            ToolName.SET_DISPLAY_FRAME: self.l0.set_display_frame,
         }
 
     def execute(self, call: ToolCall, context: dict[str, object]) -> ToolResult:

@@ -120,6 +120,103 @@ class MediaOps:
         raw = sum(diffs) / len(diffs)
         return max(0.0, min(1.0, raw / 30.0))
 
+    def locate_cover_frame(
+        self,
+        video_path: Path,
+        image_path: Path,
+        sample_budget: int = 180,
+        compare_size: int = 160,
+    ) -> dict[str, object]:
+        try:
+            import cv2
+            import numpy as np
+        except ImportError as exc:
+            raise MediaOpsError("opencv_missing") from exc
+
+        if not video_path.exists():
+            raise MediaOpsError(f"video_not_found: {video_path}")
+        if not image_path.exists():
+            raise MediaOpsError(f"image_not_found: {image_path}")
+
+        cover = cv2.imread(str(image_path))
+        if cover is None:
+            raise MediaOpsError(f"image_decode_failed: {image_path}")
+        cover_gray = self._prepare_match_frame(cover, compare_size=compare_size)
+
+        capture = cv2.VideoCapture(str(video_path))
+        if not capture.isOpened():
+            raise MediaOpsError(f"open_video_failed: {video_path}")
+
+        try:
+            total_frames = int(capture.get(cv2.CAP_PROP_FRAME_COUNT) or 0)
+            fps = float(capture.get(cv2.CAP_PROP_FPS) or 0.0)
+            probe = self.probe_video(video_path)
+            duration_ms = int(probe.get("duration_ms", 0))
+            if fps <= 0:
+                fps = float(probe.get("fps", 0.0))
+            if total_frames <= 0 and fps > 0 and duration_ms > 0:
+                total_frames = max(int(round(duration_ms * fps / 1000.0)), 1)
+
+            stride = max(total_frames // max(sample_budget, 1), 1) if total_frames > 0 else 1
+            best_frame_index: int | None = None
+            best_distance = float("inf")
+
+            frame_index = 0
+            while True:
+                ok, frame = capture.read()
+                if not ok:
+                    break
+                if frame_index % stride != 0:
+                    frame_index += 1
+                    continue
+
+                distance = self._frame_match_distance(frame, cover_gray, compare_size=compare_size, np_module=np)
+                if distance < best_distance:
+                    best_distance = distance
+                    best_frame_index = frame_index
+                frame_index += 1
+
+            if best_frame_index is None:
+                raise MediaOpsError(f"no_frames_sampled: {video_path}")
+
+            if stride > 1 and total_frames > 0:
+                refine_start = max(best_frame_index - stride + 1, 0)
+                refine_end = min(best_frame_index + stride - 1, total_frames - 1)
+                capture.set(cv2.CAP_PROP_POS_FRAMES, refine_start)
+                frame_index = refine_start
+                while frame_index <= refine_end:
+                    ok, frame = capture.read()
+                    if not ok:
+                        break
+                    distance = self._frame_match_distance(frame, cover_gray, compare_size=compare_size, np_module=np)
+                    if distance < best_distance:
+                        best_distance = distance
+                        best_frame_index = frame_index
+                    frame_index += 1
+
+            if fps > 0:
+                timestamp_ms = int(round(best_frame_index * 1000.0 / fps))
+            elif duration_ms > 0 and total_frames > 0:
+                timestamp_ms = int(round(best_frame_index * duration_ms / max(total_frames - 1, 1)))
+            else:
+                timestamp_ms = 0
+
+            position_ratio = (
+                max(0.0, min(1.0, timestamp_ms / duration_ms))
+                if duration_ms > 0
+                else 0.0
+            )
+            match_score = max(0.0, min(1.0, 1.0 - (best_distance / 255.0)))
+
+            return {
+                "cover_frame_index": int(best_frame_index),
+                "cover_frame_timestamp_ms": int(timestamp_ms),
+                "cover_frame_position_ratio": round(position_ratio, 4),
+                "cover_frame_match_score": round(match_score, 4),
+            }
+        finally:
+            capture.release()
+
     def segment_subject(self, image_path: Path, output_mask_path: Path, mode: str = "person_first") -> dict[str, object]:
         _ = mode
         try:
@@ -439,9 +536,16 @@ class MediaOps:
         return output_path
 
     def _cover_filter(self, target_w: int, target_h: int) -> str:
+        # setpts=PTS-STARTPTS: reset timestamps to 0 so clips with non-zero start PTS
+        # (e.g. HEVC clips) align correctly with the color base in overlay filter.
+        # format=yuv420p: normalize 10-bit clips to 8-bit for overlay compatibility.
+        # setsar=1: ensure square pixels so overlay uses correct display coordinates.
         return (
+            f"setpts=PTS-STARTPTS,"
             f"scale={target_w}:{target_h}:force_original_aspect_ratio=increase,"
-            f"crop={target_w}:{target_h}"
+            f"crop={target_w}:{target_h},"
+            f"format=yuv420p,"
+            f"setsar=1"
         )
 
     def add_text_overlay(self, video_path: Path, output_path: Path, text: str, style: str) -> Path:
@@ -706,6 +810,17 @@ class MediaOps:
             return float(text)
         except ValueError:
             return 0.0
+
+    def _prepare_match_frame(self, frame, compare_size: int) -> object:
+        import cv2
+
+        gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+        return cv2.resize(gray, (compare_size, compare_size), interpolation=cv2.INTER_AREA)
+
+    def _frame_match_distance(self, frame, cover_gray, compare_size: int, np_module) -> float:
+        prepared = self._prepare_match_frame(frame, compare_size=compare_size)
+        diff = np_module.abs(prepared.astype("float32") - cover_gray.astype("float32"))
+        return float(diff.mean())
 
     def _build_motion_xmp(self, video_size: int, presentation_timestamp_us: int) -> str:
         return (

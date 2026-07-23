@@ -1,0 +1,10 @@
+{
+  "dependencies": [
+    "."
+  ],
+  "graphs": {
+    "live_photo_agent_studio": "./src/live_photo_agent/execution/studio_graph.py:graph"
+  },
+  "env": ".env"
+}
+

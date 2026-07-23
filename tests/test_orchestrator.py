@@ -15,6 +15,10 @@ def test_execute_end_to_end(tmp_path: Path, monkeypatch) -> None:
     (library_root / "city_walk_01.jpg").write_bytes(b"image")
 
     monkeypatch.setattr(settings, "qwen_endpoint", "http://planner.test/plan")
+    monkeypatch.setattr(settings, "album_preprocess_index_file", tmp_path / ".album_preprocess_index.jsonl")
+    monkeypatch.setattr(settings, "album_catalog_file", tmp_path / ".album_catalog.json")
+    monkeypatch.setattr(settings, "album_operation_log_file", tmp_path / ".album_operations.jsonl")
+    monkeypatch.setattr(settings, "workspace_dir", tmp_path)
 
     def fake_call_remote_planner(self, request: AgentRequest, library_summary: dict[str, object]) -> ExecutionPlan:
         return ExecutionPlan(

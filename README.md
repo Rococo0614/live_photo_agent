@@ -100,6 +100,14 @@ python -m live_photo_agent.offline_preprocess_cli \
 
 自动化场景可使用 `--json` 输出结构化报告。
 
+预处理索引采用分层摘要：
+
+1. `technical_signals`：文件指纹、图片尺寸/亮度/清晰度、视频时长/FPS/编码等标准信息。
+2. `coarse_semantics` / `semantic_signals`：由 prompt-based VLM 语义分析器生成，包含场景、主体、动作、声音和可检索摘要；若配置 `LPA_VLM_ENDPOINT`，会把图片内容送给大模型并产出结构化语义。当前实现默认以端点推理为主，若端点不可用则保留基础摘要内容。
+3. `provenance`：记录各层生产者和版本，支持按模型、Prompt 与资产指纹增量更新。
+
+相册重新扫描只刷新技术层；资产指纹未变化时会保留已有语义层，文件变化后则使旧语义结果失效。运行时检索会优先使用这些语义字段来匹配用户需求。
+
 ## 相册前处理与底座管理（DCIM）
 
 项目默认把手机导出的 `DCIM` 目录作为底座相册输入（可通过 `LPA_DEFAULT_LIBRARY_ROOT` 覆盖）。
@@ -152,6 +160,43 @@ export LPA_PLANNER_TOOL_CONSTRAINT_POLICY=strict
 2. `route_reason`
 3. `trace`
 4. `replay_snapshot`
+
+## LangGraph Studio（可视化调试）
+
+项目已提供 Studio 图入口：
+
+1. `langgraph.json`
+2. `src/live_photo_agent/execution/studio_graph.py`
+
+> 注意：`langgraph-cli` 目前会安装 `langgraph 1.x`，与你项目运行依赖（`langgraph<1.0.0`）冲突。  
+> 建议在**独立环境**中使用 Studio，不要污染当前开发环境。
+
+示例（独立 conda 环境）：
+
+```bash
+conda create -n lg_studio python=3.11 -y
+conda activate lg_studio
+pip install "langgraph-cli[inmem]"
+pip install -e /path/to/live_photo_agent
+```
+
+启动 Studio：
+
+```bash
+cd /path/to/live_photo_agent
+langgraph dev --config langgraph.json
+```
+
+在 Studio 中可用如下初始输入测试一条 run：
+
+```json
+{
+  "user_id": "studio-user",
+  "text": "帮我找海边日落的 live photo",
+  "library_root": "/home/vivo/live_photo_agent/data/live_photo",
+  "selected_asset_ids": []
+}
+```
 
 ## Live Photo conversion CLI
 

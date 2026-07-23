@@ -6,6 +6,7 @@ from pathlib import Path
 
 from .library import LibraryService
 from .media_ops import MediaOps, MediaOpsError
+from .vlm_semantics import VLMSemanticAnalyzer
 from ..models import AssetPreprocessSummary, LivePhotoAsset
 
 
@@ -30,11 +31,12 @@ class OfflinePreprocessReport:
 class OfflinePreprocessIndexer:
     """Build and maintain offline preprocess index JSONL with incremental updates."""
 
-    INDEX_VERSION = "v1"
+    INDEX_VERSION = "v2"
 
     def __init__(self, library_service: LibraryService, media_ops: MediaOps | None = None) -> None:
         self.library_service = library_service
         self.media_ops = media_ops or MediaOps()
+        self.vlm_analyzer = VLMSemanticAnalyzer(media_ops=self.media_ops)
 
     def build(self, library_root: Path, force_rebuild: bool = False) -> OfflinePreprocessReport:
         root = library_root.resolve()
@@ -77,7 +79,35 @@ class OfflinePreprocessIndexer:
                 and previous.version == self.INDEX_VERSION
                 and previous_fingerprint == fingerprint
             ):
-                summary = previous.model_copy(update={"source": "offline_indexer_reuse"})
+                current_summary = asset.preprocess_summary or previous
+                summary = previous.model_copy(
+                    update={
+                        "media_format": current_summary.media_format,
+                        "capture_time": current_summary.capture_time,
+                        "technical_signals": {
+                            **previous.technical_signals,
+                            **current_summary.technical_signals,
+                        },
+                        "quality_signals": {
+                            **previous.quality_signals,
+                            **current_summary.quality_signals,
+                        },
+                        "editability_signals": {
+                            **previous.editability_signals,
+                            **current_summary.editability_signals,
+                        },
+                        "provenance": {
+                            **previous.provenance,
+                            **{
+                                key: value
+                                for key, value in current_summary.provenance.items()
+                                if key not in {"semantic_producer", "semantic_version"}
+                            },
+                        },
+                        "source": "offline_indexer_reuse",
+                        "updated_at": current_summary.updated_at,
+                    }
+                )
                 reused_assets += 1
             else:
                 try:
@@ -112,10 +142,14 @@ class OfflinePreprocessIndexer:
         quality_signals = dict(asset.preprocess_summary.quality_signals if asset.preprocess_summary else {})
         quality_signals.update(image_quality)
         quality_signals["asset_fingerprint"] = fingerprint
+        technical_signals = dict(asset.preprocess_summary.technical_signals if asset.preprocess_summary else {})
+        technical_signals.update(image_quality)
+        technical_signals["asset_fingerprint"] = fingerprint
 
         editability_signals = dict(asset.preprocess_summary.editability_signals if asset.preprocess_summary else {})
         has_motion = asset.motion_path is not None
         editability_signals["has_motion"] = has_motion
+        technical_signals["has_motion"] = has_motion
         if has_motion and asset.motion_path is not None and self.media_ops.ffmpeg_available():
             try:
                 video_info = self.media_ops.probe_video(asset.motion_path)
@@ -125,16 +159,34 @@ class OfflinePreprocessIndexer:
                 editability_signals["motion_resolution"] = (
                     f"{int(video_info.get('width', 0))}x{int(video_info.get('height', 0))}"
                 )
+                technical_signals.update(
+                    {
+                        "motion_duration_ms": int(video_info.get("duration_ms", 0)),
+                        "motion_fps": float(video_info.get("fps", 0.0)),
+                        "motion_codec": str(video_info.get("codec", "unknown")),
+                        "motion_width": int(video_info.get("width", 0)),
+                        "motion_height": int(video_info.get("height", 0)),
+                    }
+                )
             except (MediaOpsError, ValueError, TypeError):
                 pass
 
         base = asset.preprocess_summary or self._fallback_summary(asset=asset, fingerprint=fingerprint)
+        provenance = dict(base.provenance)
+        provenance.update(
+            {
+                "technical_producer": "offline_indexer",
+                "technical_version": self.INDEX_VERSION,
+            }
+        )
         return base.model_copy(
             update={
                 "version": self.INDEX_VERSION,
                 "source": "offline_indexer",
+                "technical_signals": technical_signals,
                 "quality_signals": quality_signals,
                 "editability_signals": editability_signals,
+                "provenance": provenance,
             }
         )
 
@@ -142,11 +194,22 @@ class OfflinePreprocessIndexer:
         fallback = asset.preprocess_summary or AssetPreprocessSummary(media_format="livephoto" if asset.motion_path else "photo")
         quality_signals = dict(fallback.quality_signals)
         quality_signals["asset_fingerprint"] = fingerprint
+        technical_signals = dict(fallback.technical_signals)
+        technical_signals["asset_fingerprint"] = fingerprint
+        provenance = dict(fallback.provenance)
+        provenance.update(
+            {
+                "technical_producer": "offline_indexer_fallback",
+                "technical_version": self.INDEX_VERSION,
+            }
+        )
         return fallback.model_copy(
             update={
                 "version": self.INDEX_VERSION,
                 "source": "offline_indexer_fallback",
+                "technical_signals": technical_signals,
                 "quality_signals": quality_signals,
+                "provenance": provenance,
             }
         )
 
@@ -172,17 +235,10 @@ class OfflinePreprocessIndexer:
         }
 
     def _asset_fingerprint(self, asset: LivePhotoAsset) -> str:
-        parts: list[str] = []
-        image_stat = asset.image_path.stat()
-        parts.append(str(asset.image_path.resolve()))
-        parts.append(str(image_stat.st_size))
-        parts.append(str(image_stat.st_mtime_ns))
-        if asset.motion_path is not None and asset.motion_path.exists():
-            motion_stat = asset.motion_path.stat()
-            parts.append(str(asset.motion_path.resolve()))
-            parts.append(str(motion_stat.st_size))
-            parts.append(str(motion_stat.st_mtime_ns))
-        return "|".join(parts)
+        return self.library_service.asset_fingerprint(
+            image_path=asset.image_path,
+            motion_path=asset.motion_path,
+        )
 
     def _read_index_rows(self) -> list[dict[str, object]]:
         path = self.library_service.preprocess_index_file
@@ -216,3 +272,106 @@ class OfflinePreprocessIndexer:
         path = self.library_service.preprocess_index_file
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(payload, encoding="utf-8")
+
+    def enrich_semantics_pass(self, force: bool = False) -> dict[str, int]:
+        """Walk existing JSONL rows and fill in VLM semantic signals where missing.
+
+        A row is considered "already enriched" only when ``semantic_signals``
+        has at least one non-empty tag list (scene_tags or subject_tags) — a
+        dict with only fallback/placeholder values is treated as not enriched.
+
+        Returns a dict with ``total``, ``enriched``, ``skipped``, and ``failed`` counts.
+        """
+        from .vlm_semantics import VLMSemanticAnalyzer  # local import to avoid circular
+        from ..config import settings as _settings
+        if not _settings.vlm_endpoint:
+            raise RuntimeError(
+                "LPA_VLM_ENDPOINT is not set.\n"
+                "Run first: source scripts/use_endpoint_backend.sh "
+                "<endpoint_url> <api_key> <model>"
+            )
+        rows = self._read_index_rows()
+        enriched = 0
+        skipped = 0
+        failed = 0
+        new_rows: list[dict[str, object]] = []
+
+        for idx, row in enumerate(rows, 1):
+            asset_id = str(row.get("asset_id", "?"))
+            summary_dict = row.get("summary")
+            if not isinstance(summary_dict, dict):
+                new_rows.append(row)
+                skipped += 1
+                continue
+
+            existing_signals = summary_dict.get("semantic_signals", {})
+            already_done = (
+                not force
+                and isinstance(existing_signals, dict)
+                and (
+                    bool(existing_signals.get("scene_tags"))
+                    or bool(existing_signals.get("subject_tags"))
+                )
+            )
+            if already_done:
+                new_rows.append(row)
+                skipped += 1
+                continue
+
+            image_path_str = row.get("image_path")
+            if not image_path_str:
+                new_rows.append(row)
+                skipped += 1
+                continue
+
+            image_path = Path(str(image_path_str))
+            motion_path_str = row.get("motion_path")
+            motion_path = Path(str(motion_path_str)) if motion_path_str else None
+
+            print(f"[{idx}/{len(rows)}] enriching {asset_id} ...", flush=True)
+            try:
+                base_summary = AssetPreprocessSummary.model_validate(summary_dict)
+                asset = LivePhotoAsset(
+                    asset_id=asset_id,
+                    image_path=image_path,
+                    motion_path=motion_path,
+                    preprocess_summary=base_summary,
+                )
+                semantic_enrichment = self.vlm_analyzer.enrich_summary(
+                    asset=asset,
+                    base_summary=base_summary,
+                )
+                # Merge semantic provenance into the row's provenance dict.
+                merged_provenance = dict(base_summary.provenance)
+                merged_provenance.update(semantic_enrichment["provenance"])
+                updated_summary = base_summary.model_copy(
+                    update={
+                        "content_tags": semantic_enrichment["content_tags"],
+                        "content_summary": semantic_enrichment["content_summary"],
+                        "semantic_signals": semantic_enrichment["semantic_signals"],
+                        "coarse_semantics": semantic_enrichment["coarse_semantics"],
+                        "provenance": merged_provenance,
+                    }
+                )
+                new_row = dict(row)
+                new_row["summary"] = updated_summary.model_dump(mode="json")
+                new_rows.append(new_row)
+                enriched += 1
+                ss = semantic_enrichment["semantic_signals"]
+                print(
+                    f"  ✓ summary={ss.get('summary','')[:60]}  "
+                    f"scene={ss.get('scene_tags',[])}",
+                    flush=True,
+                )
+            except Exception as exc:  # noqa: BLE001
+                print(f"  ✗ failed: {exc}", flush=True)
+                new_rows.append(row)
+                failed += 1
+
+        self._write_index_rows(new_rows)
+        print(
+            f"\nenrich-semantics done: total={len(rows)} enriched={enriched} "
+            f"skipped={skipped} failed={failed}",
+            flush=True,
+        )
+        return {"total": len(rows), "enriched": enriched, "skipped": skipped, "failed": failed}

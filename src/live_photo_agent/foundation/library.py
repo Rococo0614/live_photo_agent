@@ -7,6 +7,8 @@ from pathlib import Path
 
 from ..config import settings
 from ..models import AssetPreprocessSummary, LivePhotoAsset
+from .media_ops import MediaOps, MediaOpsError
+from .vlm_semantics import VLMSemanticAnalyzer
 
 JPEG_EOI = b"\xff\xd9"
 FTYP_MAGIC = b"ftyp"
@@ -21,12 +23,15 @@ class LibraryService:
         self.catalog_file = settings.album_catalog_file
         self.operation_log_file = settings.album_operation_log_file
         self.preprocess_index_file = settings.album_preprocess_index_file
+        self.media_ops = MediaOps()
+        self.vlm_analyzer = VLMSemanticAnalyzer()
 
     def scan_live_photos(self, library_root: Path) -> list[LivePhotoAsset]:
         if not library_root.exists():
             return []
 
         library_root = library_root.resolve()
+        persisted_summaries = self.load_preprocess_index(library_root)
 
         image_files = [
             path for path in library_root.rglob("*") if path.is_file() and path.suffix.lower() in IMAGE_EXTENSIONS
@@ -56,6 +61,11 @@ class LibraryService:
                 is_live_photo=is_live_photo,
                 tags=tags,
                 source="scan",
+                enrich_vlm=False,
+            )
+            preprocess_summary = self._merge_preprocess_summary(
+                scan_summary=preprocess_summary,
+                persisted_summary=persisted_summaries.get(image_path.stem),
             )
             assets.append(
                 LivePhotoAsset(
@@ -119,15 +129,32 @@ class LibraryService:
         return [asset for asset in assets if asset.asset_id in selected_set]
 
     def search_assets(self, assets: list[LivePhotoAsset], query: str) -> list[LivePhotoAsset]:
-        normalized_query = query.lower()
-        results: list[LivePhotoAsset] = []
+        normalized_query = query.lower().strip()
+        if not normalized_query:
+            return list(assets)
+
+        query_terms = [term for term in normalized_query.split() if term]
+        scored_assets: list[tuple[float, LivePhotoAsset]] = []
         for asset in assets:
-            searchable = " ".join(
-                [asset.asset_id, asset.image_path.name, *asset.tags, *asset.metadata.values()]
-            ).lower()
-            if any(term in searchable for term in normalized_query.split()):
-                results.append(asset)
-        return results
+            summary = asset.preprocess_summary
+            semantic_text_parts: list[str] = [asset.asset_id, asset.image_path.name, *asset.tags, *asset.metadata.values()]
+            if summary is not None:
+                semantic_text_parts.extend(summary.content_tags)
+                semantic_text_parts.append(summary.content_summary)
+                if isinstance(summary.semantic_signals, dict):
+                    semantic_text_parts.extend(str(value) for value in summary.semantic_signals.values())
+                if isinstance(summary.coarse_semantics, dict):
+                    semantic_text_parts.extend(str(value) for value in summary.coarse_semantics.values())
+            searchable = " ".join(semantic_text_parts).lower()
+            score = 0.0
+            for term in query_terms:
+                if term in searchable:
+                    score += 1.0
+            if score > 0:
+                scored_assets.append((score, asset))
+
+        scored_assets.sort(key=lambda item: item[0], reverse=True)
+        return [asset for _, asset in scored_assets]
 
     def _infer_tags(self, image_path: Path) -> list[str]:
         stem = image_path.stem.lower().replace("_", " ").replace("-", " ")
@@ -360,21 +387,152 @@ class LibraryService:
         is_live_photo: bool,
         tags: list[str],
         source: str,
+        enrich_vlm: bool = True,
     ) -> AssetPreprocessSummary:
         capture_time = datetime.fromtimestamp(image_path.stat().st_mtime, tz=timezone.utc).isoformat(timespec="seconds")
         file_size_kb = round(image_path.stat().st_size / 1024.0, 2)
         content_summary = " ".join(tags[:4]).strip() or image_path.stem
-        return AssetPreprocessSummary(
+        asset_fingerprint = self.asset_fingerprint(image_path=image_path, motion_path=motion_path)
+        technical_signals = {
+            "asset_fingerprint": asset_fingerprint,
+            "image_file_size_kb": file_size_kb,
+            "image_extension": image_path.suffix.lower(),
+            "has_motion": motion_path is not None,
+        }
+        editability_signals = {
+            "has_motion": motion_path is not None,
+        }
+        if enrich_vlm and motion_path is not None:
+            try:
+                cover_frame = self.media_ops.locate_cover_frame(
+                    video_path=motion_path,
+                    image_path=image_path,
+                )
+                technical_signals.update(cover_frame)
+                editability_signals.update(cover_frame)
+            except (MediaOpsError, ValueError, TypeError):
+                pass
+        base_summary = AssetPreprocessSummary(
             media_format="livephoto" if is_live_photo else "photo",
             capture_time=capture_time,
             content_tags=tags,
             content_summary=content_summary,
+            technical_signals=technical_signals,
+            provenance={
+                "technical_producer": "library_scan",
+                "technical_version": "v1",
+            },
             quality_signals={
                 "image_file_size_kb": file_size_kb,
+                "asset_fingerprint": asset_fingerprint,
             },
-            editability_signals={
-                "has_motion": motion_path is not None,
-            },
+            editability_signals=editability_signals,
             source=source,
             updated_at=self._utc_now_iso(),
+        )
+        if not enrich_vlm:
+            return base_summary
+        try:
+            semantic_enrichment = self.vlm_analyzer.enrich_summary(
+                asset=LivePhotoAsset(
+                    asset_id=image_path.stem,
+                    image_path=image_path,
+                    motion_path=motion_path,
+                    tags=tags,
+                    metadata={"is_live_photo": str(is_live_photo).lower()},
+                ),
+                base_summary=base_summary,
+            )
+        except Exception:  # noqa: BLE001
+            return base_summary
+        return base_summary.model_copy(
+            update={
+                "content_tags": semantic_enrichment["content_tags"],
+                "content_summary": semantic_enrichment["content_summary"],
+                "semantic_signals": semantic_enrichment["semantic_signals"],
+                "coarse_semantics": semantic_enrichment["coarse_semantics"],
+                "provenance": semantic_enrichment["provenance"],
+            }
+        )
+
+    def asset_fingerprint(self, image_path: Path, motion_path: Path | None) -> str:
+        parts: list[str] = []
+        image_stat = image_path.stat()
+        parts.extend(
+            [
+                str(image_path.resolve()),
+                str(image_stat.st_size),
+                str(image_stat.st_mtime_ns),
+            ]
+        )
+        if motion_path is not None and motion_path.exists():
+            motion_stat = motion_path.stat()
+            parts.extend(
+                [
+                    str(motion_path.resolve()),
+                    str(motion_stat.st_size),
+                    str(motion_stat.st_mtime_ns),
+                ]
+            )
+        return "|".join(parts)
+
+    def _merge_preprocess_summary(
+        self,
+        scan_summary: AssetPreprocessSummary,
+        persisted_summary: AssetPreprocessSummary | None,
+    ) -> AssetPreprocessSummary:
+        if persisted_summary is None:
+            return scan_summary
+
+        current_fingerprint = str(scan_summary.technical_signals.get("asset_fingerprint", ""))
+        persisted_fingerprint = str(
+            persisted_summary.technical_signals.get("asset_fingerprint")
+            or persisted_summary.quality_signals.get("asset_fingerprint", "")
+        )
+        if persisted_fingerprint and persisted_fingerprint != current_fingerprint:
+            return scan_summary.model_copy(
+                update={
+                    "semantic_signals": {},
+                    "coarse_semantics": {},
+                    "source": "scan",
+                }
+            )
+
+        technical_signals = dict(persisted_summary.technical_signals)
+        technical_signals.update(scan_summary.technical_signals)
+        quality_signals = dict(persisted_summary.quality_signals)
+        quality_signals.update(scan_summary.quality_signals)
+        editability_signals = dict(persisted_summary.editability_signals)
+        editability_signals.update(scan_summary.editability_signals)
+        semantic_signals = dict(persisted_summary.semantic_signals)
+        semantic_signals.update(scan_summary.semantic_signals)
+        coarse_semantics = dict(persisted_summary.coarse_semantics)
+        coarse_semantics.update(scan_summary.coarse_semantics)
+        provenance = dict(persisted_summary.provenance)
+        for key, value in scan_summary.provenance.items():
+            if key not in {"semantic_producer", "semantic_version"}:
+                provenance[key] = value
+
+        content_tags = persisted_summary.content_tags if persisted_summary.content_tags else scan_summary.content_tags
+        content_summary = persisted_summary.content_summary if persisted_summary.content_summary else scan_summary.content_summary
+        if persisted_summary.content_tags and persisted_summary.content_summary:
+            semantic_signals = dict(persisted_summary.semantic_signals)
+            coarse_semantics = dict(persisted_summary.coarse_semantics)
+            provenance = dict(persisted_summary.provenance)
+
+        return persisted_summary.model_copy(
+            update={
+                "media_format": scan_summary.media_format,
+                "capture_time": scan_summary.capture_time,
+                "content_tags": content_tags,
+                "content_summary": content_summary,
+                "technical_signals": technical_signals,
+                "semantic_signals": semantic_signals,
+                "coarse_semantics": coarse_semantics,
+                "quality_signals": quality_signals,
+                "editability_signals": editability_signals,
+                "provenance": provenance,
+                "source": "scan_merged",
+                "updated_at": scan_summary.updated_at,
+            }
         )

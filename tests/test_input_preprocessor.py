@@ -32,6 +32,16 @@ def test_prepare_merges_library_and_explicit_media(tmp_path: Path, monkeypatch) 
     )
 
     preprocessor = InputPreprocessor()
+    monkeypatch.setattr(
+        preprocessor.media_ops,
+        "locate_cover_frame",
+        lambda video_path, image_path: {
+            "cover_frame_index": 12,
+            "cover_frame_timestamp_ms": 400,
+            "cover_frame_position_ratio": 0.2,
+            "cover_frame_match_score": 0.88,
+        },
+    )
     prepared = preprocessor.prepare(request, LibraryService())
 
     asset_ids = {asset.asset_id for asset in prepared.assets}
@@ -44,6 +54,7 @@ def test_prepare_merges_library_and_explicit_media(tmp_path: Path, monkeypatch) 
     trip_asset = next(asset for asset in prepared.assets if asset.asset_id == "trip")
     assert trip_asset.preprocess_summary is not None
     assert trip_asset.preprocess_summary.source == "explicit_input"
+    assert trip_asset.preprocess_summary.editability_signals["cover_frame_timestamp_ms"] == 400
 
 
 def test_prepare_tracks_missing_and_unresolved_video_only(tmp_path: Path, monkeypatch) -> None:

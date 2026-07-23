@@ -6,6 +6,8 @@ from datetime import datetime, timezone
 
 from ..config import settings
 from ..foundation.library import LibraryService
+from ..foundation.media_ops import MediaOps, MediaOpsError
+from ..foundation.vlm_semantics import VLMSemanticAnalyzer
 from ..models import AgentRequest, AssetPreprocessSummary, LivePhotoAsset
 
 
@@ -19,6 +21,10 @@ class PreparedInput:
 
 class InputPreprocessor:
     """Normalize multimodal request inputs into unified library assets."""
+
+    def __init__(self) -> None:
+        self.media_ops = MediaOps()
+        self.vlm_analyzer = VLMSemanticAnalyzer()
 
     def prepare(self, request: AgentRequest, library_service: LibraryService) -> PreparedInput:
         library_root = Path(request.library_root)
@@ -176,13 +182,55 @@ class InputPreprocessor:
         capture_time = datetime.fromtimestamp(image_path.stat().st_mtime, tz=timezone.utc).isoformat(timespec="seconds")
         file_size_kb = round(image_path.stat().st_size / 1024.0, 2)
         content_summary = " ".join(tags[:4]).strip() or image_path.stem
-        return AssetPreprocessSummary(
+        technical_signals = {
+            "image_file_size_kb": file_size_kb,
+            "image_extension": image_path.suffix.lower(),
+            "has_motion": motion_path is not None,
+        }
+        editability_signals = {"has_motion": motion_path is not None}
+        if motion_path is not None:
+            try:
+                cover_frame = self.media_ops.locate_cover_frame(
+                    video_path=motion_path,
+                    image_path=image_path,
+                )
+                technical_signals.update(cover_frame)
+                editability_signals.update(cover_frame)
+            except (MediaOpsError, ValueError, TypeError):
+                pass
+        base_summary = AssetPreprocessSummary(
             media_format="livephoto" if motion_path is not None else "photo",
             capture_time=capture_time,
             content_tags=tags,
             content_summary=content_summary,
+            technical_signals=technical_signals,
+            provenance={
+                "technical_producer": "explicit_input",
+                "technical_version": "v1",
+            },
             quality_signals={"image_file_size_kb": file_size_kb},
-            editability_signals={"has_motion": motion_path is not None},
+            editability_signals=editability_signals,
             source="explicit_input",
             updated_at=datetime.now(timezone.utc).isoformat(timespec="seconds"),
+        )
+        try:
+            semantic_enrichment = self.vlm_analyzer.enrich_summary(
+                asset=LivePhotoAsset(
+                    asset_id=image_path.stem,
+                    image_path=image_path,
+                    motion_path=motion_path,
+                    tags=tags,
+                ),
+                base_summary=base_summary,
+            )
+        except Exception:  # noqa: BLE001
+            return base_summary
+        return base_summary.model_copy(
+            update={
+                "content_tags": semantic_enrichment["content_tags"],
+                "content_summary": semantic_enrichment["content_summary"],
+                "semantic_signals": semantic_enrichment["semantic_signals"],
+                "coarse_semantics": semantic_enrichment["coarse_semantics"],
+                "provenance": semantic_enrichment["provenance"],
+            }
         )

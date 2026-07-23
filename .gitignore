@@ -13,4 +13,4 @@ models/
 *.egg-info/
 tests/_last_plan_raw_output.txt
 tests/evals/planner_eval_report.json
-tests/evals/planner_eval_failures.jsonl
+tests/evals/planner_eval_failures.jsonl.env

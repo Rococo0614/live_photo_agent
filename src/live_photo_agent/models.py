@@ -7,11 +7,16 @@ from pydantic import BaseModel, Field
 
 
 class AssetPreprocessSummary(BaseModel):
-    version: str = "v1"
+    version: str = "v2"
     media_format: str
     capture_time: str | None = None
     content_tags: list[str] = Field(default_factory=list)
     content_summary: str = ""
+    technical_signals: dict[str, object] = Field(default_factory=dict)
+    semantic_signals: dict[str, object] = Field(default_factory=dict)
+    coarse_semantics: dict[str, object] = Field(default_factory=dict)
+    provenance: dict[str, object] = Field(default_factory=dict)
+    # Retained for compatibility with existing tools and index rows.
     quality_signals: dict[str, object] = Field(default_factory=dict)
     editability_signals: dict[str, object] = Field(default_factory=dict)
     source: str = "scan"
@@ -47,6 +52,7 @@ class ToolName(str, Enum):
     ADD_TEXT_OVERLAY = "add_text_overlay"
     MIX_AUDIO_BGM = "mix_audio_bgm"
     EXPORT_MP4 = "export_mp4"
+    SET_DISPLAY_FRAME = "set_display_frame"
 
 
 class ToolCall(BaseModel):
@@ -69,11 +75,11 @@ class ExecutionPlan(BaseModel):
 class AgentRequest(BaseModel):
     user_id: str
     text: str
-    library_root: Path
+    library_root: str | Path  # Accept both str and Path
     selected_asset_ids: list[str] = Field(default_factory=list)
     guided_tool_names: list[ToolName] = Field(default_factory=list)
-    input_image_paths: list[Path] = Field(default_factory=list)
-    input_video_paths: list[Path] = Field(default_factory=list)
+    input_image_paths: list[str | Path] = Field(default_factory=list)
+    input_video_paths: list[str | Path] = Field(default_factory=list)
 
 
 class ToolResult(BaseModel):

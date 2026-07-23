@@ -551,6 +551,27 @@
       return `/api/ui/media?path=${encodeURIComponent(path)}`;
     }
 
+    function formatCoverMoment(asset) {
+      const signals = asset.preprocess_summary?.editability_signals ?? {};
+      const frameIndex = Number(signals.cover_frame_index);
+      if (Number.isFinite(frameIndex) && frameIndex >= 0) {
+        const timestampMs = Number(signals.cover_frame_timestamp_ms);
+        if (Number.isFinite(timestampMs) && timestampMs >= 0) {
+          const seconds = (timestampMs / 1000).toFixed(2).replace(/\.00$/, '').replace(/(\.\d)0$/, '$1');
+          return `封面帧 #${Math.round(frameIndex)} · ${seconds}s`;
+        }
+        return `封面帧 #${Math.round(frameIndex)}`;
+      }
+      const timestampMs = Number(signals.cover_frame_timestamp_ms);
+      if (!Number.isFinite(timestampMs) || timestampMs < 0) {
+        return '';
+      }
+      const ratio = Number(signals.cover_frame_position_ratio);
+      const seconds = (timestampMs / 1000).toFixed(2).replace(/\.00$/, '').replace(/(\.\d)0$/, '$1');
+      const percent = Number.isFinite(ratio) ? ` · ${(ratio * 100).toFixed(1)}%` : '';
+      return `封面时刻 ${seconds}s${percent}`;
+    }
+
     function getSelectedAssetIds() {
       return Array.from(state.selectedAssetIds).sort();
     }
@@ -727,6 +748,7 @@
         const checked = state.selectedAssetIds.has(asset.asset_id) ? 'checked' : '';
         const tags = (asset.tags ?? []).slice(0, 5).map((tag) => `<span class="tag">${escapeHtml(tag)}</span>`).join('');
         const thumbnail = asset.image_path ? `<img src="${mediaUrl(asset.image_path)}" alt="${escapeHtml(asset.asset_id)}">` : '<div class="asset-thumb-placeholder">没有预览</div>';
+        const coverMoment = formatCoverMoment(asset);
         return `
           <label class="asset-card">
             <div class="asset-thumb">
@@ -742,6 +764,7 @@
               </div>
               <div class="asset-tags">${tags || '<span class="tag">untagged</span>'}</div>
               <div class="asset-path">${asset.image_path ? escapeHtml(asset.image_path) : ''}</div>
+              ${coverMoment ? `<div class="micro">${escapeHtml(coverMoment)}</div>` : ''}
             </div>
           </label>
         `;

@@ -242,6 +242,24 @@ TOOL_CONTRACTS: dict[ToolName, ToolContract] = {
         idempotent=False,
         security_scope="local_export_write",
     ),
+    ToolName.SET_DISPLAY_FRAME: ToolContract(
+        level="L0",
+        purpose=(
+            "Repack existing live photos with a specific display/cover frame. "
+            "The cover frame can be specified by timestamp_ms, a frame_path, or the "
+            "frame already selected by select_cover_frame (context.cover_frames). "
+            "Outputs a new live-photo jpg container with the updated still image."
+        ),
+        allowed_arguments=("asset_ids", "timestamp_ms", "frame_path"),
+        output_fields=("results", "success_count", "failed_asset_ids"),
+        preconditions=("motion clip available for assets",),
+        side_effects=("context.display_frame_result overwritten", "writes repacked live-photo jpg"),
+        failure_modes=("no_motion_clip", "pack_failed", "locate_frame_failed"),
+        timeout_budget_ms=8000,
+        quality_metrics=("cover_visual_match",),
+        idempotent=False,
+        security_scope="local_export_write",
+    ),
 }
 
 

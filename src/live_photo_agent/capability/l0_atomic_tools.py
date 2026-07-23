@@ -686,14 +686,32 @@ class L0AtomicTools:
         normalized_motion_path = workspace / "live_photo" / f"{output_name}_motion.mp4"
         live_photo_path = workspace / "live_photo" / f"{output_name}.jpg"
 
+        # Use previously-selected cover frame when available; fall back to video midpoint.
+        cover_frames: dict[str, str] = dict(context.get("cover_frames", {}))
+        selected_cover_src: Path | None = None
+        for _asset_id, frame_path_str in cover_frames.items():
+            candidate = Path(str(frame_path_str))
+            if candidate.exists():
+                selected_cover_src = candidate
+                break
+
+        presentation_ms = max(duration_ms // 2, 0)
+
         try:
-            self.media_ops.extract_cover_jpeg(source_video, cover_path, timestamp_ms=max(duration_ms // 2, 0))
+            if selected_cover_src is not None:
+                cover_path.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copy2(selected_cover_src, cover_path)
+                # presentation_timestamp_ms stays at 0 because the exported video
+                # is a new composition; exact frame mapping is not meaningful.
+                presentation_ms = 0
+            else:
+                self.media_ops.extract_cover_jpeg(source_video, cover_path, timestamp_ms=presentation_ms)
             normalized_motion = self.media_ops.normalize_motion_photo_video(source_video, normalized_motion_path)
             packed = self.media_ops.pack_motion_photo_jpg(
                 image_path=cover_path,
                 video_path=normalized_motion,
                 output_path=live_photo_path,
-                presentation_timestamp_ms=max(duration_ms // 2, 0),
+                presentation_timestamp_ms=presentation_ms,
             )
             validation = self.media_ops.validate_motion_photo_jpg(packed)
             if not bool(validation.get("valid", False)):
@@ -720,6 +738,134 @@ class L0AtomicTools:
             "format": "live_photo_jpg",
             "validation": validation,
         }
+
+    def set_display_frame(self, call: ToolCall, context: dict[str, object]) -> ToolResult:
+        """Repack existing live photos with a user-chosen display/cover frame.
+
+        Argument priority (first match wins):
+        1. ``timestamp_ms`` – extract this exact frame from the original motion clip.
+        2. ``frame_path`` – use the given image file directly as the new cover JPEG.
+        3. implicit – use the already-selected frame in ``context["cover_frames"]``.
+        If none of the above, falls back to the middle frame of the motion clip.
+        """
+        focus_assets = self._assets_for_l0(call, context)
+        timestamp_ms_arg: int | None = (
+            int(call.arguments["timestamp_ms"]) if call.arguments.get("timestamp_ms") is not None else None
+        )
+        frame_path_arg: Path | None = (
+            Path(str(call.arguments["frame_path"])) if call.arguments.get("frame_path") else None
+        )
+        workspace = self._workspace_dir(context)
+        cover_frames_ctx: dict[str, str] = dict(context.get("cover_frames", {}))
+
+        results: list[dict[str, object]] = []
+        failed_asset_ids: list[str] = []
+
+        for asset in focus_assets:
+            motion_path = self._asset_motion_path(asset)
+            if motion_path is None:
+                failed_asset_ids.append(asset.asset_id)
+                results.append({
+                    "asset_id": asset.asset_id,
+                    "status": "skipped",
+                    "reason": "no_motion_clip",
+                })
+                continue
+
+            out_dir = workspace / "display_frame" / asset.asset_id
+            out_dir.mkdir(parents=True, exist_ok=True)
+            cover_jpeg = out_dir / "cover.jpg"
+            output_live_photo = out_dir / f"{asset.asset_id}.jpg"
+
+            try:
+                # --- Determine cover image and presentation timestamp ---
+                presentation_ms: int
+
+                if timestamp_ms_arg is not None:
+                    # User provided an explicit timestamp.
+                    self.media_ops.extract_cover_jpeg(motion_path, cover_jpeg, timestamp_ms=timestamp_ms_arg)
+                    presentation_ms = timestamp_ms_arg
+
+                elif frame_path_arg is not None and frame_path_arg.exists():
+                    # User provided a specific frame image.
+                    shutil.copy2(frame_path_arg, cover_jpeg)
+                    presentation_ms = self._locate_frame_timestamp(motion_path, cover_jpeg)
+
+                elif asset.asset_id in cover_frames_ctx:
+                    # Use the frame already selected by select_cover_frame.
+                    ctx_frame = Path(cover_frames_ctx[asset.asset_id])
+                    if ctx_frame.exists():
+                        shutil.copy2(ctx_frame, cover_jpeg)
+                    else:
+                        # Context frame gone; fall back to midpoint.
+                        probe = self.media_ops.probe_video(motion_path)
+                        mid_ms = int(probe.get("duration_ms", 0)) // 2
+                        self.media_ops.extract_cover_jpeg(motion_path, cover_jpeg, timestamp_ms=mid_ms)
+                    presentation_ms = self._locate_frame_timestamp(motion_path, cover_jpeg)
+
+                else:
+                    # No hint available – use middle frame.
+                    probe = self.media_ops.probe_video(motion_path)
+                    mid_ms = int(probe.get("duration_ms", 0)) // 2
+                    self.media_ops.extract_cover_jpeg(motion_path, cover_jpeg, timestamp_ms=mid_ms)
+                    presentation_ms = mid_ms
+
+                # --- Normalise motion clip and repack ---
+                normalized_motion = out_dir / "motion.mp4"
+                self.media_ops.normalize_motion_photo_video(motion_path, normalized_motion)
+                packed = self.media_ops.pack_motion_photo_jpg(
+                    image_path=cover_jpeg,
+                    video_path=normalized_motion,
+                    output_path=output_live_photo,
+                    presentation_timestamp_ms=presentation_ms,
+                )
+                validation = self.media_ops.validate_motion_photo_jpg(packed)
+                results.append({
+                    "asset_id": asset.asset_id,
+                    "status": "ok",
+                    "output_path": str(packed),
+                    "cover_path": str(cover_jpeg),
+                    "presentation_timestamp_ms": presentation_ms,
+                    "validation": validation,
+                })
+
+            except MediaOpsError as exc:
+                failed_asset_ids.append(asset.asset_id)
+                results.append({
+                    "asset_id": asset.asset_id,
+                    "status": "failed",
+                    "error": str(exc),
+                })
+
+        context["display_frame_result"] = results
+        success = len(failed_asset_ids) < len(focus_assets)
+        return ToolResult(
+            tool=call.tool,
+            success=success,
+            payload={
+                "results": results,
+                "success_count": len([r for r in results if r.get("status") == "ok"]),
+                "failed_asset_ids": failed_asset_ids,
+            },
+        )
+
+    def _locate_frame_timestamp(self, motion_path: Path, frame_image: Path) -> int:
+        """Return the timestamp (ms) in *motion_path* that best matches *frame_image*.
+
+        Falls back to the middle of the clip when OpenCV is unavailable or matching fails.
+        """
+        try:
+            result = self.media_ops.locate_cover_frame(
+                video_path=motion_path,
+                image_path=frame_image,
+            )
+            return int(result.get("cover_frame_timestamp_ms", 0))
+        except Exception:  # noqa: BLE001
+            try:
+                probe = self.media_ops.probe_video(motion_path)
+                return int(probe.get("duration_ms", 0)) // 2
+            except Exception:  # noqa: BLE001
+                return 0
 
     def _get_assets(self, context: dict[str, object]) -> list[LivePhotoAsset]:
         return list(context.get("assets", []))

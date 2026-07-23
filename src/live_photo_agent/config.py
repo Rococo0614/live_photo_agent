@@ -20,6 +20,11 @@ class Settings(BaseSettings):
     local_device: str = "cpu"
     local_dtype: str = "float32"
     local_max_new_tokens: int = 384
+    vlm_backend: str = "endpoint"
+    vlm_endpoint: str | None = None
+    vlm_model: str | None = None
+    vlm_timeout_seconds: float = 20.0
+    vlm_prompt: str | None = None
     workspace_dir: Path = Field(default_factory=lambda: Path.cwd())
     memory_file: Path = Field(default_factory=lambda: Path.cwd() / ".agent_memory.json")
     default_library_root: Path = Field(default_factory=lambda: Path.home() / "DCIM")

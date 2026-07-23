@@ -1,0 +1,46 @@
+INFO:     Started server process [170862]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://127.0.0.1:8000 (Press CTRL+C to quit)
+INFO:     127.0.0.1:60216 - "GET /health HTTP/1.1" 200 OK
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.
+INFO:     Finished server process [170862]
+INFO:     Started server process [170989]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://127.0.0.1:8000 (Press CTRL+C to quit)
+INFO:     127.0.0.1:56390 - "GET /health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56402 - "GET /health HTTP/1.1" 200 OK
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.
+INFO:     Finished server process [170989]
+INFO:     Started server process [171257]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://127.0.0.1:8000 (Press CTRL+C to quit)
+[LangSmith] tracing enabled → project: live-photo-agent
+INFO:     127.0.0.1:58380 - "GET /health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:37042 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:37046 - "GET /favicon.ico HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:37042 - "GET /api/ui/bootstrap HTTP/1.1" 200 OK
+INFO:     127.0.0.1:37042 - "GET /api/ui/planner-config HTTP/1.1" 200 OK
+INFO:     127.0.0.1:45774 - "POST /agent/execute HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58328 - "GET /api/ui/bootstrap?library_root=%2Fhome%2Fvivo%2Flive_photo_agent%2Fdata%2Flive_photo HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58340 - "GET /api/ui/media?path=%2Fhome%2Fvivo%2Flive_photo_agent%2Fdata%2Flive_photo%2F.agent_work%2Flive_photo%2F%E4%B8%89%E6%8B%BC.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58328 - "GET /api/ui/planner-config HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58352 - "GET /api/ui/media?path=%2Fhome%2Fvivo%2Flive_photo_agent%2Fdata%2Flive_photo%2F.agent_work%2Flive_photo%2F%E4%B8%89%E6%8B%BC_cover.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:43182 - "GET /health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:34700 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:34700 - "GET /api/ui/bootstrap HTTP/1.1" 200 OK
+INFO:     127.0.0.1:34700 - "GET /api/ui/media?path=%2Fhome%2Fvivo%2Flive_photo_agent%2Fdata%2Flive_photo%2F.agent_work%2Flive_photo%2F%E4%B8%89%E6%8B%BC.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:34716 - "GET /api/ui/media?path=%2Fhome%2Fvivo%2Flive_photo_agent%2Fdata%2Flive_photo%2F.agent_work%2Flive_photo%2F%E4%B8%89%E6%8B%BC_cover.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:34716 - "GET /api/ui/planner-config HTTP/1.1" 200 OK
+INFO:     127.0.0.1:36108 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:36108 - "GET /api/ui/bootstrap HTTP/1.1" 200 OK
+INFO:     127.0.0.1:36108 - "GET /api/ui/media?path=%2Fhome%2Fvivo%2Flive_photo_agent%2Fdata%2Flive_photo%2F.agent_work%2Flive_photo%2F%E4%B8%89%E6%8B%BC.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:36114 - "GET /api/ui/planner-config HTTP/1.1" 200 OK
+INFO:     127.0.0.1:36110 - "GET /api/ui/media?path=%2Fhome%2Fvivo%2Flive_photo_agent%2Fdata%2Flive_photo%2F.agent_work%2Flive_photo%2F%E4%B8%89%E6%8B%BC_cover.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:44304 - "POST /agent/execute HTTP/1.1" 200 OK

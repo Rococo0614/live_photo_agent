@@ -16,6 +16,7 @@ def test_ui_bootstrap_and_index(tmp_path: Path, monkeypatch) -> None:
     monkeypatch.setattr(settings, "default_library_root", library_root)
     monkeypatch.setattr(settings, "album_catalog_file", tmp_path / ".album_catalog.json")
     monkeypatch.setattr(settings, "album_operation_log_file", tmp_path / ".album_operations.jsonl")
+    monkeypatch.setattr(settings, "album_preprocess_index_file", tmp_path / ".album_preprocess_index.jsonl")
     monkeypatch.setattr(settings, "workspace_dir", tmp_path)
 
     client = TestClient(app)
