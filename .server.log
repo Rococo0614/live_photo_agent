@@ -183,3 +183,47 @@ INFO:     Shutting down
 INFO:     Waiting for application shutdown.
 INFO:     Application shutdown complete.
 INFO:     Finished server process [7404]
+INFO:     Started server process [53922]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://127.0.0.1:8000 (Press CTRL+C to quit)
+[LangSmith] tracing enabled → project: live-photo-agent
+INFO:     127.0.0.1:45610 - "GET /health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:45622 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:45622 - "GET /api/ui/bootstrap HTTP/1.1" 200 OK
+INFO:     127.0.0.1:45652 - "GET /api/ui/planner-config HTTP/1.1" 200 OK
+INFO:     127.0.0.1:45622 - "GET /api/ui/media?path=%2Fhome%2Fvivo%2Flive_photo_agent%2Fdata%2Flive_photo%2F.agent_work%2Flive_photo%2F%E4%B8%89%E6%8B%BC%E8%A7%86%E9%A2%91_cover.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:45636 - "GET /api/ui/media?path=%2Fhome%2Fvivo%2Flive_photo_agent%2Fdata%2Flive_photo%2F.agent_work%2Flive_photo%2Fu1l1r1.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:45636 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:45636 - "GET /api/ui/bootstrap HTTP/1.1" 200 OK
+INFO:     127.0.0.1:45636 - "GET /api/ui/planner-config HTTP/1.1" 200 OK
+INFO:     127.0.0.1:39964 - "POST /agent/execute HTTP/1.1" 200 OK
+INFO:     127.0.0.1:33956 - "POST /api/memory/feedback HTTP/1.1" 200 OK
+INFO:     127.0.0.1:37706 - "POST /agent/execute HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49340 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49340 - "GET /api/ui/bootstrap HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49340 - "GET /api/ui/planner-config HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49342 - "POST /agent/execute HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55472 - "GET /api/runs/recent?limit=3 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55474 - "GET /api/ui/bootstrap?library_root=/home/vivo/live_photo_agent/data/live_photo HTTP/1.1" 200 OK
+INFO:     127.0.0.1:42426 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:42534 - "POST /agent/execute HTTP/1.1" 200 OK
+INFO:     127.0.0.1:48326 - "GET /api/runs/recent?limit=1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:34324 - "POST /agent/execute HTTP/1.1" 200 OK
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.
+INFO:     Finished server process [53922]
+INFO:     Started server process [62402]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://127.0.0.1:8000 (Press CTRL+C to quit)
+[LangSmith] tracing enabled → project: live-photo-agent
+INFO:     127.0.0.1:56418 - "GET /health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56430 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56430 - "GET /api/ui/bootstrap HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56430 - "GET /api/ui/planner-config HTTP/1.1" 200 OK
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.
+INFO:     Finished server process [62402]

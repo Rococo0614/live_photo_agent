@@ -26,6 +26,7 @@ class LivePhotoAgent:
         self.graph_runner = PlannerGraphRunner(max_replans=1)
 
     def execute(self, request: AgentRequest) -> AgentResponse:
+        request = self._apply_retry_feedback(request)
         prepared_input = self.input_preprocessor.prepare(request, self.library_service)
         runtime_request = prepared_input.request
         library_assets = prepared_input.assets
@@ -43,7 +44,10 @@ class LivePhotoAgent:
             "assets": library_assets,
             "tool_catalog": self.capability_layer.tool_catalog(),
             "preprocess": prepared_input.preprocess_info,
+            "layout_context": runtime_request.layout_context,
+            "operation_log": runtime_request.operation_log,
             "reusable_strategies": reusable_strategies,
+            "retry_of_run_id": request.retry_of_run_id,
         }
 
         try:
@@ -103,6 +107,24 @@ class LivePhotoAgent:
         response.review = self.memory.build_review(response)
         response.memory_updates = self.memory.append(runtime_request, response)
         return response
+
+    def _apply_retry_feedback(self, request: AgentRequest) -> AgentRequest:
+        """Fold a human's rejection comment back into the request text.
+
+        This closes the reject -> redo loop: the UI resubmits the same request
+        with ``retry_feedback`` set to the rejection comment (and
+        ``retry_of_run_id`` for traceability); the planner then sees the
+        feedback as part of the goal text and can adjust the plan accordingly.
+        """
+        feedback = request.retry_feedback.strip()
+        if not feedback:
+            return request
+        augmented_text = (
+            f"{request.text}\n\n[human_feedback_retry]\n"
+            f"上一次结果被人工打回，原因：{feedback}\n"
+            "请依据反馈调整方案，不要重复相同的问题。"
+        )
+        return request.model_copy(update={"text": augmented_text})
 
     def _build_planner_unavailable_response(
         self,

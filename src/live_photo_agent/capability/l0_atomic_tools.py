@@ -170,6 +170,116 @@ class L0AtomicTools:
             },
         )
 
+    def extract_subject_matte(self, call: ToolCall, context: dict[str, object]) -> ToolResult:
+        focus_assets = self._assets_for_l0(call, context)
+        mode = str(call.arguments.get("mode", "mog2")).strip().lower()
+        workspace = self._workspace_dir(context)
+        mattes: dict[str, dict[str, object]] = {}
+        average_ratios: dict[str, float] = {}
+        failed_asset_ids: list[str] = []
+
+        for asset in focus_assets:
+            motion_path = self._asset_motion_path(asset)
+            if motion_path is None:
+                failed_asset_ids.append(asset.asset_id)
+                continue
+            output_dir = workspace / "subject_mattes" / asset.asset_id
+            try:
+                result = self.media_ops.extract_subject_matte_frames(motion_path, output_dir, mode=mode)
+            except MediaOpsError as exc:
+                failed_asset_ids.append(asset.asset_id)
+                return ToolResult(
+                    tool=call.tool,
+                    success=False,
+                    payload={"error": str(exc), "error_code": "extract_subject_matte_failed", "asset_id": asset.asset_id},
+                )
+            mattes[asset.asset_id] = result
+            average_ratios[asset.asset_id] = float(result.get("average_foreground_ratio", 0.0))
+
+        context["subject_mattes"] = mattes
+        return ToolResult(
+            tool=call.tool,
+            success=True,
+            payload={
+                "matte_count": len(mattes),
+                "matted_asset_ids": list(mattes.keys()),
+                "average_foreground_ratios": average_ratios,
+                "failed_asset_ids": failed_asset_ids,
+            },
+        )
+
+    def overlay_subject_clip(self, call: ToolCall, context: dict[str, object]) -> ToolResult:
+        foreground_asset_id = str(call.arguments.get("foreground_asset_id", "")).strip()
+        anchor = str(call.arguments.get("anchor", "bottom_right")).strip().lower()
+        scale = float(call.arguments.get("scale", 0.45))
+        x_offset = int(call.arguments.get("x_offset", 0))
+        y_offset = int(call.arguments.get("y_offset", 0))
+        fit_mode = str(call.arguments.get("fit_mode", "loop")).strip().lower()
+
+        subject_mattes = dict(context.get("subject_mattes", {}))
+        matte = subject_mattes.get(foreground_asset_id)
+        if not isinstance(matte, dict) or not matte.get("frames_dir"):
+            return ToolResult(
+                tool=call.tool,
+                success=False,
+                payload={
+                    "error": f"missing_subject_matte_for_{foreground_asset_id}",
+                    "error_code": "overlay_subject_clip_failed",
+                },
+            )
+
+        timeline = dict(context.get("timeline", {}))
+        background_path_raw = timeline.get("path")
+        if not background_path_raw:
+            return ToolResult(
+                tool=call.tool,
+                success=False,
+                payload={"error": "no_timeline", "error_code": "overlay_subject_clip_failed"},
+            )
+
+        workspace = self._workspace_dir(context)
+        timeline_id = str(timeline.get("timeline_id", "timeline"))
+        output_path = workspace / "overlay_composite" / f"{timeline_id}_with_{foreground_asset_id}.mp4"
+
+        try:
+            result_path = self.media_ops.composite_foreground_over_background(
+                background_path=Path(str(background_path_raw)),
+                foreground_frames_dir=Path(str(matte["frames_dir"])),
+                foreground_fps=float(matte.get("fps", 25.0)),
+                output_path=output_path,
+                anchor=anchor,
+                scale=scale,
+                x_offset=x_offset,
+                y_offset=y_offset,
+                fit_mode=fit_mode,
+            )
+        except MediaOpsError as exc:
+            return ToolResult(
+                tool=call.tool,
+                success=False,
+                payload={"error": str(exc), "error_code": "overlay_subject_clip_failed"},
+            )
+
+        timeline["path"] = str(result_path)
+        timeline["subject_overlay_applied"] = True
+        timeline["subject_overlay_asset_id"] = foreground_asset_id
+        context["timeline"] = timeline
+        context["subject_overlay"] = {
+            "foreground_asset_id": foreground_asset_id,
+            "anchor": anchor,
+            "scale": scale,
+            "x_offset": x_offset,
+            "y_offset": y_offset,
+            "fit_mode": fit_mode,
+            "path": str(result_path),
+        }
+
+        return ToolResult(
+            tool=call.tool,
+            success=True,
+            payload={"overlay_applied": True, "output_path": str(result_path)},
+        )
+
     def select_cover_frame(self, call: ToolCall, context: dict[str, object]) -> ToolResult:
         focus_assets = self._assets_for_l0(call, context)
         strategy = str(call.arguments.get("strategy", "auto_adaptive")).strip().lower()
@@ -424,12 +534,28 @@ class L0AtomicTools:
             if composition_mode == "timeline":
                 self.media_ops.concat_videos(clip_paths, timeline_path)
             else:
-                self.media_ops.compose_videos_spatial(
-                    clip_paths,
-                    timeline_path,
-                    canvas=canvas,
-                    layout=composition_mode,
-                )
+                layout_context = context.get("layout_context", [])
+                placements: list[dict[str, float]] = []
+                if isinstance(layout_context, list):
+                    placement_by_asset = {
+                        str(item.get("asset_id")): item
+                        for item in layout_context
+                        if isinstance(item, dict) and item.get("asset_id")
+                    }
+                    for asset_id in resolved_order:
+                        item = placement_by_asset.get(asset_id)
+                        if item is None:
+                            placements = []
+                            break
+                        placements.append({
+                            key: float(item[key])
+                            for key in ("left", "top", "width", "height")
+                            if key in item and isinstance(item[key], (int, float))
+                        })
+                compose_kwargs = {"canvas": canvas, "layout": composition_mode}
+                if placements:
+                    compose_kwargs["placements"] = placements
+                self.media_ops.compose_videos_spatial(clip_paths, timeline_path, **compose_kwargs)
 
             timeline = {
                 "timeline_id": timeline_id,

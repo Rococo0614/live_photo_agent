@@ -260,6 +260,38 @@ TOOL_CONTRACTS: dict[ToolName, ToolContract] = {
         idempotent=False,
         security_scope="local_export_write",
     ),
+    ToolName.EXTRACT_SUBJECT_MATTE: ToolContract(
+        level="L0",
+        purpose=(
+            "Cut out the moving subject across an entire motion clip (per-frame alpha matte), "
+            "capturing its motion trajectory rather than a single static frame."
+        ),
+        allowed_arguments=("asset_ids", "mode"),
+        output_fields=("matte_count", "matted_asset_ids", "average_foreground_ratios"),
+        preconditions=("motion clip available for assets",),
+        side_effects=("context.subject_mattes overwritten",),
+        failure_modes=("missing_motion_clip", "opencv_missing", "no_frames_decoded"),
+        timeout_budget_ms=12000,
+        quality_metrics=("foreground_ratio_stability",),
+        idempotent=True,
+        security_scope="local_media_readwrite_temp",
+    ),
+    ToolName.OVERLAY_SUBJECT_CLIP: ToolContract(
+        level="L0",
+        purpose=(
+            "Composite a previously extracted subject matte (context.subject_mattes) onto the "
+            "current timeline/canvas at a chosen anchor position and scale."
+        ),
+        allowed_arguments=("foreground_asset_id", "anchor", "scale", "x_offset", "y_offset", "fit_mode"),
+        output_fields=("overlay_applied", "output_path"),
+        preconditions=("context.timeline exists", "context.subject_mattes contains foreground_asset_id"),
+        side_effects=("context.timeline overwritten", "context.subject_overlay overwritten", "writes composited video file"),
+        failure_modes=("no_timeline", "missing_subject_matte", "composite_failed"),
+        timeout_budget_ms=9000,
+        quality_metrics=("overlay_alignment_quality",),
+        idempotent=False,
+        security_scope="local_media_readwrite_temp",
+    ),
 }
 
 
@@ -341,6 +373,18 @@ class CapabilityLayer:
                 "output_name": "string(default=triptych_output)",
                 "resolution": "string(default=1080x1920)",
             },
+            ToolName.EXTRACT_SUBJECT_MATTE: {
+                "asset_ids": "string[]?",
+                "mode": "string(default=mog2, options=mog2|knn)",
+            },
+            ToolName.OVERLAY_SUBJECT_CLIP: {
+                "foreground_asset_id": "string",
+                "anchor": "string(default=bottom_right, options=top_left|top_right|bottom_left|bottom_right|center)",
+                "scale": "float(default=0.45)",
+                "x_offset": "int(default=0)",
+                "y_offset": "int(default=0)",
+                "fit_mode": "string(default=loop, options=loop|trim)",
+            },
         }
         return schemas.get(tool, {})
 
@@ -379,12 +423,19 @@ class CapabilityLayer:
             ToolName.ADD_TEXT_OVERLAY: {"overlay_applied": "bool"},
             ToolName.MIX_AUDIO_BGM: {"audio_mix_applied": "bool"},
             ToolName.EXPORT_MP4: {"output_path": "string(path)", "duration_ms": "int"},
+            ToolName.EXTRACT_SUBJECT_MATTE: {
+                "matte_count": "int",
+                "matted_asset_ids": "string[]",
+                "average_foreground_ratios": "object<string,float>",
+            },
+            ToolName.OVERLAY_SUBJECT_CLIP: {"overlay_applied": "bool", "output_path": "string(path)"},
         }
         return schemas.get(tool, {})
 
     def normalize_plan(self, plan: ExecutionPlan, request: AgentRequest) -> ExecutionPlan:
         calls = [self._normalize_call(call) for call in plan.tool_calls]
         calls = self._apply_sequence_guards(calls, request)
+        calls = self._apply_request_asset_constraints(calls, request)
         calls = self._apply_request_layout_constraints(calls, request)
 
         return ExecutionPlan(
@@ -397,6 +448,34 @@ class CapabilityLayer:
             clarification_questions=[str(item) for item in plan.clarification_questions],
             blocking_missing_info=[str(item) for item in plan.blocking_missing_info],
         )
+
+    def _apply_request_asset_constraints(self, calls: list[ToolCall], request: AgentRequest) -> list[ToolCall]:
+        if not request.selected_asset_ids and not request.layout_context:
+            return calls
+
+        layout_order = [
+            str(item["asset_id"])
+            for item in sorted(
+                request.layout_context,
+                key=lambda item: int(item.get("order", 0)) if isinstance(item.get("order", 0), int) else 0,
+            )
+            if isinstance(item, dict) and item.get("asset_id")
+        ]
+        constrained: list[ToolCall] = []
+        for call in calls:
+            if call.tool != ToolName.CONCAT_CLIPS:
+                constrained.append(call)
+                continue
+
+            updated_args = dict(call.arguments)
+            if request.selected_asset_ids and not updated_args.get("asset_ids"):
+                updated_args["asset_ids"] = list(request.selected_asset_ids)
+            if layout_order and not updated_args.get("order"):
+                updated_args["order"] = layout_order
+            if request.layout_context and not updated_args.get("canvas"):
+                updated_args["canvas"] = "1080x1920"
+            constrained.append(ToolCall(tool=call.tool, reason=call.reason, arguments=updated_args))
+        return constrained
 
     def _apply_sequence_guards(self, calls: list[ToolCall], request: AgentRequest) -> list[ToolCall]:
         if not calls:
@@ -451,6 +530,32 @@ class CapabilityLayer:
             )
             sequence = [call.tool for call in normalized]
 
+        # Guard 4b: overlay_subject_clip depends on concat_clips (a timeline to composite onto)
+        # and extract_subject_matte (the matte it composites).
+        if ToolName.OVERLAY_SUBJECT_CLIP in sequence:
+            if ToolName.CONCAT_CLIPS not in sequence:
+                overlay_idx = sequence.index(ToolName.OVERLAY_SUBJECT_CLIP)
+                normalized.insert(
+                    overlay_idx,
+                    ToolCall(
+                        tool=ToolName.CONCAT_CLIPS,
+                        reason="Build timeline before overlay_subject_clip.",
+                        arguments={},
+                    ),
+                )
+                sequence = [call.tool for call in normalized]
+            if ToolName.EXTRACT_SUBJECT_MATTE not in sequence:
+                overlay_idx = sequence.index(ToolName.OVERLAY_SUBJECT_CLIP)
+                normalized.insert(
+                    overlay_idx,
+                    ToolCall(
+                        tool=ToolName.EXTRACT_SUBJECT_MATTE,
+                        reason="Provide the subject matte required by overlay_subject_clip.",
+                        arguments={},
+                    ),
+                )
+                sequence = [call.tool for call in normalized]
+
         # Guard 5: summarize_results should be the final reporting step.
         summarize_index = next((idx for idx, call in enumerate(normalized) if call.tool == ToolName.SUMMARIZE_RESULTS), -1)
         if summarize_index != -1 and summarize_index != len(normalized) - 1:
@@ -489,6 +594,8 @@ class CapabilityLayer:
             return "triptych_landscape"
         if any(marker in lowered for marker in vertical_markers):
             return "vertical"
+        if any(marker in lowered for marker in ["布局", "空间拼接", "空间组合", "坐标", "拼贴", "layout"]):
+            return "triptych_portrait"
         return ""
 
     def _normalize_call(self, call: ToolCall) -> ToolCall:

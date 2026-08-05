@@ -598,6 +598,8 @@ class PlannerGraphRunner:
                 "text": request.text,
                 "library_root": str(request.library_root),
                 "selected_asset_ids": list(request.selected_asset_ids),
+                "layout_context": list(request.layout_context),
+                "operation_log": list(request.operation_log),
             }
         if isinstance(plan, ExecutionPlan):
             snapshot["plan"] = {
@@ -659,12 +661,18 @@ class PlannerGraphRunner:
         if ToolName.EXPORT_MP4 in sequence and ToolName.CONCAT_CLIPS not in sequence:
             errors.append("export_mp4 前应包含 concat_clips。")
 
+        if ToolName.OVERLAY_SUBJECT_CLIP in sequence:
+            if ToolName.CONCAT_CLIPS not in sequence:
+                errors.append("overlay_subject_clip 之前应先执行 concat_clips 构建背景画布。")
+            if ToolName.EXTRACT_SUBJECT_MATTE not in sequence:
+                errors.append("overlay_subject_clip 之前应先执行 extract_subject_matte 获取抠像素材。")
+
         if ToolName.SUMMARIZE_RESULTS in sequence and sequence[-1] != ToolName.SUMMARIZE_RESULTS:
             errors.append("summarize_results 应位于工具链末尾。")
 
         if ToolName.CONCAT_CLIPS in sequence:
             concat_idx = sequence.index(ToolName.CONCAT_CLIPS)
-            for tool in (ToolName.ADD_TEXT_OVERLAY, ToolName.MIX_AUDIO_BGM, ToolName.EXPORT_MP4):
+            for tool in (ToolName.ADD_TEXT_OVERLAY, ToolName.MIX_AUDIO_BGM, ToolName.EXPORT_MP4, ToolName.OVERLAY_SUBJECT_CLIP):
                 if tool in sequence and sequence.index(tool) < concat_idx:
                     errors.append(f"{tool.value} 应在 concat_clips 之后执行。")
 

@@ -39,6 +39,8 @@ class ToolRegistry:
             ToolName.MIX_AUDIO_BGM: self.l0.mix_audio_bgm,
             ToolName.EXPORT_MP4: self.l0.export_mp4,
             ToolName.SET_DISPLAY_FRAME: self.l0.set_display_frame,
+            ToolName.EXTRACT_SUBJECT_MATTE: self.l0.extract_subject_matte,
+            ToolName.OVERLAY_SUBJECT_CLIP: self.l0.overlay_subject_clip,
         }
 
     def execute(self, call: ToolCall, context: dict[str, object]) -> ToolResult:

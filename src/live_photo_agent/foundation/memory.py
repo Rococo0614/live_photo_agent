@@ -25,16 +25,26 @@ class MemoryService:
         return len(state[MULTIMODAL_KEY])
 
     def append(self, request: AgentRequest, response: AgentResponse) -> list[str]:
+        """Record this turn in session memory.
+
+        Turns that produced a real deliverable (at least one tool executed and no
+        clarification requested) are held as *pending*: asset-facing memory
+        (``multimodal_memory``) and the learned tool-sequence memory
+        (``strategy_memory``) are NOT written yet. They only commit once a human
+        explicitly confirms the result via :meth:`confirm_feedback`. Turns with no
+        deliverable (clarification / planner errors) have nothing to review, so
+        they are finalized immediately as before.
+        """
         state = self._load_state()
         summary = dict(response.context.get("summary", {}))
         focus_asset_ids = self._derive_focus_asset_ids(response)
         graph_observability = response.context.get("graph_observability", {})
         if not isinstance(graph_observability, dict):
             graph_observability = {}
-        graph_run_id = str(graph_observability.get("run_id", ""))
-        graph_route_reason = str(graph_observability.get("route_reason", ""))
+        run_id = str(graph_observability.get("run_id", ""))
+        route_reason = str(graph_observability.get("route_reason", ""))
 
-        session_entry = {
+        session_entry: dict[str, object] = {
             "ts": self._utc_now_iso(),
             "user_id": request.user_id,
             "request": request.text,
@@ -45,30 +55,124 @@ class MemoryService:
             "review": response.review,
             "tool_sequence": [call.tool.value for call in response.plan.tool_calls],
             "tool_success_count": len([result for result in response.tool_results if result.success]),
-            "graph_run_id": graph_run_id,
-            "graph_route_reason": graph_route_reason,
-            "accepted": self._is_accepted_outcome(response),
+            "run_id": run_id,
+            "graph_run_id": run_id,
+            "graph_route_reason": route_reason,
         }
-        multimodal_entry = {
-            "ts": self._utc_now_iso(),
-            "user_id": request.user_id,
+
+        pending_payload = {
             "intent": response.plan.intent,
+            "tool_sequence": session_entry["tool_sequence"],
             "focus_asset_ids": focus_asset_ids,
-            "selected_asset_ids": request.selected_asset_ids,
+            "selected_asset_ids": list(request.selected_asset_ids),
             "required_context": list(response.plan.required_context),
             "summary_focus_asset_count": int(summary.get("focus_asset_count", len(focus_asset_ids))),
-            "graph_run_id": graph_run_id,
+            "concat_composition": self._extract_concat_composition(response),
+            "request_text": request.text,
+            "request_tokens": self._tokenize_text(request.text),
         }
 
-        state[SESSION_KEY].append(session_entry)
-        state[MULTIMODAL_KEY].append(multimodal_entry)
-        self._upsert_strategy_memory(state, request, response)
+        has_deliverable = bool(response.tool_results) and not response.plan.need_clarification
 
+        if has_deliverable:
+            session_entry.update(
+                {
+                    "accepted": None,
+                    "feedback_comment": "",
+                    "requires_feedback": True,
+                    "_feedback_recorded": False,
+                    "_committed": False,
+                    "_pending_commit": pending_payload,
+                }
+            )
+            commit_note = f"run_id={run_id} 待人工反馈确认后才会计入策略/资产记忆"
+        else:
+            accepted = self._is_accepted_outcome(response)
+            session_entry.update(
+                {
+                    "accepted": accepted,
+                    "feedback_comment": "",
+                    "requires_feedback": False,
+                    "_feedback_recorded": True,
+                    "_committed": True,
+                }
+            )
+            state.setdefault(MULTIMODAL_KEY, []).append(
+                self._build_multimodal_entry(request.user_id, pending_payload, run_id)
+            )
+            self._upsert_strategy_memory_from_payload(state, pending_payload, accepted=accepted)
+            commit_note = f"run_id={run_id} 无待复核产出，已立即计入记忆（accepted={accepted}）"
+
+        state[SESSION_KEY].append(session_entry)
+        self.memory_file.parent.mkdir(parents=True, exist_ok=True)
         self.memory_file.write_text(json.dumps(state, ensure_ascii=False, indent=2), encoding="utf-8")
         return [
             f"写入会话记忆 1 条（总计 {len(state[SESSION_KEY])}）",
-            f"写入多模态记忆 1 条（总计 {len(state[MULTIMODAL_KEY])}）",
+            commit_note,
         ]
+
+    def confirm_feedback(
+        self,
+        accepted: bool,
+        run_id: str = "",
+        comment: str = "",
+        asset_ids: list[str] | None = None,
+    ) -> dict[str, object]:
+        """Resolve a pending turn with an explicit human decision.
+
+        Only on ``accepted=True`` does the turn's deliverable get written into
+        ``multimodal_memory``. Either way, ``strategy_memory`` is updated once
+        (run_count always increments, accept_count only on acceptance) so future
+        planning learns from both good and bad outcomes.
+        """
+        state = self._load_state()
+        session_entries = state[SESSION_KEY]
+
+        target: dict[str, object] | None = None
+        if run_id:
+            for entry in reversed(session_entries):
+                if isinstance(entry, dict) and str(entry.get("run_id", "")) == run_id:
+                    target = entry
+                    break
+        if target is None:
+            for entry in reversed(session_entries):
+                if isinstance(entry, dict) and not entry.get("_feedback_recorded"):
+                    target = entry
+                    break
+
+        if target is None:
+            return {"recorded": False, "reason": "no_matching_session_entry", "accepted": accepted}
+
+        target["accepted"] = accepted
+        target["_feedback_recorded"] = True
+        if comment:
+            target["feedback_comment"] = comment
+        if asset_ids:
+            target["feedback_asset_ids"] = list(asset_ids)
+
+        committed_to_memory = False
+        pending_payload = target.get("_pending_commit")
+        if isinstance(pending_payload, dict) and not target.get("_committed"):
+            if accepted:
+                state.setdefault(MULTIMODAL_KEY, []).append(
+                    self._build_multimodal_entry(str(target.get("user_id", "")), pending_payload, str(target.get("run_id", "")))
+                )
+                committed_to_memory = True
+            self._upsert_strategy_memory_from_payload(state, pending_payload, accepted=accepted)
+            target["_committed"] = True
+            target.pop("_pending_commit", None)
+
+        state[SESSION_KEY] = session_entries
+        self.memory_file.parent.mkdir(parents=True, exist_ok=True)
+        self.memory_file.write_text(json.dumps(state, ensure_ascii=False, indent=2), encoding="utf-8")
+
+        return {
+            "recorded": True,
+            "accepted": accepted,
+            "run_id": str(target.get("run_id", "")),
+            "committed_to_memory": committed_to_memory,
+            "session_memory_size": len(session_entries),
+        }
 
     def suggest_reusable_sequences(self, request_text: str, limit: int = 3) -> list[dict[str, object]]:
         state = self._load_state()
@@ -183,13 +287,25 @@ class MemoryService:
         success = len([result for result in response.tool_results if result.success])
         return success == total
 
-    def _upsert_strategy_memory(
+    def _build_multimodal_entry(self, user_id: str, payload: dict[str, object], run_id: str) -> dict[str, object]:
+        return {
+            "ts": self._utc_now_iso(),
+            "user_id": user_id,
+            "intent": payload.get("intent", ""),
+            "focus_asset_ids": payload.get("focus_asset_ids", []),
+            "selected_asset_ids": payload.get("selected_asset_ids", []),
+            "required_context": payload.get("required_context", []),
+            "summary_focus_asset_count": payload.get("summary_focus_asset_count", 0),
+            "graph_run_id": run_id,
+        }
+
+    def _upsert_strategy_memory_from_payload(
         self,
         state: dict[str, list[dict[str, object]]],
-        request: AgentRequest,
-        response: AgentResponse,
+        payload: dict[str, object],
+        accepted: bool,
     ) -> None:
-        sequence = [call.tool.value for call in response.plan.tool_calls]
+        sequence = [str(item) for item in payload.get("tool_sequence", [])]
         if not sequence:
             return
 
@@ -197,10 +313,10 @@ class MemoryService:
         if not isinstance(strategies, list):
             strategies = []
 
-        key = self._strategy_key(response.plan.intent, sequence)
-        accepted = self._is_accepted_outcome(response)
-        request_tokens = self._tokenize_text(request.text)
-        concat_composition = self._extract_concat_composition(response)
+        intent = str(payload.get("intent", ""))
+        key = self._strategy_key(intent, sequence)
+        request_tokens = [str(token) for token in payload.get("request_tokens", [])]
+        concat_composition = str(payload.get("concat_composition", ""))
 
         found: dict[str, object] | None = None
         for item in strategies:
@@ -211,9 +327,9 @@ class MemoryService:
         if found is None:
             found = {
                 "strategy_key": key,
-                "intent": response.plan.intent,
+                "intent": intent,
                 "tool_sequence": sequence,
-                "request_example": request.text,
+                "request_example": str(payload.get("request_text", "")),
                 "token_profile": request_tokens,
                 "concat_composition": concat_composition,
                 "run_count": 0,

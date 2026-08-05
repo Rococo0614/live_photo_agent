@@ -252,6 +252,173 @@ class MediaOps:
             "foreground_ratio": foreground_ratio,
         }
 
+    def extract_subject_matte_frames(
+        self,
+        video_path: Path,
+        output_dir: Path,
+        mode: str = "mog2",
+    ) -> dict[str, object]:
+        """Cut out the moving subject across an entire motion clip.
+
+        Uses background-subtraction (MOG2/KNN) rather than a per-frame deep model:
+        it needs no extra dependency or downloaded weights, and works reasonably
+        well for live-photo clips where the camera is roughly static and the
+        subject moves. Each frame is written as an RGBA PNG (alpha = cleaned
+        foreground mask) so downstream compositing can treat the sequence as a
+        transparent overlay without an intermediate alpha-video codec.
+        """
+        try:
+            import cv2
+            import numpy as np
+        except ImportError as exc:
+            raise MediaOpsError("opencv_missing") from exc
+
+        if not video_path.exists():
+            raise MediaOpsError(f"video_not_found: {video_path}")
+
+        capture = cv2.VideoCapture(str(video_path))
+        if not capture.isOpened():
+            raise MediaOpsError(f"open_video_failed: {video_path}")
+
+        normalized_mode = mode.strip().lower()
+        if normalized_mode == "knn":
+            subtractor = cv2.createBackgroundSubtractorKNN(detectShadows=True)
+        else:
+            subtractor = cv2.createBackgroundSubtractorMOG2(detectShadows=True)
+
+        probe = self.probe_video(video_path)
+        fps = float(probe.get("fps") or capture.get(cv2.CAP_PROP_FPS) or 25.0)
+        if fps <= 0:
+            fps = 25.0
+
+        output_dir.mkdir(parents=True, exist_ok=True)
+        kernel = np.ones((5, 5), np.uint8)
+
+        try:
+            # Warm-up pass: let the background model converge over the whole clip
+            # before it is used to produce the masks that are actually kept.
+            while True:
+                ok, frame = capture.read()
+                if not ok:
+                    break
+                subtractor.apply(frame, learningRate=-1)
+
+            capture.set(cv2.CAP_PROP_POS_FRAMES, 0)
+
+            frame_index = 0
+            foreground_ratios: list[float] = []
+            width = height = 0
+            while True:
+                ok, frame = capture.read()
+                if not ok:
+                    break
+                height, width = frame.shape[:2]
+
+                raw_mask = subtractor.apply(frame, learningRate=0)
+                # Shadows are labelled 127 by detectShadows=True; treat as background.
+                _, binary_mask = cv2.threshold(raw_mask, 200, 255, cv2.THRESH_BINARY)
+                cleaned = cv2.morphologyEx(binary_mask, cv2.MORPH_OPEN, kernel)
+                cleaned = cv2.morphologyEx(cleaned, cv2.MORPH_CLOSE, kernel)
+
+                contours, _ = cv2.findContours(cleaned, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+                if contours:
+                    largest = max(contours, key=cv2.contourArea)
+                    refined = np.zeros_like(cleaned)
+                    cv2.drawContours(refined, [largest], -1, 255, thickness=cv2.FILLED)
+                else:
+                    refined = cleaned
+
+                alpha = cv2.GaussianBlur(refined, (7, 7), 0)
+                rgba = cv2.cvtColor(frame, cv2.COLOR_BGR2BGRA)
+                rgba[:, :, 3] = alpha
+
+                frame_path = output_dir / f"frame_{frame_index:05d}.png"
+                cv2.imwrite(str(frame_path), rgba)
+                foreground_ratios.append(float(np.mean(alpha) / 255.0))
+                frame_index += 1
+        finally:
+            capture.release()
+
+        if frame_index == 0:
+            raise MediaOpsError(f"no_frames_decoded: {video_path}")
+
+        return {
+            "frames_dir": str(output_dir),
+            "frame_count": frame_index,
+            "fps": fps,
+            "width": width,
+            "height": height,
+            "average_foreground_ratio": round(sum(foreground_ratios) / len(foreground_ratios), 4)
+            if foreground_ratios
+            else 0.0,
+        }
+
+    def composite_foreground_over_background(
+        self,
+        background_path: Path,
+        foreground_frames_dir: Path,
+        foreground_fps: float,
+        output_path: Path,
+        *,
+        anchor: str = "bottom_right",
+        scale: float = 0.45,
+        x_offset: int = 0,
+        y_offset: int = 0,
+        fit_mode: str = "loop",
+    ) -> Path:
+        self._ensure_binaries()
+        if not background_path.exists():
+            raise MediaOpsError(f"video_not_found: {background_path}")
+
+        frame_files = sorted(foreground_frames_dir.glob("frame_*.png"))
+        if not frame_files:
+            raise MediaOpsError(f"no_matte_frames: {foreground_frames_dir}")
+
+        anchor_expressions = {
+            "top_left": ("0", "0"),
+            "top_right": ("main_w-overlay_w", "0"),
+            "bottom_left": ("0", "main_h-overlay_h"),
+            "bottom_right": ("main_w-overlay_w", "main_h-overlay_h"),
+            "center": ("(main_w-overlay_w)/2", "(main_h-overlay_h)/2"),
+        }
+        base_x, base_y = anchor_expressions.get(anchor.strip().lower(), anchor_expressions["bottom_right"])
+        x_expr = f"({base_x})+({int(x_offset)})"
+        y_expr = f"({base_y})+({int(y_offset)})"
+
+        safe_scale = scale if scale > 0 else 0.45
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+
+        cmd = [str(self._ffmpeg), "-y", "-i", str(background_path)]
+        if fit_mode.strip().lower() == "loop":
+            cmd.extend(["-stream_loop", "-1"])
+        cmd.extend(
+            [
+                "-framerate",
+                f"{max(foreground_fps, 1.0):.3f}",
+                "-i",
+                str(foreground_frames_dir / "frame_%05d.png"),
+                "-filter_complex",
+                (
+                    f"[1:v]scale=iw*{safe_scale}:ih*{safe_scale}[fg];"
+                    f"[0:v][fg]overlay=x='{x_expr}':y='{y_expr}':shortest=1[outv]"
+                ),
+                "-map",
+                "[outv]",
+                "-c:v",
+                "libx264",
+                "-preset",
+                "veryfast",
+                "-crf",
+                "20",
+                "-pix_fmt",
+                "yuv420p",
+                "-an",
+                str(output_path),
+            ]
+        )
+        self._run(cmd)
+        return output_path
+
     def trim_video(self, video_path: Path, output_path: Path, start_ms: int, end_ms: int) -> Path:
         self._ensure_binaries()
         start_sec = max(start_ms / 1000.0, 0.0)
@@ -402,20 +569,25 @@ class MediaOps:
         *,
         canvas: str = "1080x1920",
         layout: str = "auto",
+        placements: list[dict[str, float]] | None = None,
     ) -> Path:
         self._ensure_binaries()
         if not video_paths:
             raise MediaOpsError("no_clips_to_compose")
-        if "x" not in canvas:
+        normalized_canvas = str(canvas).strip().lower().replace("×", "x").replace("*", "x")
+        if "x" not in normalized_canvas:
             raise MediaOpsError("invalid_canvas")
 
-        width_raw, height_raw = canvas.split("x", maxsplit=1)
+        width_raw, height_raw = (part.strip() for part in normalized_canvas.split("x", maxsplit=1))
         if not width_raw.isdigit() or not height_raw.isdigit():
             raise MediaOpsError("invalid_canvas")
 
         canvas_w = int(width_raw)
         canvas_h = int(height_raw)
         output_path.parent.mkdir(parents=True, exist_ok=True)
+
+        if placements:
+            return self._compose_videos_with_placements(video_paths, output_path, canvas_w, canvas_h, placements)
 
         # Single clip: normalize to canvas to keep downstream deterministic.
         if len(video_paths) == 1:
@@ -532,6 +704,46 @@ class MediaOps:
                 str(output_path),
             ]
         )
+        self._run(cmd)
+        return output_path
+
+    def _compose_videos_with_placements(
+        self,
+        video_paths: list[Path],
+        output_path: Path,
+        canvas_w: int,
+        canvas_h: int,
+        placements: list[dict[str, float]],
+    ) -> Path:
+        filter_parts: list[str] = []
+        overlay_inputs: list[str] = []
+        for index, path in enumerate(video_paths[:3]):
+            placement = placements[index] if index < len(placements) else {}
+            tile_w = max(round(canvas_w * float(placement.get("width", 24.0)) / 100), 2)
+            tile_h = max(round(canvas_h * float(placement.get("height", 42.0)) / 100), 2)
+            x = max(0, min(canvas_w - tile_w, round(canvas_w * float(placement.get("left", 0.0)) / 100 - tile_w / 2)))
+            y = max(0, min(canvas_h - tile_h, round(canvas_h * float(placement.get("top", 0.0)) / 100 - tile_h / 2)))
+            filter_parts.append(f"[{index}:v]{self._cover_filter(tile_w, tile_h)}[placed{index}]")
+            overlay_inputs.append(f"[placed{index}]@{x},{y}")
+
+        filter_parts.append(f"color=c=black:s={canvas_w}x{canvas_h}:r=30:d=86400[base]")
+        current = "base"
+        for index, placed in enumerate(overlay_inputs):
+            source, coordinates = placed.split("@", maxsplit=1)
+            x, y = coordinates.split(",", maxsplit=1)
+            output_label = "outv" if index == len(overlay_inputs) - 1 else f"layer{index}"
+            filter_parts.append(f"[{current}]{source}overlay={x}:{y}:eof_action=pass:repeatlast=1[{output_label}]")
+            current = output_label
+
+        cmd = [str(self._ffmpeg), "-y"]
+        for path in video_paths[:3]:
+            cmd.extend(["-i", str(path)])
+        cmd.extend([
+            "-filter_complex", ";".join(filter_parts),
+            "-map", "[outv]",
+            "-c:v", "libx264", "-preset", "veryfast", "-crf", "20",
+            "-pix_fmt", "yuv420p", "-an", "-shortest", str(output_path),
+        ])
         self._run(cmd)
         return output_path
 

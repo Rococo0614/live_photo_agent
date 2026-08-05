@@ -120,6 +120,9 @@ All contracts are centralized in `src/live_photo_agent/models.py`.
 
 - L0 atomic tools:
   - scan/filter/extract/score/segment/cover/trim/speed/color/stabilize/concat/overlay/bgm/export
+  - `extract_subject_matte` / `overlay_subject_clip`: cut a moving subject out of one motion clip
+    (per-frame alpha matte via OpenCV background subtraction, no extra model dependency) and
+    composite it onto the current `context.timeline` at a chosen anchor/scale.
 - L1 integrated tools:
   - search and summary aggregation
 - L2 vertical tools:
@@ -131,7 +134,22 @@ Registry mapping is single-source in `src/live_photo_agent/capability/registry.p
 
 - Shared mutable `context` dictionary is the runtime bus between tool calls.
 - Each tool writes declared side effects (for example `context.key_frames`, `context.summary`).
-- Memory writes happen only at the end of successful execution or clarification response build via `MemoryService.append`.
+- `MemoryService.append` always writes a `session_memory` entry immediately (audit trail).
+  For turns that produced a real deliverable (tool_calls executed, no clarification),
+  `multimodal_memory` and `strategy_memory` are **not** written yet — the entry is left
+  pending (`accepted: null`, `requires_feedback: true`) until a human confirms via
+  `POST /api/memory/feedback` (`MemoryService.confirm_feedback`, keyed by
+  `graph_observability.run_id`). Only `accepted=true` commits into `multimodal_memory`;
+  `strategy_memory` learns from both outcomes (`run_count` always increments,
+  `accept_count` only on acceptance). Turns with no deliverable (clarification / planner
+  unavailable) have nothing to review and are finalized immediately as before.
+- Rejected turns are expected to be retried by resubmitting `/agent/execute` with
+  `retry_feedback` (+ `retry_of_run_id`) set on `AgentRequest`; `LivePhotoAgent` folds the
+  feedback into the request text before planning so the next plan can react to it.
+- Local trace visualization (staged `pipeline_trace` + fine-grained `graph_observability.trace`)
+  replaces LangSmith for in-process observability; recent runs are also available via
+  `GET /api/runs/recent` (tailing `settings.graph_run_log_file`). LangSmith tracing in
+  `api.py` remains an optional no-op auto-enable hook, not the primary observability path.
 
 ## 8. Clarification Behavior
 
@@ -195,6 +213,16 @@ Registry mapping is single-source in `src/live_photo_agent/capability/registry.p
 1. Multimodal direct input is now normalized into runtime assets, but audio and richer metadata are not ingested yet.
 2. Tool capability is still mostly ffmpeg/opencv baseline; advanced creative operators are pending.
 3. Result-layer IQA scoring has been introduced in eval, but production threshold policy still needs online validation.
+4. `extract_subject_matte` uses classic background subtraction (MOG2/KNN) + largest-contour cleanup,
+   not a learned matting model — it degrades on moving cameras, cluttered/dynamic backgrounds, or
+   multiple moving subjects. `mediapipe`'s modern Python package (>=0.10.14) dropped the legacy
+   `mp.solutions` API and requires downloading a `.tflite` model from `storage.googleapis.com` at
+   runtime, which was unreachable in this sandbox; pinning `mediapipe==0.10.9` restores the legacy
+   API but force-downgrades `protobuf` to 3.20.3, breaking `langgraph-api`/`grpcio`/`tensorboard` in
+   this env — so no ML-based matting dependency was added. If a real deployment has network access to
+   Google's model CDN and an isolated env, swapping in `mediapipe.tasks.python.vision.ImageSegmenter`
+   (or another local model) behind the same `extract_subject_matte_frames` signature is a drop-in
+   quality upgrade.
 
 Recommended next implementation priority:
 

@@ -266,6 +266,45 @@ TOOL_SPECS: tuple[ToolSpec, ...] = (
         },
         output_schema={"output_path": "string(path)", "duration_ms": "int"},
     ),
+    ToolSpec(
+        name=ToolName.EXTRACT_SUBJECT_MATTE,
+        level="L0",
+        purpose=(
+            "Cut out the moving subject across an entire motion clip (per-frame alpha matte), "
+            "preserving its motion trajectory rather than a single static frame."
+        ),
+        when_to_use=(
+            "Use when the request wants a subject/person cut out of one live photo so it can be "
+            "pasted onto another composition (e.g. 'expression', 'cutout', 'paste the moving person')."
+        ),
+        arguments={
+            "asset_ids": "Optional list of target asset IDs (typically the single source live photo).",
+            "mode": "Background-subtraction backend: mog2 or knn.",
+        },
+        output_schema={
+            "matte_count": "int",
+            "matted_asset_ids": "string[]",
+            "average_foreground_ratios": "object<string,float>",
+        },
+    ),
+    ToolSpec(
+        name=ToolName.OVERLAY_SUBJECT_CLIP,
+        level="L0",
+        purpose="Composite a previously extracted subject matte onto the current timeline/canvas.",
+        when_to_use=(
+            "Use after concat_clips has built the background composition and extract_subject_matte has "
+            "produced the cutout, to paste the moving subject onto that composition."
+        ),
+        arguments={
+            "foreground_asset_id": "Asset ID whose subject matte (from extract_subject_matte) to paste.",
+            "anchor": "Position preset: top_left, top_right, bottom_left, bottom_right, or center.",
+            "scale": "Foreground scale factor relative to its own frame size, e.g. 0.45.",
+            "x_offset": "Extra horizontal pixel offset from the anchor position.",
+            "y_offset": "Extra vertical pixel offset from the anchor position.",
+            "fit_mode": "Duration alignment: loop (repeat foreground to fill background) or trim.",
+        },
+        output_schema={"overlay_applied": "bool", "output_path": "string(path)"},
+    ),
 )
 
 
@@ -480,6 +519,8 @@ class QwenPlanner:
                                 "selected_asset_ids": request.selected_asset_ids,
                                 "guided_tool_names": [tool.value for tool in request.guided_tool_names],
                                 "library_root": str(request.library_root),
+                                "layout_context": request.layout_context,
+                                "operation_log": request.operation_log,
                             },
                             "library_summary": library_summary,
                             "tool_catalog": tool_catalog,

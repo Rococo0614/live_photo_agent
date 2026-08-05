@@ -175,6 +175,40 @@ def execute_agent(request: AgentRequest) -> AgentResponse:
 
 
 # ---------------------------------------------------------------------------
+# Run observability (local replacement for LangSmith tracing)
+# ---------------------------------------------------------------------------
+
+@app.get("/api/runs/recent")
+def recent_runs(limit: int = 20) -> dict[str, object]:
+    """Return the most recent graph run records for local trace visualization.
+
+    Reads ``settings.graph_run_log_file`` (JSONL, one record per run written by
+    ``PlannerGraphRunner``) so the UI can render intent/plan/tool-arrangement/
+    execution timelines without depending on an external tracer like LangSmith.
+    """
+    import json
+
+    log_file = settings.graph_run_log_file
+    if not log_file.exists():
+        return {"runs": []}
+
+    records: list[dict[str, object]] = []
+    for raw_line in log_file.read_text(encoding="utf-8").splitlines():
+        line = raw_line.strip()
+        if not line:
+            continue
+        try:
+            row = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        if isinstance(row, dict):
+            records.append(row)
+
+    records.reverse()
+    return {"runs": records[: max(limit, 0)]}
+
+
+# ---------------------------------------------------------------------------
 # Album sync
 # ---------------------------------------------------------------------------
 
@@ -211,6 +245,7 @@ def album_sync(request: AlbumSyncRequest) -> dict[str, object]:
 
 class FeedbackRequest(BaseModel):
     session_id: str = ""
+    run_id: str = ""
     asset_ids: list[str] = Field(default_factory=list)
     accepted: bool = True
     comment: str = ""
@@ -218,42 +253,19 @@ class FeedbackRequest(BaseModel):
 
 @app.post("/api/memory/feedback")
 def memory_feedback(request: FeedbackRequest) -> dict[str, object]:
-    """Record explicit user acceptance / rejection for the last agent turn.
+    """Record explicit human acceptance / rejection for one agent turn.
 
-    This patches the most recent session-memory entry whose ``accepted`` field
-    has not yet been set by a feedback call, then persists ``strategy_memory``
-    so future planner suggestions reflect the outcome.
+    Prefer targeting by ``run_id`` (returned as ``context.graph_observability.run_id``
+    from ``/agent/execute``); falls back to the most recent unconfirmed turn when
+    omitted. Only ``accepted=true`` commits the turn's deliverable into
+    ``multimodal_memory``; either way ``strategy_memory`` learns from the outcome.
+    Rejected turns are expected to be retried via ``/agent/execute`` with
+    ``retry_feedback``/``retry_of_run_id`` set until accepted.
     """
     memory = MemoryService(settings.memory_file)
-    state = memory._load_state()  # noqa: SLF001  (internal helper, intentional)
-
-    session_entries = state.get("session_memory", [])
-    updated = False
-    for entry in reversed(session_entries):
-        if not isinstance(entry, dict):
-            continue
-        if entry.get("_feedback_recorded"):
-            continue
-        entry["accepted"] = request.accepted
-        entry["_feedback_recorded"] = True
-        if request.comment:
-            entry["feedback_comment"] = request.comment
-        if request.asset_ids:
-            entry["feedback_asset_ids"] = request.asset_ids
-        updated = True
-        break
-
-    if updated:
-        from datetime import datetime, timezone
-        import json
-        state["session_memory"] = session_entries
-        settings.memory_file.parent.mkdir(parents=True, exist_ok=True)
-        settings.memory_file.write_text(
-            json.dumps(state, ensure_ascii=False, indent=2), encoding="utf-8"
-        )
-
-    return {
-        "recorded": updated,
-        "accepted": request.accepted,
-        "session_memory_size": len(session_entries),
-    }
+    return memory.confirm_feedback(
+        accepted=request.accepted,
+        run_id=request.run_id,
+        comment=request.comment,
+        asset_ids=request.asset_ids,
+    )

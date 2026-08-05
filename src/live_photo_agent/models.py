@@ -53,6 +53,8 @@ class ToolName(str, Enum):
     MIX_AUDIO_BGM = "mix_audio_bgm"
     EXPORT_MP4 = "export_mp4"
     SET_DISPLAY_FRAME = "set_display_frame"
+    EXTRACT_SUBJECT_MATTE = "extract_subject_matte"
+    OVERLAY_SUBJECT_CLIP = "overlay_subject_clip"
 
 
 class ToolCall(BaseModel):
@@ -80,6 +82,12 @@ class AgentRequest(BaseModel):
     guided_tool_names: list[ToolName] = Field(default_factory=list)
     input_image_paths: list[str | Path] = Field(default_factory=list)
     input_video_paths: list[str | Path] = Field(default_factory=list)
+    layout_context: list[dict[str, object]] = Field(default_factory=list)
+    operation_log: list[dict[str, object]] = Field(default_factory=list)
+    # Human-in-the-loop redo: set when resubmitting a rejected run. The planner
+    # sees retry_feedback appended to the request text so it can correct course.
+    retry_of_run_id: str = ""
+    retry_feedback: str = ""
 
 
 class ToolResult(BaseModel):

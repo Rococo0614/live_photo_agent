@@ -29,10 +29,10 @@
         linear-gradient(180deg, #08101d 0%, #09111f 42%, #050914 100%);
     }
 
-    .shell { max-width: 1480px; margin: 0 auto; padding: 28px 20px 36px; }
+    .shell { max-width: 1680px; margin: 0 auto; padding: 24px 24px 40px; }
     .hero {
       display: grid;
-      grid-template-columns: minmax(0, 1.5fr) minmax(320px, 0.9fr);
+      grid-template-columns: minmax(0, 1.2fr) minmax(420px, 1fr);
       gap: 16px;
       align-items: stretch;
       margin-bottom: 16px;
@@ -46,7 +46,7 @@
       backdrop-filter: blur(20px);
     }
 
-    .hero-copy { padding: 28px; position: relative; overflow: hidden; }
+    .hero-copy { padding: 22px 26px; position: relative; overflow: hidden; }
     .hero-copy::after {
       content: "";
       position: absolute;
@@ -72,20 +72,20 @@
     }
 
     h1 {
-      margin: 16px 0 10px;
+      margin: 12px 0 8px;
       font-family: Georgia, "Times New Roman", serif;
-      font-size: clamp(32px, 4vw, 58px);
+      font-size: clamp(28px, 3.2vw, 46px);
       line-height: 1;
       letter-spacing: -0.04em;
     }
 
-    .subtitle { margin: 0; max-width: 62ch; color: var(--muted); font-size: 15px; line-height: 1.75; }
-    .hero-meta { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 20px; }
+    .subtitle { margin: 0; max-width: 62ch; color: var(--muted); font-size: 13px; line-height: 1.55; }
+    .hero-meta { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; }
     .badge {
       display: inline-flex;
       align-items: center;
       gap: 8px;
-      padding: 10px 12px;
+      padding: 8px 10px;
       border-radius: 14px;
       background: rgba(255, 255, 255, 0.04);
       border: 1px solid var(--line);
@@ -97,28 +97,46 @@
       display: grid;
       grid-template-columns: repeat(2, minmax(0, 1fr));
       gap: 12px;
-      padding: 18px;
+      padding: 12px;
       background: linear-gradient(180deg, rgba(17, 25, 54, 0.95), rgba(8, 12, 27, 0.95));
     }
 
     .stat {
-      padding: 18px;
+      padding: 14px;
       border-radius: 18px;
       background: linear-gradient(180deg, rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0.02));
       border: 1px solid rgba(255, 255, 255, 0.08);
     }
 
-    .stat-value { display: block; font-size: 30px; font-weight: 700; letter-spacing: -0.05em; }
+    .stat-value { display: block; font-size: 26px; font-weight: 700; letter-spacing: -0.05em; }
     .stat-label { display: block; margin-top: 4px; color: var(--muted); font-size: 13px; }
 
     .workspace {
       display: grid;
-      grid-template-columns: 280px minmax(0, 1.35fr) minmax(360px, 1fr);
+      grid-template-columns: 248px minmax(0, 1fr);
       gap: 16px;
       align-items: start;
     }
 
-    .sidebar, .content, .chat { padding: 18px; }
+    .sidebar, .content {
+      min-height: 0;
+      height: calc(100vh - 350px);
+      min-height: 520px;
+      padding: 18px;
+      overflow-y: auto;
+      scrollbar-gutter: stable;
+    }
+    .chat {
+      min-width: 0;
+      padding: 18px;
+    }
+    .sidebar {
+      position: sticky;
+      top: 18px;
+      align-self: stretch;
+      height: auto;
+      min-height: calc(100vh - 36px);
+    }
     .section-title { margin: 0 0 14px; font-size: 14px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
     .field { display: grid; gap: 8px; margin-bottom: 14px; }
     .field label { font-size: 12px; color: var(--muted); letter-spacing: 0.04em; }
@@ -227,24 +245,86 @@
     }
 
     .asset-grid {
-      grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
-      align-items: stretch;
+      grid-template-columns: repeat(6, minmax(76px, 1fr));
+      grid-auto-rows: max-content;
+      max-height: calc(100% - 76px);
+      overflow-y: auto;
+      padding-right: 6px;
+      align-items: start;
     }
-    .asset-card {
-      display: flex;
-      flex-direction: column;
-      gap: 12px;
-      min-height: 100%;
-      padding: 12px;
+    .gallery-modal {
+      position: fixed;
+      inset: 0;
+      z-index: 15;
+      display: none;
+      padding: 28px;
+      background: rgba(2, 6, 23, 0.78);
+      backdrop-filter: blur(12px);
+    }
+    .gallery-modal.open { display: block; }
+    .gallery-dialog {
+      display: grid;
+      grid-template-rows: auto auto minmax(0, 1fr) auto;
+      width: min(1180px, 100%);
+      height: min(780px, 100%);
+      margin: 0 auto;
+      padding: 22px;
       overflow: hidden;
+      border: 1px solid var(--line);
+      border-radius: 24px;
+      background: #101a31;
+      box-shadow: 0 30px 100px rgba(2, 6, 23, 0.6);
+    }
+    .gallery-dialog-header { display: flex; align-items: start; justify-content: space-between; gap: 16px; }
+    .gallery-dialog-title { margin: 0; font-size: 22px; }
+    .gallery-dialog .asset-grid { max-height: none; min-height: 0; overflow-y: auto; padding: 4px 8px 4px 0; }
+    .gallery-dialog-footer { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding-top: 14px; }
+    .gallery-dialog-footer .controls { justify-content: flex-end; }
+    .load-images-button { display: inline-flex; align-items: center; gap: 8px; }
+    .asset-card {
+      position: relative;
+      display: block;
+      width: 100%;
+      min-width: 0;
+      aspect-ratio: 4 / 3;
+      padding: 0;
+      overflow: hidden;
+      cursor: pointer;
     }
     .asset-thumb {
       position: relative;
-      aspect-ratio: 4 / 3;
+      height: 100%;
       border-radius: 14px;
       overflow: hidden;
       border: 1px solid rgba(255, 255, 255, 0.08);
       background: linear-gradient(180deg, rgba(125, 211, 252, 0.16), rgba(255, 255, 255, 0.02));
+    }
+    .asset-card:has(input:checked) .asset-thumb { border-color: var(--accent); box-shadow: 0 0 0 2px rgba(125, 211, 252, 0.28); }
+    .asset-select { position: absolute; top: 8px; right: 8px; z-index: 1; width: 18px; height: 18px; margin: 0; accent-color: var(--accent); }
+    .live-photo-badge {
+      position: absolute;
+      left: 8px;
+      top: 8px;
+      z-index: 1;
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      padding: 5px 7px;
+      border: 1px solid rgba(255, 255, 255, 0.46);
+      border-radius: 8px;
+      background: rgba(2, 6, 23, 0.72);
+      color: #fff;
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 0.02em;
+    }
+    .live-photo-badge::before {
+      content: '';
+      width: 8px;
+      height: 8px;
+      border: 1px solid currentColor;
+      border-radius: 50%;
+      box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.24);
     }
     .asset-thumb img {
       width: 100%;
@@ -263,11 +343,41 @@
       text-align: center;
       padding: 12px;
     }
-    .asset-card-body { display: grid; gap: 8px; }
-    .asset-top { display: flex; justify-content: space-between; gap: 10px; align-items: start; }
-    .asset-name { font-weight: 700; word-break: break-word; }
-    .asset-tags { display: flex; flex-wrap: wrap; gap: 6px; }
-    .asset-path { color: var(--muted); font-size: 11px; word-break: break-word; line-height: 1.45; }
+    .composition-drop-zone { position: relative; min-height: 240px; overflow: hidden; border: 1px dashed rgba(125, 211, 252, 0.3); border-radius: 16px; background: rgba(125, 211, 252, 0.06); }
+    .composition-layout-layer { position: absolute; inset: 0; }
+    .composition-layout-item { position: absolute; transform: translate(-50%, -50%); width: 24%; height: 42%; min-width: 80px; min-height: 80px; overflow: hidden; border: 1px solid rgba(125, 211, 252, 0.35); border-radius: 14px; cursor: grab; touch-action: none; user-select: none; }
+    .composition-layout-item.dragging { cursor: grabbing; z-index: 2; }
+    .composition-layout-item.active { border-color: var(--accent); box-shadow: 0 0 0 2px rgba(125, 211, 252, 0.28); }
+    .composition-layout-item img { width: 100%; height: 100%; object-fit: cover; display: block; }
+    .composition-layout-label { position: absolute; left: 6px; right: 6px; bottom: 6px; padding: 4px 6px; border-radius: 8px; background: rgba(2, 6, 23, 0.72); color: var(--text); font-size: 10px; text-align: center; }
+    .composition-layout-helper { position: absolute; inset: 0; display: grid; place-items: center; padding: 18px; color: var(--muted); text-align: center; }
+    .canvas-editor-grid { display: grid; grid-template-columns: minmax(180px, 0.65fr) minmax(240px, 1.35fr); gap: 12px; align-items: stretch; }
+    .canvas-editor-controls { display: grid; align-content: start; gap: 10px; }
+    .canvas-stage { display: grid; align-content: center; min-width: 0; }
+    .editor-workbench {
+      display: grid;
+      grid-template-columns: minmax(190px, 0.8fr) minmax(260px, 1.2fr);
+      gap: 12px;
+      padding-bottom: 12px;
+    }
+    .editor-workbench > .result-card { min-width: 0; }
+    .asset-loader-bar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      margin-bottom: 14px;
+      padding: 14px 16px;
+      border: 1px solid rgba(125, 211, 252, 0.2);
+      border-radius: 16px;
+      background: rgba(56, 189, 248, 0.08);
+    }
+    .asset-loader-bar strong { display: block; margin-top: 4px; font-size: 14px; }
+    .operation-card { margin-top: 14px; }
+    .operation-log { display: grid; gap: 8px; margin-top: 10px; }
+    .operation-item { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 9px 10px; border-radius: 10px; background: rgba(255, 255, 255, 0.04); color: var(--muted); font-size: 12px; }
+    .operation-item strong { color: var(--text); font-weight: 600; }
+    .operation-remove { padding: 4px 8px; font-size: 11px; }
     .tag {
       display: inline-flex;
       align-items: center;
@@ -315,6 +425,105 @@
     .controls { display: flex; gap: 10px; flex-wrap: wrap; }
     .controls button { flex: 1 1 140px; }
 
+    .timeline { display: grid; gap: 0; }
+    .timeline-step {
+      position: relative;
+      padding: 10px 0 10px 26px;
+      border-left: 2px solid rgba(255, 255, 255, 0.1);
+    }
+    .timeline-step:last-child { border-left-color: transparent; }
+    .timeline-step::before {
+      content: '';
+      position: absolute;
+      left: -7px;
+      top: 14px;
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      background: rgba(125, 211, 252, 0.25);
+      border: 2px solid var(--accent);
+    }
+    .timeline-step.done::before { background: var(--accent-strong); }
+    .timeline-stage { font-weight: 700; font-size: 12px; letter-spacing: 0.04em; text-transform: uppercase; color: var(--accent); }
+    .timeline-detail { margin-top: 4px; color: var(--text); font-size: 12px; line-height: 1.55; }
+
+    .trace-log { display: grid; gap: 8px; max-height: 260px; overflow: auto; padding-right: 4px; }
+    .trace-item {
+      padding: 8px 10px;
+      border-radius: 12px;
+      background: rgba(255, 255, 255, 0.03);
+      border: 1px solid rgba(255, 255, 255, 0.07);
+      font-size: 11px;
+      line-height: 1.5;
+    }
+    .trace-item .trace-node { color: var(--accent); font-weight: 700; }
+    .trace-item .trace-event { color: var(--text); }
+    .trace-item .trace-ts { color: var(--muted); }
+
+    .status-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 6px 12px;
+      border-radius: 999px;
+      font-size: 12px;
+      font-weight: 700;
+    }
+    .status-pending { background: rgba(250, 204, 21, 0.14); color: #facc15; border: 1px solid rgba(250, 204, 21, 0.35); }
+    .status-accepted { background: rgba(74, 222, 128, 0.14); color: #4ade80; border: 1px solid rgba(74, 222, 128, 0.35); }
+    .status-rejected { background: rgba(248, 113, 113, 0.14); color: #f87171; border: 1px solid rgba(248, 113, 113, 0.35); }
+    .status-none { background: rgba(255, 255, 255, 0.05); color: var(--muted); border: 1px solid rgba(255, 255, 255, 0.08); }
+
+    .feedback-actions button.accept { background: rgba(74, 222, 128, 0.16); border-color: rgba(74, 222, 128, 0.4); color: #bbf7d0; }
+    .feedback-actions button.reject { background: rgba(248, 113, 113, 0.16); border-color: rgba(248, 113, 113, 0.4); color: #fecaca; }
+    .feedback-actions button.retry { background: rgba(250, 204, 21, 0.16); border-color: rgba(250, 204, 21, 0.4); color: #fde68a; }
+    .feedback-actions button:disabled { opacity: 0.45; cursor: not-allowed; transform: none; }
+    .feedback-trigger { display: none; margin-top: 12px; }
+    .feedback-trigger.visible { display: inline-flex; }
+    .feedback-modal {
+      position: fixed;
+      inset: 0;
+      z-index: 20;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+      background: rgba(2, 6, 23, 0.72);
+      backdrop-filter: blur(10px);
+    }
+    .feedback-modal.open { display: flex; }
+    .feedback-dialog {
+      width: min(560px, 100%);
+      max-height: min(86vh, 760px);
+      overflow-y: auto;
+      padding: 22px;
+      border: 1px solid var(--line);
+      border-radius: 22px;
+      background: #111a31;
+      box-shadow: 0 30px 100px rgba(2, 6, 23, 0.55);
+    }
+    .feedback-dialog-header { display: flex; justify-content: space-between; gap: 12px; align-items: start; margin-bottom: 16px; }
+    .feedback-dialog-title { margin: 0; font-size: 20px; }
+    .feedback-dialog-close { padding: 6px 10px; }
+    .feedback-output {
+      display: grid;
+      gap: 10px;
+      margin: 16px 0;
+      padding: 14px;
+      border: 1px solid rgba(125, 211, 252, 0.22);
+      border-radius: 14px;
+      background: rgba(56, 189, 248, 0.07);
+    }
+    .feedback-output-section { display: grid; gap: 5px; }
+    .feedback-output-title { color: var(--accent); font-size: 11px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; }
+    .feedback-output-body { color: var(--text); font-size: 13px; line-height: 1.55; white-space: pre-wrap; overflow-wrap: anywhere; }
+    .feedback-dialog-footer { display: flex; flex-wrap: wrap; gap: 10px; justify-content: flex-end; margin-top: 16px; }
+    .compact-result { display: grid; gap: 10px; }
+    .intent-line { font-size: 17px; line-height: 1.45; }
+    .tool-summary { color: var(--muted); font-size: 12px; }
+    .debug-details { margin-top: 12px; }
+    .debug-details summary { cursor: pointer; color: var(--muted); font-size: 12px; }
+
     .empty-state {
       padding: 22px;
       border-radius: 18px;
@@ -323,15 +532,22 @@
       background: rgba(125, 211, 252, 0.06);
     }
 
-    @media (max-width: 1200px) {
+    @media (max-width: 980px) {
       .hero, .workspace { grid-template-columns: 1fr; }
+      .sidebar, .content, .chat { position: static; height: auto; min-height: 0; overflow: visible; }
+      .asset-grid { max-height: 60vh; }
     }
 
     @media (max-width: 720px) {
       .shell { padding: 16px 12px 28px; }
       .hero-copy, .hero-stats, .sidebar, .content, .chat { padding: 16px; }
       .hero-stats { grid-template-columns: 1fr; }
-      .asset-grid { grid-template-columns: 1fr; }
+      .asset-grid { grid-template-columns: repeat(4, minmax(64px, 1fr)); }
+      .canvas-editor-grid { grid-template-columns: 1fr; }
+      .editor-workbench { grid-template-columns: 1fr; }
+      .asset-loader-bar { align-items: stretch; flex-direction: column; }
+      .gallery-modal { padding: 12px; }
+      .gallery-dialog { height: calc(100vh - 24px); padding: 16px; }
     }
   </style>
 </head>
@@ -365,7 +581,7 @@
         </div>
         <div class="controls">
           <button id="refreshButton">刷新资产</button>
-          <button id="selectAllButton">全选当前相册</button>
+          <button id="selectAllAssetsButton">全选当前相册</button>
         </div>
         <div class="field" style="margin-top: 14px;">
           <label for="albumSelect">选择相册</label>
@@ -373,8 +589,8 @@
         </div>
         <div id="albumList" class="album-list"></div>
 
-        <div class="config-panel">
-          <h2 class="section-title" style="margin: 0;">大脑配置</h2>
+        <details class="config-panel">
+          <summary class="section-title" style="margin: 0; cursor: pointer;">大脑配置</summary>
           <div class="field" style="margin: 0;">
             <label for="plannerBackendSelect">Backend</label>
             <select id="plannerBackendSelect">
@@ -428,49 +644,147 @@
             <button id="plannerResetButton">恢复默认</button>
           </div>
           <pre id="plannerConfigPreview">等待加载配置。</pre>
-        </div>
+        </details>
 
-        <h2 class="section-title" style="margin-top: 20px;">工具规划</h2>
-        <div class="micro">点选工具后，会作为 guidance 发送给 planner，帮助它优先编排这些工具。</div>
-        <div id="guidedToolsPreview" class="chip-list"></div>
-        <div id="toolCatalog" class="tool-grid"></div>
+        <details style="margin-top: 20px;">
+          <summary class="section-title" style="cursor: pointer;">工具规划</summary>
+          <div class="micro">点选工具后，会作为 guidance 发送给 planner，帮助它优先编排这些工具。</div>
+          <div id="guidedToolsPreview" class="chip-list"></div>
+          <div id="toolCatalog" class="tool-grid"></div>
+        </details>
       </aside>
 
-      <main class="panel content">
-        <h2 class="section-title">当前资产卡片</h2>
-        <div id="assetGrid" class="asset-grid"></div>
-      </main>
-
       <section class="panel chat">
-        <h2 class="section-title">聊天与生成</h2>
-        <div class="field">
-          <label for="chatInput">用户输入</label>
-          <textarea id="chatInput" placeholder="例如：帮我从当前相册里挑一组适合做三拼的 live photo，输出一个适合朋友圈的版本。"></textarea>
+        <h2 class="section-title">布局、编辑与生成</h2>
+        <div class="asset-loader-bar">
+          <div>
+            <div class="micro">当前素材</div>
+            <strong id="loadedAssetSummary">尚未载入图片</strong>
+          </div>
+          <div class="controls">
+            <button id="openGalleryButton" class="load-images-button primary" type="button">＋ 载入图片</button>
+            <button id="clearLayoutButton" type="button">清空布局</button>
+          </div>
+        </div>
+        <div class="editor-workbench">
+          <div class="result-card">
+            <div class="micro">布局</div>
+            <div id="compositionDropZone" class="composition-drop-zone">
+              <div id="compositionLayoutLayer" class="composition-layout-layer"></div>
+            </div>
+          </div>
+          <div class="result-card">
+            <div class="micro" style="margin-bottom: 10px;">画布编辑</div>
+            <div class="canvas-editor-grid">
+              <div class="canvas-editor-controls">
+                <div class="field">
+                  <label for="canvasPromptInput">编辑提示</label>
+                  <textarea id="canvasPromptInput" placeholder="例如：把选区中的人物改成电影感光影" style="min-height: 90px;"></textarea>
+                </div>
+                <div class="field">
+                  <label for="canvasModeSelect">选择模式</label>
+                  <select id="canvasModeSelect">
+                    <option value="brush">画笔选区</option>
+                    <option value="rect">矩形框选</option>
+                  </select>
+                </div>
+                <div class="controls">
+                  <button id="canvasPreviewButton" class="primary" type="button">保存编辑到布局</button>
+                  <button id="canvasResetButton" type="button">清空画布</button>
+                </div>
+              </div>
+              <div id="canvasStage" class="canvas-stage" style="border: 1px dashed rgba(125, 211, 252, 0.28); border-radius: 18px; padding: 10px; background: rgba(125, 211, 252, 0.06);">
+                <div class="micro">画布预览</div>
+                <canvas id="interactiveCanvas" width="480" height="320" style="width: 100%; max-width: 100%; border-radius: 12px; background: linear-gradient(180deg, rgba(255,255,255,0.06), rgba(255,255,255,0.02));"></canvas>
+              </div>
+            </div>
+          </div>
         </div>
         <div class="controls">
-          <button id="generateButton" class="primary">开始生成</button>
+          <button id="generateButton" class="primary">根据当前布局生成</button>
           <button id="clearButton">清空结果</button>
         </div>
+        <div class="result-card operation-card">
+          <div class="micro">当前处理记录</div>
+          <div id="operationLog" class="operation-log">还没有画布编辑记录。</div>
+        </div>
         <div class="results-layout" style="margin-top: 16px;">
-          <div class="result-card">
-            <div class="micro">大脑规划</div>
-            <div id="planPreview" class="summary-grid">等待生成。</div>
+          <div class="result-card compact-result">
+            <div class="micro">生成计划</div>
+            <div id="planPreview" class="intent-line">等待生成。这里会显示系统对整体需求的理解。</div>
+            <div id="selectedAssetPreview" class="tool-summary">已选素材 0 张 · 工具 guidance 0 个</div>
+            <button id="feedbackOpenButton" class="feedback-trigger" type="button">查看结果并反馈</button>
           </div>
-          <div class="result-card">
-            <div class="micro">选中的资产与工具</div>
-            <pre id="selectedAssetPreview">[]</pre>
-          </div>
-          <div class="result-card">
-            <div class="micro">生成效果展示</div>
+          <div class="result-card compact-result">
+            <div class="micro">执行结果</div>
             <div id="resultPreview" class="summary-grid">等待生成。</div>
-          </div>
-          <div class="result-card">
-            <div class="micro">规划与执行轨迹</div>
-            <pre id="tracePreview">-</pre>
+            <details class="debug-details" open>
+              <summary>执行阶段与思维链记录</summary>
+              <div id="stagePreview" class="timeline" style="margin-top: 10px;">等待生成。</div>
+              <div id="tracePreview" class="trace-log" style="margin-top: 10px;">等待生成。</div>
+              <details style="margin-top: 10px;">
+                <summary>原始 JSON</summary>
+                <pre id="traceRawPreview">-</pre>
+              </details>
+            </details>
           </div>
         </div>
       </section>
     </section>
+  </div>
+
+  <div id="galleryModal" class="gallery-modal" role="dialog" aria-modal="true" aria-labelledby="galleryDialogTitle">
+    <div class="gallery-dialog">
+      <div class="gallery-dialog-header">
+        <div>
+          <h2 id="galleryDialogTitle" class="gallery-dialog-title">载入图片</h2>
+          <div class="micro" style="margin-top: 6px;">选择要加入当前布局的图片，完成后点击“载入到布局”。</div>
+        </div>
+        <button id="closeGalleryButton" type="button" aria-label="关闭图片画廊">关闭</button>
+      </div>
+      <div class="controls" style="margin: 16px 0 12px;">
+        <button id="refreshGalleryButton" type="button">刷新资产</button>
+        <button id="selectAllButton" type="button">全选当前相册</button>
+        <select id="galleryAlbumSelect" aria-label="选择相册"></select>
+      </div>
+      <div id="assetGrid" class="asset-grid"></div>
+      <div class="gallery-dialog-footer">
+        <span id="gallerySelectionSummary" class="micro">已选择 0 张</span>
+        <div class="controls">
+          <button id="cancelGalleryButton" type="button">取消</button>
+          <button id="addSelectedToLayoutButton" class="primary" type="button">载入到布局</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="feedbackModal" class="feedback-modal" role="dialog" aria-modal="true" aria-labelledby="feedbackDialogTitle">
+    <div class="feedback-dialog">
+      <div class="feedback-dialog-header">
+        <div>
+          <h2 id="feedbackDialogTitle" class="feedback-dialog-title">确认这次生成结果</h2>
+          <div id="feedbackStatusBadge" class="status-badge status-none" style="margin-top: 8px;">尚未生成</div>
+          <div id="feedbackRunId" class="micro" style="margin-top: 6px;"></div>
+        </div>
+        <button id="feedbackCloseButton" class="feedback-dialog-close" type="button" aria-label="关闭反馈窗口">关闭</button>
+      </div>
+      <div id="feedbackOutputPreview" class="feedback-output">
+        <div class="feedback-output-section">
+          <div class="feedback-output-title">输出结果</div>
+          <div class="feedback-output-body">等待生成结果。</div>
+        </div>
+      </div>
+      <div class="field">
+        <label for="feedbackComment">反馈意见</label>
+        <textarea id="feedbackComment" placeholder="例如：素材选错了，想要人物特写而不是风景。" style="min-height: 100px;"></textarea>
+      </div>
+      <div class="controls feedback-actions">
+        <button id="feedbackAcceptButton" class="accept" type="button" disabled>通过并记住</button>
+        <button id="feedbackRejectButton" class="reject" type="button" disabled>打回</button>
+        <button id="feedbackRetryButton" class="retry" type="button" disabled>根据反馈重新生成</button>
+      </div>
+      <div id="feedbackResultPreview" class="micro" style="margin-top: 10px;"></div>
+    </div>
   </div>
 
   <script>
@@ -479,6 +793,11 @@
       selectedAssetIds: new Set(),
       selectedToolNames: new Set(),
       activeAlbum: '__all__',
+      lastRunId: '',
+      lastFeedbackResolved: true,
+      droppedAssetIds: [],
+      layoutItems: [],
+      operationLog: [],
     };
 
     const els = {
@@ -506,15 +825,46 @@
       plannerResetButton: document.getElementById('plannerResetButton'),
       plannerConfigPreview: document.getElementById('plannerConfigPreview'),
       assetGrid: document.getElementById('assetGrid'),
+      galleryModal: document.getElementById('galleryModal'),
+      galleryAlbumSelect: document.getElementById('galleryAlbumSelect'),
+      gallerySelectionSummary: document.getElementById('gallerySelectionSummary'),
+      loadedAssetSummary: document.getElementById('loadedAssetSummary'),
+      operationLog: document.getElementById('operationLog'),
       toolCatalog: document.getElementById('toolCatalog'),
       guidedToolsPreview: document.getElementById('guidedToolsPreview'),
-      chatInput: document.getElementById('chatInput'),
       planPreview: document.getElementById('planPreview'),
       selectedAssetPreview: document.getElementById('selectedAssetPreview'),
       resultPreview: document.getElementById('resultPreview'),
+      stagePreview: document.getElementById('stagePreview'),
       tracePreview: document.getElementById('tracePreview'),
+      traceRawPreview: document.getElementById('traceRawPreview'),
+      feedbackStatusBadge: document.getElementById('feedbackStatusBadge'),
+      feedbackRunId: document.getElementById('feedbackRunId'),
+      feedbackComment: document.getElementById('feedbackComment'),
+      feedbackAcceptButton: document.getElementById('feedbackAcceptButton'),
+      feedbackRejectButton: document.getElementById('feedbackRejectButton'),
+      feedbackRetryButton: document.getElementById('feedbackRetryButton'),
+      feedbackResultPreview: document.getElementById('feedbackResultPreview'),
+      feedbackOutputPreview: document.getElementById('feedbackOutputPreview'),
+      feedbackModal: document.getElementById('feedbackModal'),
+      feedbackOpenButton: document.getElementById('feedbackOpenButton'),
+      feedbackCloseButton: document.getElementById('feedbackCloseButton'),
       refreshButton: document.getElementById('refreshButton'),
+      addSelectedToLayoutButton: document.getElementById('addSelectedToLayoutButton'),
+      clearLayoutButton: document.getElementById('clearLayoutButton'),
+      openGalleryButton: document.getElementById('openGalleryButton'),
+      closeGalleryButton: document.getElementById('closeGalleryButton'),
+      cancelGalleryButton: document.getElementById('cancelGalleryButton'),
+      refreshGalleryButton: document.getElementById('refreshGalleryButton'),
+      selectAllAssetsButton: document.getElementById('selectAllAssetsButton'),
       selectAllButton: document.getElementById('selectAllButton'),
+      compositionDropZone: document.getElementById('compositionDropZone'),
+      compositionLayoutLayer: document.getElementById('compositionLayoutLayer'),
+      canvasPromptInput: document.getElementById('canvasPromptInput'),
+      canvasModeSelect: document.getElementById('canvasModeSelect'),
+      canvasPreviewButton: document.getElementById('canvasPreviewButton'),
+      canvasResetButton: document.getElementById('canvasResetButton'),
+      interactiveCanvas: document.getElementById('interactiveCanvas'),
       generateButton: document.getElementById('generateButton'),
       clearButton: document.getElementById('clearButton'),
     };
@@ -574,6 +924,10 @@
 
     function getSelectedAssetIds() {
       return Array.from(state.selectedAssetIds).sort();
+    }
+
+    function getLayoutAssetIds() {
+      return state.layoutItems.filter((item) => item.asset_id).map((item) => item.asset_id);
     }
 
     function setSelectedAssetIds(ids) {
@@ -716,6 +1070,8 @@
         .concat(albums.map((album) => `<option value="${escapeHtml(album.album_name)}">${escapeHtml(album.album_name)} (${album.asset_count})</option>`))
         .join('');
       els.albumSelect.value = state.activeAlbum;
+      els.galleryAlbumSelect.innerHTML = els.albumSelect.innerHTML;
+      els.galleryAlbumSelect.value = state.activeAlbum;
 
       els.albumList.innerHTML = albums.length === 0
         ? '<div class="empty-state">当前没有扫描到资产。你可以先切换库根目录再刷新。</div>'
@@ -746,25 +1102,13 @@
 
       els.assetGrid.innerHTML = assets.map((asset) => {
         const checked = state.selectedAssetIds.has(asset.asset_id) ? 'checked' : '';
-        const tags = (asset.tags ?? []).slice(0, 5).map((tag) => `<span class="tag">${escapeHtml(tag)}</span>`).join('');
         const thumbnail = asset.image_path ? `<img src="${mediaUrl(asset.image_path)}" alt="${escapeHtml(asset.asset_id)}">` : '<div class="asset-thumb-placeholder">没有预览</div>';
-        const coverMoment = formatCoverMoment(asset);
         return `
           <label class="asset-card">
             <div class="asset-thumb">
               ${thumbnail}
-            </div>
-            <div class="asset-card-body">
-              <div class="asset-top">
-                <div>
-                  <div class="asset-name">${escapeHtml(asset.asset_id)}</div>
-                  <div class="asset-meta">${escapeHtml(asset.metadata?.album_name ?? '.')}${asset.motion_path ? ' · motion' : ''}</div>
-                </div>
-                <input type="checkbox" data-asset-id="${escapeHtml(asset.asset_id)}" ${checked}>
-              </div>
-              <div class="asset-tags">${tags || '<span class="tag">untagged</span>'}</div>
-              <div class="asset-path">${asset.image_path ? escapeHtml(asset.image_path) : ''}</div>
-              ${coverMoment ? `<div class="micro">${escapeHtml(coverMoment)}</div>` : ''}
+              ${asset.motion_path ? '<span class="live-photo-badge" aria-label="Live Photo">Live</span>' : ''}
+              <input class="asset-select" type="checkbox" aria-label="选择资产 ${escapeHtml(asset.asset_id)}" data-asset-id="${escapeHtml(asset.asset_id)}" ${checked}>
             </div>
           </label>
         `;
@@ -841,12 +1185,200 @@
     }
 
     function renderSelectedPreview() {
-      const selected = currentAssets().filter((asset) => state.selectedAssetIds.has(asset.asset_id)).map(summarizeAsset);
-      els.selectedAssetPreview.textContent = JSON.stringify({
-        selected_asset_ids: getSelectedAssetIds(),
-        guided_tool_names: Array.from(state.selectedToolNames).sort(),
-        selected_assets: selected,
-      }, null, 2);
+      const selectedCount = getLayoutAssetIds().length;
+      const tools = Array.from(state.selectedToolNames).sort();
+      els.selectedAssetPreview.textContent = `布局素材 ${selectedCount} 项 · ${tools.length ? `工具 guidance：${tools.join('、')}` : '未指定工具 guidance'}`;
+      els.gallerySelectionSummary.textContent = `已选择 ${getSelectedAssetIds().length} 张`;
+      els.loadedAssetSummary.textContent = state.layoutItems.length > 0
+        ? `已载入 ${state.layoutItems.length} 项素材`
+        : '尚未载入图片';
+      els.operationLog.innerHTML = state.operationLog.length === 0
+        ? '还没有画布编辑记录。'
+        : state.operationLog.map((operation, index) => `
+          <div class="operation-item">
+            <span><strong>${escapeHtml(operation.intent)}</strong> · ${escapeHtml(operation.tool)} · ${escapeHtml(operation.status)}</span>
+            ${operation.layoutId ? `<button class="operation-remove" type="button" data-remove-operation="${index}">移除</button>` : ''}
+          </div>`).join('');
+      els.operationLog.querySelectorAll('[data-remove-operation]').forEach((node) => {
+        node.addEventListener('click', () => {
+          const operation = state.operationLog[Number(node.dataset.removeOperation)];
+          if (operation?.layoutId) {
+            state.layoutItems = state.layoutItems.filter((item) => item.id !== operation.layoutId);
+            state.operationLog.splice(Number(node.dataset.removeOperation), 1);
+            state.droppedAssetIds = state.layoutItems.filter((item) => item.asset_id).map((item) => item.asset_id);
+            renderCompositionDropZone();
+            renderSelectedPreview();
+          }
+        });
+      });
+    }
+
+    const interactiveCanvasState = { image: null, points: [], drawing: false };
+
+    function currentDroppedAssets() {
+      return state.layoutItems.filter((item) => item.asset_id).map((item) => currentAssets().find((asset) => asset.asset_id === item.asset_id)).filter(Boolean);
+    }
+
+    function loadCanvasImageFromAsset(asset) {
+      if (!asset?.image_path) {
+        resetInteractiveCanvas();
+        return;
+      }
+      const image = new Image();
+      image.onload = () => { interactiveCanvasState.image = image; interactiveCanvasState.points = []; drawInteractivePoints(); };
+      image.src = mediaUrl(asset.image_path);
+    }
+
+    function renderCompositionDropZone() {
+      const helper = state.layoutItems.length === 0 ? '<div class="composition-layout-helper">先载入图片，或将画布编辑保存为布局素材。</div>' : '';
+      els.compositionLayoutLayer.innerHTML = `${state.layoutItems.map((item, index) => `
+        <div class="composition-layout-item ${index === 0 ? 'active' : ''}" data-layout-id="${escapeHtml(item.id)}" style="left: ${item.left ?? (18 + (index % 3) * 28)}%; top: ${item.top ?? (35 + Math.floor(index / 3) * 30)}%">
+          <img src="${item.image_src || mediaUrl(item.image_path)}" alt="${escapeHtml(item.label)}">
+          <div class="composition-layout-label">${escapeHtml(item.label)}</div>
+        </div>`).join('')}${helper}`;
+      els.compositionLayoutLayer.querySelectorAll('.composition-layout-item').forEach((item) => {
+        const layoutItem = state.layoutItems.find((candidate) => candidate.id === item.dataset.layoutId);
+        bindLayoutDrag(item, layoutItem);
+        item.addEventListener('click', () => {
+          els.compositionLayoutLayer.querySelectorAll('.composition-layout-item').forEach((node) => node.classList.remove('active'));
+          item.classList.add('active');
+          const layoutItem = state.layoutItems.find((candidate) => candidate.id === item.dataset.layoutId);
+          if (layoutItem?.asset_id) loadCanvasImageFromAsset(currentAssets().find((asset) => asset.asset_id === layoutItem.asset_id));
+        });
+      });
+    }
+
+    function bindLayoutDrag(node, layoutItem) {
+      if (!layoutItem) return;
+      const drag = { active: false, moved: false, pointerId: null };
+      node.addEventListener('pointerdown', (event) => {
+        drag.active = true;
+        drag.moved = false;
+        drag.pointerId = event.pointerId;
+        node.classList.add('dragging');
+        node.setPointerCapture(event.pointerId);
+      });
+      node.addEventListener('pointermove', (event) => {
+        if (!drag.active) return;
+        const zone = els.compositionDropZone.getBoundingClientRect();
+        const nextLeft = Math.max(5, Math.min(95, ((event.clientX - zone.left) / zone.width) * 100));
+        const nextTop = Math.max(8, Math.min(92, ((event.clientY - zone.top) / zone.height) * 100));
+        const currentLeft = Number.parseFloat(node.style.left) || nextLeft;
+        const currentTop = Number.parseFloat(node.style.top) || nextTop;
+        if (Math.abs(nextLeft - currentLeft) > 0.2 || Math.abs(nextTop - currentTop) > 0.2) drag.moved = true;
+        node.style.left = `${nextLeft}%`;
+        node.style.top = `${nextTop}%`;
+        layoutItem.left = nextLeft;
+        layoutItem.top = nextTop;
+      });
+      node.addEventListener('pointerup', (event) => {
+        drag.active = false;
+        node.classList.remove('dragging');
+        if (node.hasPointerCapture(event.pointerId)) node.releasePointerCapture(event.pointerId);
+      });
+      node.addEventListener('pointercancel', () => {
+        drag.active = false;
+        node.classList.remove('dragging');
+      });
+    }
+
+    function useSelectedAssetsInLayout() {
+      const existingIds = new Set(state.layoutItems.filter((item) => item.asset_id).map((item) => item.asset_id));
+      getSelectedAssetIds().forEach((assetId) => {
+        if (existingIds.has(assetId)) return;
+        const asset = currentAssets().find((candidate) => candidate.asset_id === assetId);
+        if (asset) state.layoutItems.push({ id: `asset:${assetId}`, asset_id: assetId, image_path: asset.image_path, label: asset.asset_id });
+      });
+      state.droppedAssetIds = state.layoutItems.filter((item) => item.asset_id).map((item) => item.asset_id);
+      renderCompositionDropZone();
+      loadCanvasImageFromAsset(currentDroppedAssets()[0] ?? null);
+      renderSelectedPreview();
+      els.galleryModal.classList.remove('open');
+    }
+
+    function resetInteractiveCanvas() {
+      const context = els.interactiveCanvas.getContext('2d');
+      context.clearRect(0, 0, els.interactiveCanvas.width, els.interactiveCanvas.height);
+      context.fillStyle = 'rgba(255,255,255,0.06)';
+      context.fillRect(0, 0, els.interactiveCanvas.width, els.interactiveCanvas.height);
+      interactiveCanvasState.image = null;
+      interactiveCanvasState.points = [];
+    }
+
+    function saveCanvasEditToLayout() {
+      const prompt = els.canvasPromptInput.value.trim();
+      if (!interactiveCanvasState.image) {
+        els.resultPreview.textContent = '请先从布局中选择一张图片，再进行画布编辑。';
+        return;
+      }
+      if (interactiveCanvasState.points.length < 2) {
+        els.resultPreview.textContent = '请先在画布上完成画笔或矩形选区。';
+        return;
+      }
+      const layoutId = `edit:${Date.now()}`;
+      const imageSrc = els.interactiveCanvas.toDataURL('image/png');
+      const intent = prompt || `对当前选区执行${els.canvasModeSelect.value === 'rect' ? '矩形' : '画笔'}编辑`;
+      state.layoutItems.push({
+        id: layoutId,
+        image_src: imageSrc,
+        label: `编辑产物 ${state.operationLog.length + 1}`,
+        kind: 'canvas_edit',
+        prompt,
+        selection_mode: els.canvasModeSelect.value,
+      });
+      state.operationLog.push({
+        intent,
+        tool: 'interactive_canvas_edit',
+        status: '已保存到布局',
+        layoutId,
+      });
+      renderCompositionDropZone();
+      renderSelectedPreview();
+      els.resultPreview.textContent = '画布编辑已作为中间素材保存到布局，可继续载入图片或直接生成。';
+    }
+
+    function drawInteractivePoints() {
+      const context = els.interactiveCanvas.getContext('2d');
+      context.clearRect(0, 0, els.interactiveCanvas.width, els.interactiveCanvas.height);
+      if (interactiveCanvasState.image) context.drawImage(interactiveCanvasState.image, 0, 0, els.interactiveCanvas.width, els.interactiveCanvas.height);
+      if (interactiveCanvasState.points.length < 2) return;
+      context.strokeStyle = 'rgba(255,255,255,0.95)';
+      context.lineWidth = 3;
+      context.beginPath();
+      context.moveTo(interactiveCanvasState.points[0].x, interactiveCanvasState.points[0].y);
+      if (els.canvasModeSelect.value === 'rect') {
+        const start = interactiveCanvasState.points[0];
+        const end = interactiveCanvasState.points[interactiveCanvasState.points.length - 1];
+        context.strokeRect(start.x, start.y, end.x - start.x, end.y - start.y);
+        return;
+      }
+      interactiveCanvasState.points.slice(1).forEach((point) => context.lineTo(point.x, point.y));
+      context.stroke();
+    }
+
+    function bindInteractiveCanvas() {
+      const canvas = els.interactiveCanvas;
+      canvas.addEventListener('pointerdown', (event) => {
+        const rect = canvas.getBoundingClientRect();
+        interactiveCanvasState.drawing = true;
+        canvas.setPointerCapture(event.pointerId);
+        interactiveCanvasState.points = [{ x: ((event.clientX - rect.left) / rect.width) * canvas.width, y: ((event.clientY - rect.top) / rect.height) * canvas.height }];
+      });
+      canvas.addEventListener('pointermove', (event) => {
+        if (!interactiveCanvasState.drawing) return;
+        const rect = canvas.getBoundingClientRect();
+        const point = { x: ((event.clientX - rect.left) / rect.width) * canvas.width, y: ((event.clientY - rect.top) / rect.height) * canvas.height };
+        if (els.canvasModeSelect.value === 'rect') {
+          interactiveCanvasState.points = [interactiveCanvasState.points[0], point];
+        } else {
+          interactiveCanvasState.points.push(point);
+        }
+        drawInteractivePoints();
+      });
+      canvas.addEventListener('pointerup', (event) => {
+        interactiveCanvasState.drawing = false;
+        if (canvas.hasPointerCapture(event.pointerId)) canvas.releasePointerCapture(event.pointerId);
+      });
     }
 
     function renderResult(response) {
@@ -857,17 +1389,19 @@
         ? response.plan.tool_calls.map((call) => `<div class="summary-body"><strong>${escapeHtml(call.tool)}</strong> · ${escapeHtml(call.reason)}</div>`).join('')
         : '<div class="summary-body">无</div>';
 
-      els.planPreview.innerHTML = [
-        `<div class="summary-section"><div class="summary-title">Intent</div><div class="summary-body">${escapeHtml(response.plan?.intent ?? '-')}</div></div>`,
-        `<div class="summary-section"><div class="summary-title">Clarification</div><div class="summary-body">${clarification}</div></div>`,
-        `<div class="summary-section"><div class="summary-title">Tools</div><div class="summary-body">${toolCalls}</div></div>`,
-      ].join('');
+      const tools = (response.plan?.tool_calls ?? []).map((call) => call.tool).filter(Boolean);
+      els.planPreview.innerHTML = `<div>${escapeHtml(response.plan?.intent ?? '未能识别整体需求')}</div><div class="tool-summary">${tools.length ? `将使用：${tools.map(escapeHtml).join('、')}` : '暂无工具安排'}</div>`;
 
       els.resultPreview.innerHTML = [
         `<div class="summary-section"><div class="summary-title">输出结果</div><div class="summary-body">${escapeHtml(response.final_response ?? '-')}</div></div>`,
         `<div class="summary-section"><div class="summary-title">工具输出</div><div class="summary-body">${escapeHtml((response.tool_results ?? []).map((item) => `${item.tool}: ${item.success ? 'ok' : 'fail'}`).join(' · ') || '无')}</div></div>`,
       ].join('');
-      els.tracePreview.textContent = JSON.stringify({
+
+      renderStageTimeline(response);
+      renderTraceLog(response);
+      resetFeedbackPanel(response);
+
+      els.traceRawPreview.textContent = JSON.stringify({
         pipeline_trace: response.pipeline_trace,
         context: {
           preprocess: response.context?.preprocess,
@@ -876,6 +1410,142 @@
         },
       }, null, 2);
     }
+
+    function renderStageTimeline(response) {
+      const stages = response.pipeline_trace ?? [];
+      if (stages.length === 0) {
+        els.stagePreview.innerHTML = '<div class="empty-state">暂无流程阶段记录。</div>';
+        return;
+      }
+      els.stagePreview.innerHTML = stages.map((item) => `
+        <div class="timeline-step done">
+          <div class="timeline-stage">${escapeHtml(item.stage)}</div>
+          <div class="timeline-detail">${escapeHtml(item.detail)}</div>
+        </div>
+      `).join('');
+    }
+
+    function renderTraceLog(response) {
+      const observability = response.context?.graph_observability ?? {};
+      const events = Array.isArray(observability.trace) ? observability.trace : [];
+      if (events.length === 0) {
+        els.tracePreview.innerHTML = '<div class="empty-state">暂无细粒度节点轨迹（可能是 planner 不可用或走了 fallback）。</div>';
+        return;
+      }
+      els.tracePreview.innerHTML = events.map((event) => {
+        const details = event.details ? JSON.stringify(event.details) : '';
+        return `
+          <div class="trace-item">
+            <span class="trace-ts">${escapeHtml(event.ts ?? '')}</span> ·
+            <span class="trace-node">${escapeHtml(event.node ?? '')}</span> ·
+            <span class="trace-event">${escapeHtml(event.event ?? '')}</span>
+            ${details ? `<div class="micro">${escapeHtml(details)}</div>` : ''}
+          </div>
+        `;
+      }).join('');
+    }
+
+    function resetFeedbackPanel(response) {
+      const observability = response.context?.graph_observability ?? {};
+      const runId = String(observability.run_id ?? '');
+      const hasToolResults = (response.tool_results ?? []).length > 0;
+      const needClarification = Boolean(response.plan?.need_clarification);
+      const requiresFeedback = hasToolResults && !needClarification;
+
+      state.lastRunId = runId;
+      state.lastFeedbackResolved = !requiresFeedback;
+      els.feedbackOpenButton.classList.toggle('visible', requiresFeedback);
+
+      els.feedbackRunId.textContent = runId ? `run_id: ${runId}` : '（本次无 run_id，可能规划失败）';
+      const finalResponse = response.final_response ?? '无文本输出';
+      const toolSummary = (response.tool_results ?? []).map((item) => `${item.tool}: ${item.success ? '执行成功' : '执行失败'}`).join(' · ') || '无工具执行结果';
+      const layoutSummary = (response.context?.layout_context ?? response.context?.summary?.layout_context)
+        ? JSON.stringify(response.context?.layout_context ?? response.context?.summary?.layout_context)
+        : '布局中间信息已随本次请求提交';
+      els.feedbackOutputPreview.innerHTML = `
+        <div class="feedback-output-section">
+          <div class="feedback-output-title">输出结果</div>
+          <div class="feedback-output-body">${escapeHtml(finalResponse)}</div>
+        </div>
+        <div class="feedback-output-section">
+          <div class="feedback-output-title">工具执行</div>
+          <div class="feedback-output-body">${escapeHtml(toolSummary)}</div>
+        </div>
+        <div class="feedback-output-section">
+          <div class="feedback-output-title">布局处理</div>
+          <div class="feedback-output-body">${escapeHtml(layoutSummary)}</div>
+        </div>`;
+      els.feedbackComment.value = '';
+      els.feedbackResultPreview.textContent = '';
+      els.feedbackRetryButton.disabled = true;
+
+      if (!requiresFeedback) {
+        els.feedbackStatusBadge.textContent = needClarification ? '需要澄清，无需确认' : '无可执行产出，无需确认';
+        els.feedbackStatusBadge.className = 'status-badge status-none';
+        els.feedbackAcceptButton.disabled = true;
+        els.feedbackRejectButton.disabled = true;
+        return;
+      }
+
+      els.feedbackStatusBadge.textContent = '待确认（未计入策略/资产记忆）';
+      els.feedbackStatusBadge.className = 'status-badge status-pending';
+      els.feedbackAcceptButton.disabled = false;
+      els.feedbackRejectButton.disabled = false;
+      els.feedbackModal.classList.add('open');
+    }
+
+    async function submitFeedback(accepted) {
+      if (!state.lastRunId) {
+        els.feedbackResultPreview.textContent = '没有可确认的 run_id，请先生成一次结果。';
+        return;
+      }
+      const payload = {
+        run_id: state.lastRunId,
+        accepted,
+        comment: els.feedbackComment.value.trim(),
+        asset_ids: getSelectedAssetIds(),
+      };
+      els.feedbackAcceptButton.disabled = true;
+      els.feedbackRejectButton.disabled = true;
+      try {
+        const response = await fetch('/api/memory/feedback', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
+        if (!response.ok) {
+          const text = await response.text();
+          throw new Error(text || `feedback failed: ${response.status}`);
+        }
+        const data = await response.json();
+        state.lastFeedbackResolved = true;
+        if (accepted) {
+          els.feedbackStatusBadge.textContent = '已通过 · 已计入策略/资产记忆';
+          els.feedbackStatusBadge.className = 'status-badge status-accepted';
+          els.feedbackRetryButton.disabled = true;
+          els.feedbackOpenButton.classList.remove('visible');
+        } else {
+          els.feedbackStatusBadge.textContent = '已打回 · 不计入资产记忆';
+          els.feedbackStatusBadge.className = 'status-badge status-rejected';
+          els.feedbackRetryButton.disabled = false;
+        }
+        els.feedbackResultPreview.textContent = JSON.stringify(data);
+      } catch (error) {
+        els.feedbackAcceptButton.disabled = false;
+        els.feedbackRejectButton.disabled = false;
+        els.feedbackResultPreview.textContent = String(error);
+      }
+    }
+
+    async function retryWithFeedback() {
+      const comment = els.feedbackComment.value.trim();
+      if (!comment) {
+        els.feedbackResultPreview.textContent = '请先填写打回原因，再重新生成。';
+        return;
+      }
+      await runGeneration({ retryFeedback: comment, retryOfRunId: state.lastRunId });
+    }
+
 
     async function refreshBootstrap() {
       const libraryRoot = els.libraryRootInput.value.trim();
@@ -886,30 +1556,54 @@
       }
       state.bootstrap = await response.json();
       state.activeAlbum = '__all__';
-      if (state.bootstrap.assets.length > 0) {
-        state.selectedAssetIds = new Set(state.bootstrap.assets.slice(0, Math.min(3, state.bootstrap.assets.length)).map((asset) => asset.asset_id));
-      }
+      const availableIds = new Set(state.bootstrap.assets.map((asset) => asset.asset_id));
+      state.selectedAssetIds = new Set();
+      state.layoutItems = state.layoutItems.filter((item) => !item.asset_id || availableIds.has(item.asset_id));
+      state.droppedAssetIds = state.layoutItems.filter((item) => item.asset_id).map((item) => item.asset_id);
       renderSummary();
       renderAlbums();
       renderAssets();
+      renderCompositionDropZone();
+      if (state.droppedAssetIds.length === 0) {
+        resetInteractiveCanvas();
+      }
       renderSelectedPreview();
       renderToolCatalog();
       await fetchPlannerConfig();
     }
 
-    async function runGeneration() {
+    async function runGeneration(retryOptions = {}) {
       const payload = {
         user_id: 'web-demo',
-        text: els.chatInput.value.trim() || '请根据当前资产给我一个可展示的生成结果。',
+        text: buildGenerationIntent(),
         library_root: els.libraryRootInput.value.trim() || state.bootstrap?.library_root,
-        selected_asset_ids: getSelectedAssetIds(),
+        selected_asset_ids: getLayoutAssetIds(),
         guided_tool_names: Array.from(state.selectedToolNames).sort(),
+        layout_context: state.layoutItems.map((item, index) => ({
+          order: index + 1,
+          id: item.id,
+          kind: item.kind || 'source_asset',
+          label: item.label,
+          asset_id: item.asset_id || '',
+          left: item.left ?? (18 + (index % 3) * 28),
+          top: item.top ?? (35 + Math.floor(index / 3) * 30),
+          width: item.width ?? 24,
+          height: item.height ?? 42,
+          z_index: item.z_index ?? index + 1,
+          prompt: item.prompt || '',
+          selection_mode: item.selection_mode || '',
+        })),
+        operation_log: state.operationLog,
         input_image_paths: [],
         input_video_paths: [],
       };
+      if (retryOptions.retryFeedback) {
+        payload.retry_feedback = retryOptions.retryFeedback;
+        payload.retry_of_run_id = retryOptions.retryOfRunId ?? '';
+      }
 
       els.generateButton.disabled = true;
-      els.generateButton.textContent = '生成中...';
+      els.generateButton.textContent = retryOptions.retryFeedback ? '根据反馈重新生成中...' : '生成中...';
       try {
         const response = await fetch('/agent/execute', {
           method: 'POST',
@@ -930,21 +1624,68 @@
       }
     }
 
+    function buildGenerationIntent() {
+      const edits = state.operationLog.map((operation) => operation.intent).join('；');
+      const assetCount = state.layoutItems.filter((item) => item.kind !== 'canvas_edit').length;
+      const editCount = state.layoutItems.filter((item) => item.kind === 'canvas_edit').length;
+      return `请根据当前布局生成最终 Live Photo：调用 concat_clips 对布局中的 ${assetCount} 张原始图片做空间拼接，严格使用每个布局项的 left/top/width/height 和 z_index，不要仅按素材加入顺序排列${editCount ? `，并把 ${editCount} 个画布编辑产物叠加到拼接结果上` : ''}。${edits ? `处理中间步骤：${edits}。` : ''}当前测试只验证原始素材空间拼接，不需要分割。请保留完整的意图识别、工具使用和中间处理记录。`;
+    }
+
     els.refreshButton.addEventListener('click', () => refreshBootstrap().catch((error) => { els.resultPreview.textContent = String(error); }));
+    els.addSelectedToLayoutButton.addEventListener('click', useSelectedAssetsInLayout);
+    els.clearLayoutButton.addEventListener('click', () => { state.droppedAssetIds = []; state.layoutItems = []; state.operationLog = []; renderCompositionDropZone(); resetInteractiveCanvas(); renderSelectedPreview(); });
+    els.openGalleryButton.addEventListener('click', () => {
+      renderAssets();
+      els.galleryModal.classList.add('open');
+    });
+    els.closeGalleryButton.addEventListener('click', () => els.galleryModal.classList.remove('open'));
+    els.cancelGalleryButton.addEventListener('click', () => els.galleryModal.classList.remove('open'));
+    els.galleryModal.addEventListener('click', (event) => {
+      if (event.target === els.galleryModal) els.galleryModal.classList.remove('open');
+    });
+    els.refreshGalleryButton.addEventListener('click', () => refreshBootstrap().catch((error) => { els.gallerySelectionSummary.textContent = String(error); }));
+    els.canvasResetButton.addEventListener('click', resetInteractiveCanvas);
+    els.canvasPreviewButton.addEventListener('click', saveCanvasEditToLayout);
+    els.selectAllAssetsButton.addEventListener('click', () => {
+      const assets = filteredAssets();
+      setSelectedAssetIds(assets.map((asset) => asset.asset_id));
+    });
     els.selectAllButton.addEventListener('click', () => {
       const assets = filteredAssets();
       setSelectedAssetIds(assets.map((asset) => asset.asset_id));
     });
     els.albumSelect.addEventListener('change', () => setActiveAlbum(els.albumSelect.value));
+    els.galleryAlbumSelect.addEventListener('change', () => setActiveAlbum(els.galleryAlbumSelect.value));
     els.generateButton.addEventListener('click', () => runGeneration());
     els.clearButton.addEventListener('click', () => {
       els.planPreview.textContent = '等待生成。';
       els.resultPreview.textContent = '等待生成。';
-      els.tracePreview.textContent = '-';
+      els.stagePreview.textContent = '等待生成。';
+      els.tracePreview.textContent = '等待生成。';
+      els.traceRawPreview.textContent = '-';
+      state.lastRunId = '';
+      state.lastFeedbackResolved = true;
+      els.feedbackStatusBadge.textContent = '尚未生成';
+      els.feedbackStatusBadge.className = 'status-badge status-none';
+      els.feedbackRunId.textContent = '';
+      els.feedbackComment.value = '';
+      els.feedbackResultPreview.textContent = '';
+      els.feedbackAcceptButton.disabled = true;
+      els.feedbackRejectButton.disabled = true;
+      els.feedbackRetryButton.disabled = true;
     });
     els.plannerApplyButton.addEventListener('click', () => applyPlannerConfig().catch((error) => { els.resultPreview.textContent = String(error); }));
     els.plannerResetButton.addEventListener('click', () => resetPlannerConfig().catch((error) => { els.resultPreview.textContent = String(error); }));
+    els.feedbackAcceptButton.addEventListener('click', () => submitFeedback(true));
+    els.feedbackRejectButton.addEventListener('click', () => submitFeedback(false));
+    els.feedbackRetryButton.addEventListener('click', () => retryWithFeedback().catch((error) => { els.feedbackResultPreview.textContent = String(error); }));
+    els.feedbackOpenButton.addEventListener('click', () => els.feedbackModal.classList.add('open'));
+    els.feedbackCloseButton.addEventListener('click', () => els.feedbackModal.classList.remove('open'));
+    els.feedbackModal.addEventListener('click', (event) => { if (event.target === els.feedbackModal) els.feedbackModal.classList.remove('open'); });
 
+    renderCompositionDropZone();
+    resetInteractiveCanvas();
+    bindInteractiveCanvas();
     refreshBootstrap().catch((error) => {
       els.resultPreview.textContent = String(error);
       els.assetGrid.innerHTML = '<div class="empty-state">页面初始化失败，请检查后端是否启动。</div>';
