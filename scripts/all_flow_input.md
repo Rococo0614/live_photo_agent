@@ -30,37 +30,6 @@ source scripts/use_endpoint_backend.sh \
 > 「人工反馈闭环」三个面板；也可以用 `GET /api/runs/recent` 拉取最近的运行记录（见第 5 节）。
 > 不想配 LangSmith 的话可以跳过 `LANGCHAIN_*` 这三行，其余步骤完全不受影响。
 
----
-
-## 1. 离线相册索引 + VLM 语义填充（无需启动服务）
-
-### 1a. 初次建库（扫描 + 质量信号）
-```bash
-python -m live_photo_agent.offline_preprocess_cli build \
-  --library-root data/live_photo
-```
-
-### 1b. VLM 语义富化（读取已有 JSONL，补充语义字段，跳过已完成的行）
-```bash
-python -m live_photo_agent.offline_preprocess_cli enrich-semantics
-```
-
-### 1c. 强制全量重做（忽略缓存和已有语义）
-```bash
-python -m live_photo_agent.offline_preprocess_cli enrich-semantics --force
-```
-
-### 1d. 只测试 5 个素材（调试 VLM prompt / 响应格式）
-```bash
-python scripts/test_vlm_videos.py \
-  data/live_photo/1.jpg \
-  data/live_photo/10.jpg \
-  data/live_photo/100.jpg \
-  data/live_photo/1000.jpg \
-  data/live_photo/101.jpg
-```
-
----
 
 ## 2. 启动 Agent 服务
 
