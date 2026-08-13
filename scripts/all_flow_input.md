@@ -4,6 +4,8 @@
 
 ```bash
 cd live_photo_agent
+
+
 conda activate live_photo_agent
 
 export DASHSCOPE_API_KEY='sk-ws-H.EDDIMHE.XPJN.MEUCIFj-bi6j3oX3ba8uOeEP9ObU9oPqmb5VwpO6WgANKkm3AiEAvDesS6EN6P51MCfDeL3skveLQT2lgk7ls181Xvia8vk'
@@ -210,30 +212,7 @@ else:
 
 ---
 
-## 7. LangGraph Studio 可视化观察窗口（独立 lg_studio 环境）
-
-### 7a. 填写 API Key（只需一次）
-编辑项目根目录的 `.env` 文件，填入真实的密钥：
-```
-LPA_QWEN_AUTH_TOKEN=sk-ws-xxx...
-LPA_QWEN_WORKSPACE_ID=ws-xxx...
-```
-
-### 7b. 启动 Studio 服务（在 lg_studio 环境中运行）
-```bash
-conda activate lg_studio
-cd /home/vivo/live_photo_agent
-/home/vivo/miniconda3/envs/lg_studio/bin/langgraph dev --config langgraph.json
-```
-
-启动后访问 **http://127.0.0.1:2024** 即可在浏览器中看到 Agent 执行状态图。
-
-> Studio 和主开发环境共享同一份状态文件（`.album_preprocess_index.jsonl`、`.agent_memory.json`），  
-> 因此主环境跑 `agent/execute` 时，Studio 中可实时看到状态变化。
-
----
-
-## 8. 典型完整测试流程（顺序执行）
+## 7. 典型完整测试流程（顺序执行）
 
 ```bash
 # Step 1: 建库 + 语义富化（只需跑一次，后续增量）
@@ -258,7 +237,7 @@ curl -s -X POST http://127.0.0.1:8000/api/memory/feedback \
 
 ---
 
-## 9. 自动化测试（记忆闭环相关）
+## 8. 自动化测试（记忆闭环相关）
 
 ```bash
 conda run -n live_photo_agent python -m pytest tests/test_memory_strategy.py tests/test_orchestrator.py tests/test_ui.py -v

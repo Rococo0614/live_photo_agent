@@ -4,14 +4,16 @@ channels:
 dependencies:
   - python=3.11
   - pip
+  # L0 media tools rely on ffmpeg/ffprobe for probe/trim/concat/export.
   - ffmpeg
   - pip:
       - --extra-index-url https://download.pytorch.org/whl/cpu
+      # Project deps include fastapi/langgraph/opencv-python-headless/pydantic.
       - -e .[dev]
+      # Local HF planner runtime (optional but supported by current agent).
       - torch==2.3.1+cpu
       - torchvision==0.18.1+cpu
       - transformers==4.46.3
       - accelerate>=0.34,<1.0
-      - pyiqa==0.1.16
-      - setuptools==80.9.0
+      # Live photo packaging in media_ops.pack_motion_photo_jpg.
       - pyexiv2>=2.15,<3.0

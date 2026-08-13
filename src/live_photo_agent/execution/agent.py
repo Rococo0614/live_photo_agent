@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from time import perf_counter
+
 from ..brain import QwenPlanner
 from ..capability import CapabilityLayer, ToolRegistry
 from ..config import settings
@@ -26,12 +28,19 @@ class LivePhotoAgent:
         self.graph_runner = PlannerGraphRunner(max_replans=1)
 
     def execute(self, request: AgentRequest) -> AgentResponse:
+        request_start = perf_counter()
         request = self._apply_retry_feedback(request)
+
+        preprocess_start = perf_counter()
         prepared_input = self.input_preprocessor.prepare(request, self.library_service)
+        preprocess_duration_ms = max(0, int((perf_counter() - preprocess_start) * 1000))
         runtime_request = prepared_input.request
         library_assets = prepared_input.assets
         library_summary = prepared_input.library_summary
+
+        memory_suggest_start = perf_counter()
         reusable_strategies = self.memory.suggest_reusable_sequences(runtime_request.text, limit=3)
+        memory_suggest_duration_ms = max(0, int((perf_counter() - memory_suggest_start) * 1000))
         if reusable_strategies:
             library_summary = {
                 **library_summary,
@@ -50,6 +59,7 @@ class LivePhotoAgent:
             "retry_of_run_id": request.retry_of_run_id,
         }
 
+        graph_run_start = perf_counter()
         try:
             graph_result = self.graph_runner.run(
                 request=runtime_request,
@@ -66,12 +76,22 @@ class LivePhotoAgent:
                 library_summary=library_summary,
                 message=str(exc),
             )
+        graph_run_duration_ms = max(0, int((perf_counter() - graph_run_start) * 1000))
+
+        timings = {
+            "total_duration_ms": max(0, int((perf_counter() - request_start) * 1000)),
+            "preprocess_duration_ms": preprocess_duration_ms,
+            "memory_suggest_duration_ms": memory_suggest_duration_ms,
+            "graph_run_duration_ms": graph_run_duration_ms,
+            "execution": graph_result.execution_metrics,
+        }
         plan = graph_result.plan
         graph_observability = {
             "run_id": graph_result.run_id,
             "route_reason": graph_result.route_reason,
             "trace": graph_result.graph_trace,
             "replay_snapshot": graph_result.replay_snapshot,
+            "timings": timings,
         }
 
         if plan.need_clarification:
@@ -85,6 +105,7 @@ class LivePhotoAgent:
 
         context = graph_result.context
         context["graph_observability"] = graph_observability
+        context["timings"] = timings
         tool_results = graph_result.tool_results
         pipeline_trace = self.input_flow_layer.build_trace()
         foundation_state = self.foundation_layer.build_state(

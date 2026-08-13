@@ -76,3 +76,12 @@ def test_execute_end_to_end(tmp_path: Path, monkeypatch) -> None:
     ]
     assert "beach_sunset_01" in response.final_response
     assert response.memory_updates
+    timings = response.context.get("timings", {})
+    assert isinstance(timings, dict)
+    assert int(timings.get("total_duration_ms", -1)) >= 0
+    assert int(timings.get("graph_run_duration_ms", -1)) >= 0
+    execution = timings.get("execution", {})
+    assert isinstance(execution, dict)
+    tool_timings = execution.get("tool_timings", [])
+    assert isinstance(tool_timings, list)
+    assert len(tool_timings) == len(response.plan.tool_calls)

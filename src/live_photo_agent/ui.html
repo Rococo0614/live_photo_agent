@@ -2011,11 +2011,28 @@
         : '<div class="summary-body">无</div>';
 
       const tools = (response.plan?.tool_calls ?? []).map((call) => call.tool).filter(Boolean);
+      const timings = response.context?.timings ?? response.context?.graph_observability?.timings ?? {};
+      const executionTiming = timings.execution ?? {};
+      const topToolTimings = Array.isArray(executionTiming.tool_timings)
+        ? executionTiming.tool_timings
+            .slice()
+            .sort((a, b) => Number(b?.duration_ms || 0) - Number(a?.duration_ms || 0))
+            .slice(0, 5)
+            .map((item) => `${item.tool}: ${item.duration_ms}ms${item.success === false ? ' (fail)' : ''}`)
+        : [];
+      const timingSummary = [
+        Number.isFinite(timings.total_duration_ms) ? `总耗时 ${timings.total_duration_ms}ms` : '',
+        Number.isFinite(timings.preprocess_duration_ms) ? `预处理 ${timings.preprocess_duration_ms}ms` : '',
+        Number.isFinite(timings.memory_suggest_duration_ms) ? `记忆检索 ${timings.memory_suggest_duration_ms}ms` : '',
+        Number.isFinite(timings.graph_run_duration_ms) ? `图执行 ${timings.graph_run_duration_ms}ms` : '',
+      ].filter(Boolean).join(' · ');
       els.planPreview.innerHTML = `<div>${escapeHtml(response.plan?.intent ?? '未能识别整体需求')}</div><div class="tool-summary">${tools.length ? `将使用：${tools.map(escapeHtml).join('、')}` : '暂无工具安排'}</div>`;
 
       els.resultPreview.innerHTML = [
         `<div class="summary-section"><div class="summary-title">输出结果</div><div class="summary-body">${escapeHtml(response.final_response ?? '-')}</div></div>`,
         `<div class="summary-section"><div class="summary-title">工具输出</div><div class="summary-body">${escapeHtml((response.tool_results ?? []).map((item) => `${item.tool}: ${item.success ? 'ok' : 'fail'}`).join(' · ') || '无')}</div></div>`,
+        `<div class="summary-section"><div class="summary-title">阶段耗时</div><div class="summary-body">${escapeHtml(timingSummary || '无')}</div></div>`,
+        `<div class="summary-section"><div class="summary-title">慢工具 Top5</div><div class="summary-body">${escapeHtml(topToolTimings.join(' · ') || '无')}</div></div>`,
       ].join('');
 
       renderStageTimeline(response);

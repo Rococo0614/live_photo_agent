@@ -161,61 +161,24 @@ export LPA_PLANNER_TOOL_CONSTRAINT_POLICY=strict
 3. `trace`
 4. `replay_snapshot`
 
-## LangGraph Studio（可视化调试）
-
-项目已提供 Studio 图入口：
-
-1. `langgraph.json`
-2. `src/live_photo_agent/execution/studio_graph.py`
-
-> 注意：`langgraph-cli` 目前会安装 `langgraph 1.x`，与你项目运行依赖（`langgraph<1.0.0`）冲突。  
-> 建议在**独立环境**中使用 Studio，不要污染当前开发环境。
-
-示例（独立 conda 环境）：
-
-```bash
-conda create -n lg_studio python=3.11 -y
-conda activate lg_studio
-pip install "langgraph-cli[inmem]"
-pip install -e /path/to/live_photo_agent
-```
-
-启动 Studio：
-
-```bash
-cd /path/to/live_photo_agent
-langgraph dev --config langgraph.json
-```
-
-在 Studio 中可用如下初始输入测试一条 run：
-
-```json
-{
-  "user_id": "studio-user",
-  "text": "帮我找海边日落的 live photo",
-  "library_root": "/home/vivo/live_photo_agent/data/live_photo",
-  "selected_asset_ids": []
-}
-```
-
 ## Live Photo conversion CLI
 
 If your source/target data format is single-file Live Photo (JPEG primary + embedded MP4), use:
 
 ```bash
 # unpack single-file motion photo into jpg + mp4
-python live_photo_transfer_and_save/live_photo_cli.py unpack \
+python src/live_photo_agent/capability/live_photo_cli.py unpack \
   /path/to/input_motion_photo.jpg \
   --out-dir /path/to/output_dir
 
 # pack jpg + mp4 back into a single-file motion photo
-python live_photo_transfer_and_save/live_photo_cli.py pack \
+python src/live_photo_agent/capability/live_photo_cli.py pack \
   --image /path/to/frame.jpg \
   --video /path/to/motion.mp4 \
   --output /path/to/final_motion_photo.jpg
 
 # optional: normalize legacy data folders into a 3-folder layout
-python live_photo_transfer_and_save/live_photo_cli.py normalize-layout \
+python src/live_photo_agent/capability/live_photo_cli.py normalize-layout \
   --data-root ./data \
   --apply
 ```

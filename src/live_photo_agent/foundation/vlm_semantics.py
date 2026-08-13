@@ -4,27 +4,15 @@ import base64
 import contextlib
 import json
 import re
-import sys
 import tempfile
 import urllib.request
 from pathlib import Path
 from typing import Any, Generator
 
 from ..config import settings
+from ..capability.live_photo_cli import is_live_photo_container, unpack_motion_photo
 from ..models import AssetPreprocessSummary, LivePhotoAsset
 from .media_ops import MediaOps
-
-# Import codec utilities from the live_photo_transfer_and_save module without
-# installing it as a package — it lives alongside this project.
-_CLI_DIR = Path(__file__).resolve().parents[4] / "live_photo_transfer_and_save"
-if str(_CLI_DIR) not in sys.path:
-    sys.path.insert(0, str(_CLI_DIR))
-
-try:
-    from live_photo_cli import is_live_photo_container, unpack_motion_photo  # type: ignore[import]
-    _CODEC_AVAILABLE = True
-except ImportError:
-    _CODEC_AVAILABLE = False
 
 
 class VLMSemanticAnalyzer:
@@ -198,7 +186,7 @@ class VLMSemanticAnalyzer:
             motion_path = asset.motion_path
 
             # Packed single-file live photo: unpack to temp, read, discard.
-            if _CODEC_AVAILABLE and image_path.exists() and is_live_photo_container(image_path):
+            if image_path.exists() and is_live_photo_container(image_path):
                 unpacked_jpg, unpacked_mp4 = unpack_motion_photo(image_path, out_dir=tmp)
                 image_bytes = unpacked_jpg.read_bytes()
                 video_bytes = unpacked_mp4.read_bytes()

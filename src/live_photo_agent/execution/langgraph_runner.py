@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 import json
 from datetime import datetime, timezone
+from time import perf_counter
 from typing import Any, TypedDict
 from uuid import uuid4
 
@@ -26,6 +27,7 @@ class GraphRunResult:
     route_reason: str
     graph_trace: list[dict[str, object]]
     replay_snapshot: dict[str, object]
+    execution_metrics: dict[str, object]
 
 
 class GraphState(TypedDict, total=False):
@@ -44,6 +46,7 @@ class GraphState(TypedDict, total=False):
     policy_clarification_mode: str
     policy_tool_constraint_mode: str
     graph_trace: list[dict[str, object]]
+    execution_metrics: dict[str, object]
 
 
 class PlannerGraphRunner:
@@ -146,6 +149,7 @@ class PlannerGraphRunner:
                 route_reason=str(state_after_planning.get("route_reason", "clarification")),
                 graph_trace=trace,
                 replay_snapshot=replay,
+                execution_metrics={},
             )
 
         final_state = execution_graph.invoke(state_after_planning)
@@ -167,6 +171,7 @@ class PlannerGraphRunner:
             route_reason=str(final_state.get("route_reason", "executed")),
             graph_trace=self._extract_trace(final_state, initial_state),
             replay_snapshot=self._build_replay_snapshot(final_state),
+            execution_metrics=dict(final_state.get("execution_metrics", {})),
         )
 
     def _build_input_subgraph(self, StateGraph: Any, END: Any) -> Any:
@@ -417,21 +422,42 @@ class PlannerGraphRunner:
         def execute_node(state: GraphState) -> GraphState:
             plan = state["plan"]
             context = dict(state["base_context"])
-            tool_results = [tools.execute(call, context) for call in plan.tool_calls]
+            run_start = perf_counter()
+            tool_results: list[ToolResult] = []
+            tool_timings: list[dict[str, object]] = []
+            for call in plan.tool_calls:
+                tool_start = perf_counter()
+                result = tools.execute(call, context)
+                elapsed_ms = max(0, int((perf_counter() - tool_start) * 1000))
+                tool_results.append(result)
+                tool_timings.append(
+                    {
+                        "tool": call.tool.value,
+                        "duration_ms": elapsed_ms,
+                        "success": result.success,
+                    }
+                )
+            execution_duration_ms = max(0, int((perf_counter() - run_start) * 1000))
+            slowest_tool = max(tool_timings, key=lambda item: int(item.get("duration_ms", 0)), default=None)
+            metrics = {
+                "execution_duration_ms": execution_duration_ms,
+                "tool_count": len(plan.tool_calls),
+                "success_count": len([item for item in tool_results if item.success]),
+                "tool_timings": tool_timings,
+                "slowest_tool": slowest_tool,
+            }
             trace = self._record_trace(
                 state,
                 "execution.execute",
                 "executed",
-                {
-                    "tool_count": len(plan.tool_calls),
-                    "success_count": len([item for item in tool_results if item.success]),
-                },
+                metrics,
             )
             return {
                 "context": context,
                 "tool_results": tool_results,
                 "route_reason": "executed",
                 "graph_trace": trace,
+                "execution_metrics": metrics,
             }
 
         execution_graph.add_node("execute", execute_node)
@@ -487,6 +513,7 @@ class PlannerGraphRunner:
                     route_reason="fallback_clarification",
                     graph_trace=self._extract_trace(state, initial_state),
                     replay_snapshot=self._build_replay_snapshot(state),
+                    execution_metrics={},
                 )
 
             combined_reasons = errors + gate_reasons
@@ -512,6 +539,7 @@ class PlannerGraphRunner:
                     route_reason="fallback_forced_clarification",
                     graph_trace=self._extract_trace(state, initial_state),
                     replay_snapshot=self._build_replay_snapshot(state),
+                    execution_metrics={},
                 )
 
             if combined_reasons:
@@ -531,19 +559,40 @@ class PlannerGraphRunner:
                 continue
 
             context = dict(base_context)
-            tool_results = [tools.execute(call, context) for call in plan.tool_calls]
+            run_start = perf_counter()
+            tool_results: list[ToolResult] = []
+            tool_timings: list[dict[str, object]] = []
+            for call in plan.tool_calls:
+                tool_start = perf_counter()
+                result = tools.execute(call, context)
+                elapsed_ms = max(0, int((perf_counter() - tool_start) * 1000))
+                tool_results.append(result)
+                tool_timings.append(
+                    {
+                        "tool": call.tool.value,
+                        "duration_ms": elapsed_ms,
+                        "success": result.success,
+                    }
+                )
+            execution_duration_ms = max(0, int((perf_counter() - run_start) * 1000))
+            slowest_tool = max(tool_timings, key=lambda item: int(item.get("duration_ms", 0)), default=None)
+            execution_metrics = {
+                "execution_duration_ms": execution_duration_ms,
+                "tool_count": len(plan.tool_calls),
+                "success_count": len([item for item in tool_results if item.success]),
+                "tool_timings": tool_timings,
+                "slowest_tool": slowest_tool,
+            }
             state["graph_trace"] = self._record_trace(
                 state,
                 "fallback",
                 "executed",
-                {
-                    "tool_count": len(plan.tool_calls),
-                    "success_count": len([item for item in tool_results if item.success]),
-                },
+                execution_metrics,
             )
             state["context"] = context
             state["tool_results"] = tool_results
             state["route_reason"] = "fallback_executed"
+            state["execution_metrics"] = execution_metrics
             return GraphRunResult(
                 run_id=str(state.get("run_id", "fallback")),
                 plan=plan,
@@ -552,6 +601,7 @@ class PlannerGraphRunner:
                 route_reason="fallback_executed",
                 graph_trace=self._extract_trace(state, initial_state),
                 replay_snapshot=self._build_replay_snapshot(state),
+                execution_metrics=execution_metrics,
             )
 
     def _record_trace(
@@ -622,6 +672,7 @@ class PlannerGraphRunner:
             "need_clarification": result.plan.need_clarification,
             "tool_sequence": [call.tool.value for call in result.plan.tool_calls],
             "tool_result_count": len(result.tool_results),
+            "execution_metrics": result.execution_metrics,
             "trace": result.graph_trace,
             "replay_snapshot": result.replay_snapshot,
         }
