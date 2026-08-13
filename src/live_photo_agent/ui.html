@@ -344,13 +344,80 @@
       padding: 12px;
     }
     .composition-drop-zone { position: relative; min-height: 240px; overflow: hidden; border: 1px dashed rgba(125, 211, 252, 0.3); border-radius: 16px; background: rgba(125, 211, 252, 0.06); }
+    .composition-drop-zone {
+      aspect-ratio: var(--canvas-ratio, 3 / 4);
+      max-height: 520px;
+    }
     .composition-layout-layer { position: absolute; inset: 0; }
-    .composition-layout-item { position: absolute; transform: translate(-50%, -50%); width: 24%; height: 42%; min-width: 80px; min-height: 80px; overflow: hidden; border: 1px solid rgba(125, 211, 252, 0.35); border-radius: 14px; cursor: grab; touch-action: none; user-select: none; }
+    .composition-layout-item { position: absolute; width: 24%; height: 42%; min-width: 72px; min-height: 72px; overflow: hidden; border: 1px solid rgba(125, 211, 252, 0.35); border-radius: 14px; cursor: grab; touch-action: none; user-select: none; }
     .composition-layout-item.dragging { cursor: grabbing; z-index: 2; }
+    .composition-layout-item.resizing { cursor: nwse-resize; z-index: 3; }
     .composition-layout-item.active { border-color: var(--accent); box-shadow: 0 0 0 2px rgba(125, 211, 252, 0.28); }
-    .composition-layout-item img { width: 100%; height: 100%; object-fit: cover; display: block; }
-    .composition-layout-label { position: absolute; left: 6px; right: 6px; bottom: 6px; padding: 4px 6px; border-radius: 8px; background: rgba(2, 6, 23, 0.72); color: var(--text); font-size: 10px; text-align: center; }
+    .composition-layout-item img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      display: block;
+      pointer-events: none;
+      -webkit-user-drag: none;
+      user-drag: none;
+    }
+    .composition-layout-label { position: absolute; left: 6px; right: 6px; bottom: 6px; padding: 4px 6px; border-radius: 8px; background: rgba(2, 6, 23, 0.72); color: var(--text); font-size: 10px; text-align: center; pointer-events: none; }
+    .composition-edit-badge {
+      position: absolute;
+      left: 8px;
+      top: 8px;
+      z-index: 2;
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      padding: 5px 7px;
+      border: 1px solid rgba(74, 222, 128, 0.5);
+      border-radius: 8px;
+      background: rgba(16, 42, 27, 0.78);
+      color: #bbf7d0;
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 0.02em;
+      pointer-events: none;
+    }
+    .composition-edit-badge::before {
+      content: '';
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: currentColor;
+      box-shadow: 0 0 0 2px rgba(187, 247, 208, 0.22);
+    }
+    .resize-handle {
+      position: absolute;
+      z-index: 4;
+      background: rgba(56, 189, 248, 0.96);
+      border: 1px solid rgba(255, 255, 255, 0.7);
+      border-radius: 6px;
+      width: 10px;
+      height: 10px;
+      touch-action: none;
+    }
+    .resize-handle.tl { left: -5px; top: -5px; cursor: nwse-resize; }
+    .resize-handle.tr { right: -5px; top: -5px; cursor: nesw-resize; }
+    .resize-handle.bl { left: -5px; bottom: -5px; cursor: nesw-resize; }
+    .resize-handle.br { right: -5px; bottom: -5px; cursor: nwse-resize; }
+    .resize-handle.t { left: calc(50% - 5px); top: -5px; cursor: ns-resize; }
+    .resize-handle.b { left: calc(50% - 5px); bottom: -5px; cursor: ns-resize; }
+    .resize-handle.l { left: -5px; top: calc(50% - 5px); cursor: ew-resize; }
+    .resize-handle.r { right: -5px; top: calc(50% - 5px); cursor: ew-resize; }
     .composition-layout-helper { position: absolute; inset: 0; display: grid; place-items: center; padding: 18px; color: var(--muted); text-align: center; }
+    .composition-grid-overlay {
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+      background-image:
+        linear-gradient(to right, rgba(125, 211, 252, 0.08) 1px, transparent 1px),
+        linear-gradient(to bottom, rgba(125, 211, 252, 0.06) 1px, transparent 1px);
+      background-size: calc(100% / 12) calc(100% / 16);
+      z-index: 0;
+    }
     .canvas-editor-grid { display: grid; grid-template-columns: minmax(180px, 0.65fr) minmax(240px, 1.35fr); gap: 12px; align-items: stretch; }
     .canvas-editor-controls { display: grid; align-content: start; gap: 10px; }
     .canvas-stage { display: grid; align-content: center; min-width: 0; }
@@ -371,6 +438,57 @@
       border: 1px solid rgba(125, 211, 252, 0.2);
       border-radius: 16px;
       background: rgba(56, 189, 248, 0.08);
+    }
+    .template-toolbar {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(180px, 1fr));
+      gap: 10px;
+      margin-bottom: 12px;
+      padding: 14px;
+      border: 1px solid rgba(125, 211, 252, 0.2);
+      border-radius: 16px;
+      background: rgba(255, 255, 255, 0.03);
+    }
+    .template-toolbar .controls { grid-column: 1 / -1; }
+    .template-gallery {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 10px;
+      margin-bottom: 14px;
+    }
+    .template-card {
+      text-align: left;
+      padding: 10px;
+      border-radius: 14px;
+      background: rgba(255, 255, 255, 0.03);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      cursor: pointer;
+      transition: border-color 0.15s ease, transform 0.15s ease;
+    }
+    .template-card:hover { transform: translateY(-1px); border-color: rgba(125, 211, 252, 0.45); }
+    .template-card.active { border-color: rgba(125, 211, 252, 0.65); background: rgba(56, 189, 248, 0.12); }
+    .template-card-name { font-size: 12px; font-weight: 700; }
+    .template-card-meta { margin-top: 4px; color: var(--muted); font-size: 11px; }
+    .template-thumb {
+      position: relative;
+      margin-top: 8px;
+      width: 100%;
+      aspect-ratio: 3 / 4;
+      border-radius: 10px;
+      background: rgba(3, 8, 22, 0.9);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      overflow: hidden;
+    }
+    .template-thumb-slot {
+      position: absolute;
+      border: 1px solid rgba(125, 211, 252, 0.7);
+      background: rgba(56, 189, 248, 0.2);
+      border-radius: 6px;
+    }
+    .template-note {
+      margin-top: 10px;
+      color: var(--muted);
+      font-size: 12px;
     }
     .asset-loader-bar strong { display: block; margin-top: 4px; font-size: 14px; }
     .operation-card { margin-top: 14px; }
@@ -546,6 +664,8 @@
       .canvas-editor-grid { grid-template-columns: 1fr; }
       .editor-workbench { grid-template-columns: 1fr; }
       .asset-loader-bar { align-items: stretch; flex-direction: column; }
+      .template-toolbar { grid-template-columns: 1fr; }
+      .template-gallery { grid-template-columns: repeat(2, minmax(0, 1fr)); }
       .gallery-modal { padding: 12px; }
       .gallery-dialog { height: calc(100vh - 24px); padding: 16px; }
     }
@@ -663,9 +783,17 @@
           </div>
           <div class="controls">
             <button id="openGalleryButton" class="load-images-button primary" type="button">＋ 载入图片</button>
+            <button id="openTemplateButton" type="button">选择模板</button>
+            <label class="chip" style="gap: 6px; cursor: pointer;">
+              <input id="keepAspectResize" type="checkbox" style="width: 14px; height: 14px; margin: 0;">
+              等比缩放
+            </label>
+            <button id="layerUpButton" type="button">当前素材置顶</button>
+            <button id="layerDownButton" type="button">当前素材置底</button>
             <button id="clearLayoutButton" type="button">清空布局</button>
           </div>
         </div>
+        <div class="template-note">画布已固定 1080x1440（3:4）。请先载入素材，再点“选择模板”。</div>
         <div class="editor-workbench">
           <div class="result-card">
             <div class="micro">布局</div>
@@ -681,13 +809,7 @@
                   <label for="canvasPromptInput">编辑提示</label>
                   <textarea id="canvasPromptInput" placeholder="例如：把选区中的人物改成电影感光影" style="min-height: 90px;"></textarea>
                 </div>
-                <div class="field">
-                  <label for="canvasModeSelect">选择模式</label>
-                  <select id="canvasModeSelect">
-                    <option value="brush">画笔选区</option>
-                    <option value="rect">矩形框选</option>
-                  </select>
-                </div>
+                <div class="micro">当前仅保留矩形框选。</div>
                 <div class="controls">
                   <button id="canvasPreviewButton" class="primary" type="button">保存编辑到布局</button>
                   <button id="canvasResetButton" type="button">清空画布</button>
@@ -758,6 +880,26 @@
     </div>
   </div>
 
+  <div id="templateModal" class="gallery-modal" role="dialog" aria-modal="true" aria-labelledby="templateDialogTitle">
+    <div class="gallery-dialog">
+      <div class="gallery-dialog-header">
+        <div>
+          <h2 id="templateDialogTitle" class="gallery-dialog-title">选择模板</h2>
+          <div id="templateDialogHint" class="micro" style="margin-top: 6px;">先选素材，再按素材数量匹配模板。</div>
+        </div>
+        <button id="closeTemplateButton" type="button" aria-label="关闭模板弹窗">关闭</button>
+      </div>
+      <div id="templateGrid" class="template-gallery" style="overflow-y: auto; padding-right: 8px;"></div>
+      <div class="gallery-dialog-footer">
+        <span id="templateSelectionSummary" class="micro">尚未选择模板</span>
+        <div class="controls">
+          <button id="cancelTemplateButton" type="button">取消</button>
+          <button id="applyTemplateFromModalButton" class="primary" type="button">应用模板到画布</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <div id="feedbackModal" class="feedback-modal" role="dialog" aria-modal="true" aria-labelledby="feedbackDialogTitle">
     <div class="feedback-dialog">
       <div class="feedback-dialog-header">
@@ -798,7 +940,31 @@
       droppedAssetIds: [],
       layoutItems: [],
       operationLog: [],
+      canvasPreset: 'xhs',
+      activeTemplateId: 'm16_image_led_cover',
+      pendingTemplateId: '',
+      activeLayoutId: '',
+      keepAspectResize: false,
     };
+
+    const GRID_LAYOUT = { cols: 120, rows: 160 };
+
+    const CANVAS_PRESETS = {
+      xhs: { key: 'xhs', label: 'XHS 3:4', width: 1080, height: 1440, ratio: '3 / 4' },
+    };
+
+    const TEMPLATE_LIBRARY = [
+      { id: 'm16_image_led_cover', name: 'M16 全图封面', style: 'editorial', board: 'xhs', slots: [{ gx: 0, gy: 0, gw: 120, gh: 160 }] },
+      { id: 'm07_field_ledger', name: 'M07 上图下文', style: 'editorial', board: 'xhs', slots: [{ gx: 6, gy: 6, gw: 108, gh: 66 }, { gx: 6, gy: 78, gw: 108, gh: 76 }] },
+      { id: 'm14_vertical_pipeline', name: 'M14 三段流程', style: 'editorial', board: 'xhs', slots: [{ gx: 8, gy: 8, gw: 104, gh: 44 }, { gx: 8, gy: 58, gw: 104, gh: 44 }, { gx: 8, gy: 108, gw: 104, gh: 44 }] },
+      { id: 's09_kpi_tower', name: 'S09 KPI 三栏', style: 'swiss', board: 'xhs', slots: [{ gx: 6, gy: 12, gw: 34, gh: 136 }, { gx: 43, gy: 12, gw: 34, gh: 136 }, { gx: 80, gy: 12, gw: 34, gh: 136 }] },
+      { id: 's10_hbar_chart', name: 'S10 条形四段', style: 'swiss', board: 'xhs', slots: [{ gx: 8, gy: 14, gw: 104, gh: 24 }, { gx: 8, gy: 46, gw: 104, gh: 24 }, { gx: 8, gy: 78, gw: 104, gh: 24 }, { gx: 8, gy: 110, gw: 104, gh: 24 }] },
+      { id: 'live_single_focus', name: 'Live 单视频', style: 'live', board: 'xhs', slots: [{ gx: 5, gy: 10, gw: 110, gh: 138 }] },
+      { id: 'live_two_stack', name: 'Live 二宫格上下', style: 'live', board: 'xhs', slots: [{ gx: 5, gy: 10, gw: 110, gh: 64 }, { gx: 5, gy: 86, gw: 110, gh: 64 }] },
+      { id: 'live_three_stack', name: 'Live 三宫格上下', style: 'live', board: 'xhs', slots: [{ gx: 5, gy: 8, gw: 110, gh: 46 }, { gx: 5, gy: 58, gw: 110, gh: 46 }, { gx: 5, gy: 108, gw: 110, gh: 46 }] },
+      { id: 'live_four_grid', name: 'Live 四宫格', style: 'live', board: 'xhs', slots: [{ gx: 6, gy: 10, gw: 52, gh: 66 }, { gx: 62, gy: 10, gw: 52, gh: 66 }, { gx: 6, gy: 84, gw: 52, gh: 66 }, { gx: 62, gy: 84, gw: 52, gh: 66 }] },
+      { id: 'matrix_three_by_two', name: '3x2 材料拼板', style: 'swiss', board: 'xhs', slots: [{ gx: 6, gy: 16, gw: 34, gh: 34 }, { gx: 43, gy: 16, gw: 34, gh: 34 }, { gx: 80, gy: 16, gw: 34, gh: 34 }, { gx: 6, gy: 56, gw: 34, gh: 34 }, { gx: 43, gy: 56, gw: 34, gh: 34 }, { gx: 80, gy: 56, gw: 34, gh: 34 }] },
+    ];
 
     const els = {
       libraryRootLabel: document.getElementById('libraryRootLabel'),
@@ -853,21 +1019,74 @@
       addSelectedToLayoutButton: document.getElementById('addSelectedToLayoutButton'),
       clearLayoutButton: document.getElementById('clearLayoutButton'),
       openGalleryButton: document.getElementById('openGalleryButton'),
+      openTemplateButton: document.getElementById('openTemplateButton'),
+      keepAspectResize: document.getElementById('keepAspectResize'),
       closeGalleryButton: document.getElementById('closeGalleryButton'),
       cancelGalleryButton: document.getElementById('cancelGalleryButton'),
+      templateModal: document.getElementById('templateModal'),
+      templateDialogHint: document.getElementById('templateDialogHint'),
+      templateGrid: document.getElementById('templateGrid'),
+      templateSelectionSummary: document.getElementById('templateSelectionSummary'),
+      closeTemplateButton: document.getElementById('closeTemplateButton'),
+      cancelTemplateButton: document.getElementById('cancelTemplateButton'),
+      applyTemplateFromModalButton: document.getElementById('applyTemplateFromModalButton'),
       refreshGalleryButton: document.getElementById('refreshGalleryButton'),
       selectAllAssetsButton: document.getElementById('selectAllAssetsButton'),
       selectAllButton: document.getElementById('selectAllButton'),
       compositionDropZone: document.getElementById('compositionDropZone'),
       compositionLayoutLayer: document.getElementById('compositionLayoutLayer'),
       canvasPromptInput: document.getElementById('canvasPromptInput'),
-      canvasModeSelect: document.getElementById('canvasModeSelect'),
       canvasPreviewButton: document.getElementById('canvasPreviewButton'),
       canvasResetButton: document.getElementById('canvasResetButton'),
       interactiveCanvas: document.getElementById('interactiveCanvas'),
+      layerUpButton: document.getElementById('layerUpButton'),
+      layerDownButton: document.getElementById('layerDownButton'),
       generateButton: document.getElementById('generateButton'),
       clearButton: document.getElementById('clearButton'),
     };
+
+    function clamp(value, min, max) {
+      return Math.max(min, Math.min(max, value));
+    }
+
+    function gridToPercentX(gridX) {
+      return (Number(gridX) / GRID_LAYOUT.cols) * 100;
+    }
+
+    function gridToPercentY(gridY) {
+      return (Number(gridY) / GRID_LAYOUT.rows) * 100;
+    }
+
+    function percentToGridX(percentX) {
+      return Math.round((Number(percentX) / 100) * GRID_LAYOUT.cols);
+    }
+
+    function percentToGridY(percentY) {
+      return Math.round((Number(percentY) / 100) * GRID_LAYOUT.rows);
+    }
+
+    function ensureLayoutItemGrid(item) {
+      if (Number.isFinite(item.grid_x) && Number.isFinite(item.grid_y) && Number.isFinite(item.grid_w) && Number.isFinite(item.grid_h)) {
+        item.grid_x = clamp(Math.round(item.grid_x), 0, GRID_LAYOUT.cols - 1);
+        item.grid_y = clamp(Math.round(item.grid_y), 0, GRID_LAYOUT.rows - 1);
+        item.grid_w = clamp(Math.round(item.grid_w), 1, GRID_LAYOUT.cols - item.grid_x);
+        item.grid_h = clamp(Math.round(item.grid_h), 1, GRID_LAYOUT.rows - item.grid_y);
+        return item;
+      }
+      const width = Number(item.width ?? 24);
+      const height = Number(item.height ?? 42);
+      const left = Number(item.left ?? 18);
+      const top = Number(item.top ?? 35);
+      item.grid_w = clamp(percentToGridX(width), 1, GRID_LAYOUT.cols);
+      item.grid_h = clamp(percentToGridY(height), 1, GRID_LAYOUT.rows);
+      item.grid_x = clamp(percentToGridX(left), 0, GRID_LAYOUT.cols - item.grid_w);
+      item.grid_y = clamp(percentToGridY(top), 0, GRID_LAYOUT.rows - item.grid_h);
+      item.width = gridToPercentX(item.grid_w);
+      item.height = gridToPercentY(item.grid_h);
+      item.left = gridToPercentX(item.grid_x);
+      item.top = gridToPercentY(item.grid_y);
+      return item;
+    }
 
     function escapeHtml(value) {
       return String(value)
@@ -924,6 +1143,11 @@
 
     function getSelectedAssetIds() {
       return Array.from(state.selectedAssetIds).sort();
+    }
+
+    function selectedAssetsInCatalogOrder() {
+      const selected = state.selectedAssetIds;
+      return currentAssets().filter((asset) => selected.has(asset.asset_id));
     }
 
     function getLayoutAssetIds() {
@@ -1187,7 +1411,10 @@
     function renderSelectedPreview() {
       const selectedCount = getLayoutAssetIds().length;
       const tools = Array.from(state.selectedToolNames).sort();
-      els.selectedAssetPreview.textContent = `布局素材 ${selectedCount} 项 · ${tools.length ? `工具 guidance：${tools.join('、')}` : '未指定工具 guidance'}`;
+      const preset = CANVAS_PRESETS[state.canvasPreset] ?? CANVAS_PRESETS.xhs;
+      const template = TEMPLATE_LIBRARY.find((item) => item.id === state.activeTemplateId);
+      const templateLabel = template ? template.name : '自由布局';
+      els.selectedAssetPreview.textContent = `布局素材 ${selectedCount} 项 · 画布 ${preset.width}x${preset.height} · 网格 ${GRID_LAYOUT.cols}x${GRID_LAYOUT.rows} · 模板 ${templateLabel} · ${tools.length ? `工具 guidance：${tools.join('、')}` : '未指定工具 guidance'}`;
       els.gallerySelectionSummary.textContent = `已选择 ${getSelectedAssetIds().length} 张`;
       els.loadedAssetSummary.textContent = state.layoutItems.length > 0
         ? `已载入 ${state.layoutItems.length} 项素材`
@@ -1213,15 +1440,98 @@
       });
     }
 
-    const interactiveCanvasState = { image: null, points: [], drawing: false };
+    const interactiveCanvasState = { image: null, points: [], drawing: false, sourceLayoutId: '' };
 
     function currentDroppedAssets() {
       return state.layoutItems.filter((item) => item.asset_id).map((item) => currentAssets().find((asset) => asset.asset_id === item.asset_id)).filter(Boolean);
     }
 
+    function normalizeRectFromPoints(points, width, height) {
+      if (!Array.isArray(points) || points.length < 2 || width <= 0 || height <= 0) {
+        return null;
+      }
+      const start = points[0];
+      const end = points[points.length - 1];
+      const left = Math.min(start.x, end.x);
+      const top = Math.min(start.y, end.y);
+      const right = Math.max(start.x, end.x);
+      const bottom = Math.max(start.y, end.y);
+      return {
+        x: left / width,
+        y: top / height,
+        w: (right - left) / width,
+        h: (bottom - top) / height,
+      };
+    }
+
+    function pointsFromNormalizedRect(rect, width, height) {
+      if (!rect || typeof rect !== 'object') {
+        return [];
+      }
+      const x = Number(rect.x);
+      const y = Number(rect.y);
+      const w = Number(rect.w);
+      const h = Number(rect.h);
+      if (![x, y, w, h].every(Number.isFinite)) {
+        return [];
+      }
+      return [
+        { x: x * width, y: y * height },
+        { x: (x + w) * width, y: (y + h) * height },
+      ];
+    }
+
+    function clearInteractiveCanvasAll() {
+      const context = els.interactiveCanvas.getContext('2d');
+      context.clearRect(0, 0, els.interactiveCanvas.width, els.interactiveCanvas.height);
+      context.fillStyle = 'rgba(255,255,255,0.06)';
+      context.fillRect(0, 0, els.interactiveCanvas.width, els.interactiveCanvas.height);
+      interactiveCanvasState.image = null;
+      interactiveCanvasState.points = [];
+      interactiveCanvasState.sourceLayoutId = '';
+    }
+
+    function loadCanvasForLayoutItem(layoutItem) {
+      if (!layoutItem || !layoutItem.asset_id) {
+        return;
+      }
+      const asset = currentAssets().find((candidate) => candidate.asset_id === layoutItem.asset_id);
+      if (!asset?.image_path) {
+        clearInteractiveCanvasAll();
+        return;
+      }
+      interactiveCanvasState.sourceLayoutId = layoutItem.id;
+      const image = new Image();
+      image.onload = () => {
+        interactiveCanvasState.image = image;
+        interactiveCanvasState.points = pointsFromNormalizedRect(layoutItem.edit_rect, els.interactiveCanvas.width, els.interactiveCanvas.height);
+        if (typeof layoutItem.edit_prompt === 'string') {
+          els.canvasPromptInput.value = layoutItem.edit_prompt;
+        }
+        drawInteractivePoints();
+      };
+      image.src = mediaUrl(asset.image_path);
+    }
+
+    function loadCanvasForActiveLayout() {
+      if (!state.activeLayoutId) {
+        return;
+      }
+      const activeLayout = state.layoutItems.find((item) => item.id === state.activeLayoutId);
+      if (!activeLayout) {
+        return;
+      }
+      if (!activeLayout.asset_id) {
+        // Canvas-edit overlays do not map to a source asset; keep the current
+        // base preview instead of clearing it.
+        return;
+      }
+      loadCanvasForLayoutItem(activeLayout);
+    }
+
     function loadCanvasImageFromAsset(asset) {
       if (!asset?.image_path) {
-        resetInteractiveCanvas();
+        clearInteractiveCanvasAll();
         return;
       }
       const image = new Image();
@@ -1231,45 +1541,216 @@
 
     function renderCompositionDropZone() {
       const helper = state.layoutItems.length === 0 ? '<div class="composition-layout-helper">先载入图片，或将画布编辑保存为布局素材。</div>' : '';
-      els.compositionLayoutLayer.innerHTML = `${state.layoutItems.map((item, index) => `
-        <div class="composition-layout-item ${index === 0 ? 'active' : ''}" data-layout-id="${escapeHtml(item.id)}" style="left: ${item.left ?? (18 + (index % 3) * 28)}%; top: ${item.top ?? (35 + Math.floor(index / 3) * 30)}%">
-          <img src="${item.image_src || mediaUrl(item.image_path)}" alt="${escapeHtml(item.label)}">
-          <div class="composition-layout-label">${escapeHtml(item.label)}</div>
-        </div>`).join('')}${helper}`;
+      const preset = CANVAS_PRESETS[state.canvasPreset] ?? CANVAS_PRESETS.xhs;
+      els.compositionDropZone.style.setProperty('--canvas-ratio', preset.ratio);
+      const items = state.layoutItems.map((item) => ensureLayoutItemGrid(item));
+      const sortedItems = items.slice().sort((a, b) => Number(a.z_index ?? 0) - Number(b.z_index ?? 0));
+      if (!state.activeLayoutId && sortedItems.length > 0) {
+        state.activeLayoutId = sortedItems[0].id;
+      }
+      const gridOverlay = '<div class="composition-grid-overlay"></div>';
+      els.compositionLayoutLayer.innerHTML = `${gridOverlay}${sortedItems.map((item) => {
+        const isActive = item.id === state.activeLayoutId;
+        const edited = item.edit_rect || item.edit_prompt;
+        return `
+        <div class="composition-layout-item ${isActive ? 'active' : ''}" data-layout-id="${escapeHtml(item.id)}" style="left: ${gridToPercentX(item.grid_x)}%; top: ${gridToPercentY(item.grid_y)}%; width: ${gridToPercentX(item.grid_w)}%; height: ${gridToPercentY(item.grid_h)}%; z-index: ${item.z_index ?? 1}">
+          <img src="${item.image_src || mediaUrl(item.image_path)}" alt="${escapeHtml(item.label)}" draggable="false">
+          ${edited ? '<span class="composition-edit-badge">已编辑</span>' : ''}
+          <div class="composition-layout-label">${escapeHtml(item.label)}${edited ? ' · 已编辑' : ''} · z${item.z_index ?? 1}</div>
+          <span class="resize-handle tl" data-resize-dir="tl"></span>
+          <span class="resize-handle tr" data-resize-dir="tr"></span>
+          <span class="resize-handle bl" data-resize-dir="bl"></span>
+          <span class="resize-handle br" data-resize-dir="br"></span>
+          <span class="resize-handle t" data-resize-dir="t"></span>
+          <span class="resize-handle b" data-resize-dir="b"></span>
+          <span class="resize-handle l" data-resize-dir="l"></span>
+          <span class="resize-handle r" data-resize-dir="r"></span>
+        </div>`;
+      }).join('')}${helper}`;
       els.compositionLayoutLayer.querySelectorAll('.composition-layout-item').forEach((item) => {
-        const layoutItem = state.layoutItems.find((candidate) => candidate.id === item.dataset.layoutId);
-        bindLayoutDrag(item, layoutItem);
+        const itemRef = state.layoutItems.find((candidate) => candidate.id === item.dataset.layoutId);
+        bindLayoutDrag(item, itemRef);
+        item.querySelectorAll('.resize-handle').forEach((handle) => {
+          bindLayoutResize(handle, item, itemRef, String(handle.dataset.resizeDir || ''));
+        });
         item.addEventListener('click', () => {
           els.compositionLayoutLayer.querySelectorAll('.composition-layout-item').forEach((node) => node.classList.remove('active'));
           item.classList.add('active');
-          const layoutItem = state.layoutItems.find((candidate) => candidate.id === item.dataset.layoutId);
-          if (layoutItem?.asset_id) loadCanvasImageFromAsset(currentAssets().find((asset) => asset.asset_id === layoutItem.asset_id));
+          state.activeLayoutId = itemRef?.id || '';
+          loadCanvasForLayoutItem(itemRef);
+        });
+      });
+      loadCanvasForActiveLayout();
+    }
+
+    function renderTemplateControls() {
+      const selectedCount = getSelectedAssetIds().length;
+      const candidates = TEMPLATE_LIBRARY.filter((template) => template.slots.length === selectedCount);
+      const templateRows = candidates.length > 0 ? candidates : TEMPLATE_LIBRARY;
+      const strict = candidates.length > 0;
+      state.pendingTemplateId = templateRows[0]?.id || '';
+
+      els.templateDialogHint.textContent = strict
+        ? `已选素材 ${selectedCount} 项，仅展示 ${selectedCount} 格模板。`
+        : `已选素材 ${selectedCount} 项，暂无完全匹配模板，展示全部模板供你参考。`;
+
+      els.templateGrid.innerHTML = templateRows.map((template) => {
+        const active = template.id === state.activeTemplateId ? 'active' : '';
+        const thumbSlots = template.slots.map((slot) => `
+          <div class="template-thumb-slot" style="left:${gridToPercentX(slot.gx)}%;top:${gridToPercentY(slot.gy)}%;width:${gridToPercentX(slot.gw)}%;height:${gridToPercentY(slot.gh)}%"></div>
+        `).join('');
+        return `
+          <button class="template-card ${active}" data-template-id="${escapeHtml(template.id)}" type="button">
+            <div class="template-card-name">${escapeHtml(template.name)}</div>
+            <div class="template-card-meta">${escapeHtml(template.style)} · ${escapeHtml(template.board)} · ${template.slots.length} 格</div>
+            <div class="template-thumb">${thumbSlots}</div>
+          </button>
+        `;
+      }).join('');
+
+      els.templateSelectionSummary.textContent = state.pendingTemplateId
+        ? `待应用模板：${TEMPLATE_LIBRARY.find((item) => item.id === state.pendingTemplateId)?.name || '-'}`
+        : '尚未选择模板';
+
+      els.templateGrid.querySelectorAll('[data-template-id]').forEach((node) => {
+        node.addEventListener('click', () => {
+          const templateId = node.dataset.templateId;
+          const template = TEMPLATE_LIBRARY.find((item) => item.id === templateId);
+          if (!template) return;
+          state.pendingTemplateId = template.id;
+          state.activeTemplateId = template.id;
+          renderTemplateControls();
         });
       });
     }
 
+    function resizeInteractiveCanvasToPreset() {
+      const preset = CANVAS_PRESETS[state.canvasPreset] ?? CANVAS_PRESETS.xhs;
+      const maxWidth = 640;
+      const scale = Math.min(1, maxWidth / preset.width);
+      const width = Math.max(280, Math.round(preset.width * scale));
+      const height = Math.max(220, Math.round(preset.height * scale));
+      els.interactiveCanvas.width = width;
+      els.interactiveCanvas.height = height;
+      drawInteractivePoints();
+    }
+
+    function applyActiveTemplateToLayout(templateId) {
+      const targetTemplateId = templateId || state.activeTemplateId;
+      const template = TEMPLATE_LIBRARY.find((item) => item.id === targetTemplateId);
+      if (!template) {
+        els.resultPreview.textContent = '模板不存在，请重新选择。';
+        return;
+      }
+      state.canvasPreset = 'xhs';
+
+      const selectedAssets = selectedAssetsInCatalogOrder();
+      if (selectedAssets.length !== template.slots.length) {
+        els.resultPreview.textContent = `当前选中素材 ${selectedAssets.length} 项，模板需要 ${template.slots.length} 项。请先调整素材数量。`;
+        return;
+      }
+
+      const sourceAssets = currentAssets();
+      state.layoutItems = template.slots.map((slot, index) => {
+        const assetId = selectedAssets[index]?.asset_id || '';
+        const asset = sourceAssets.find((candidate) => candidate.asset_id === assetId);
+        return {
+          id: `slot:${template.id}:${index + 1}`,
+          kind: asset ? 'source_asset' : 'template_slot',
+          template_id: template.id,
+          slot_index: index + 1,
+          asset_id: assetId,
+          image_path: asset?.image_path || '',
+          label: asset ? asset.asset_id : `Slot ${index + 1}`,
+          grid_x: slot.gx,
+          grid_y: slot.gy,
+          grid_w: slot.gw,
+          grid_h: slot.gh,
+          left: gridToPercentX(slot.gx),
+          top: gridToPercentY(slot.gy),
+          width: gridToPercentX(slot.gw),
+          height: gridToPercentY(slot.gh),
+          z_index: index + 1,
+        };
+      });
+      state.activeLayoutId = state.layoutItems[0]?.id || '';
+      state.operationLog.push({
+        intent: `套用模板 ${template.name}`,
+        tool: 'template_layout_map',
+        status: `已映射 ${template.slots.length} 格 · ${CANVAS_PRESETS[state.canvasPreset].width}x${CANVAS_PRESETS[state.canvasPreset].height}`,
+      });
+      state.droppedAssetIds = state.layoutItems.filter((item) => item.asset_id).map((item) => item.asset_id);
+      renderCompositionDropZone();
+      renderSelectedPreview();
+      renderTemplateControls();
+      resizeInteractiveCanvasToPreset();
+      els.templateModal.classList.remove('open');
+    }
+
+    function moveActiveLayer(toFront) {
+      if (!state.activeLayoutId) {
+        els.resultPreview.textContent = '请先在布局中点击一个素材，再调整叠层。';
+        return;
+      }
+      const current = state.layoutItems.find((item) => item.id === state.activeLayoutId);
+      if (!current) return;
+      const zValues = state.layoutItems.map((item) => Number(item.z_index ?? 0));
+      if (zValues.length === 0) return;
+      const minZ = Math.min(...zValues);
+      const maxZ = Math.max(...zValues);
+      current.z_index = toFront ? maxZ + 1 : minZ - 1;
+      const sorted = state.layoutItems.slice().sort((a, b) => Number(a.z_index ?? 0) - Number(b.z_index ?? 0));
+      sorted.forEach((item, index) => {
+        item.z_index = index + 1;
+      });
+      state.layoutItems = sorted;
+      state.operationLog.push({
+        intent: `${toFront ? '置顶' : '置底'} ${current.label}`,
+        tool: 'layer_order_edit',
+        status: `z-index 已更新（顶层覆盖底层）`,
+      });
+      renderCompositionDropZone();
+      renderSelectedPreview();
+    }
+
     function bindLayoutDrag(node, layoutItem) {
       if (!layoutItem) return;
-      const drag = { active: false, moved: false, pointerId: null };
+      const drag = { active: false, moved: false, pointerId: null, offsetX: 0, offsetY: 0 };
       node.addEventListener('pointerdown', (event) => {
+        const target = event.target;
+        if (target instanceof HTMLElement && target.closest('.resize-handle')) {
+          return;
+        }
         drag.active = true;
         drag.moved = false;
         drag.pointerId = event.pointerId;
+        state.activeLayoutId = layoutItem.id;
+        loadCanvasForLayoutItem(layoutItem);
+        const rect = node.getBoundingClientRect();
+        drag.offsetX = event.clientX - rect.left;
+        drag.offsetY = event.clientY - rect.top;
         node.classList.add('dragging');
         node.setPointerCapture(event.pointerId);
       });
       node.addEventListener('pointermove', (event) => {
         if (!drag.active) return;
         const zone = els.compositionDropZone.getBoundingClientRect();
-        const nextLeft = Math.max(5, Math.min(95, ((event.clientX - zone.left) / zone.width) * 100));
-        const nextTop = Math.max(8, Math.min(92, ((event.clientY - zone.top) / zone.height) * 100));
+        ensureLayoutItemGrid(layoutItem);
+        const nextPxX = event.clientX - zone.left - drag.offsetX;
+        const nextPxY = event.clientY - zone.top - drag.offsetY;
+        const nextLeft = clamp((nextPxX / zone.width) * 100, 0, 100);
+        const nextTop = clamp((nextPxY / zone.height) * 100, 0, 100);
         const currentLeft = Number.parseFloat(node.style.left) || nextLeft;
         const currentTop = Number.parseFloat(node.style.top) || nextTop;
         if (Math.abs(nextLeft - currentLeft) > 0.2 || Math.abs(nextTop - currentTop) > 0.2) drag.moved = true;
-        node.style.left = `${nextLeft}%`;
-        node.style.top = `${nextTop}%`;
-        layoutItem.left = nextLeft;
-        layoutItem.top = nextTop;
+        const nextGridX = clamp(percentToGridX(nextLeft), 0, GRID_LAYOUT.cols - layoutItem.grid_w);
+        const nextGridY = clamp(percentToGridY(nextTop), 0, GRID_LAYOUT.rows - layoutItem.grid_h);
+        layoutItem.grid_x = nextGridX;
+        layoutItem.grid_y = nextGridY;
+        layoutItem.left = gridToPercentX(nextGridX);
+        layoutItem.top = gridToPercentY(nextGridY);
+        node.style.left = `${layoutItem.left}%`;
+        node.style.top = `${layoutItem.top}%`;
       });
       node.addEventListener('pointerup', (event) => {
         drag.active = false;
@@ -1282,27 +1763,169 @@
       });
     }
 
+    function bindLayoutResize(handle, node, layoutItem, dir) {
+      if (!layoutItem || !dir) return;
+      const resize = {
+        active: false,
+        pointerId: null,
+        startX: 0,
+        startY: 0,
+        startGridX: 0,
+        startGridY: 0,
+        startGridW: 0,
+        startGridH: 0,
+      };
+      handle.addEventListener('pointerdown', (event) => {
+        event.stopPropagation();
+        ensureLayoutItemGrid(layoutItem);
+        resize.active = true;
+        resize.pointerId = event.pointerId;
+        resize.startX = event.clientX;
+        resize.startY = event.clientY;
+        resize.startGridX = layoutItem.grid_x;
+        resize.startGridY = layoutItem.grid_y;
+        resize.startGridW = layoutItem.grid_w;
+        resize.startGridH = layoutItem.grid_h;
+        state.activeLayoutId = layoutItem.id;
+        node.classList.add('resizing');
+        handle.setPointerCapture(event.pointerId);
+      });
+
+      handle.addEventListener('pointermove', (event) => {
+        if (!resize.active) return;
+        const zone = els.compositionDropZone.getBoundingClientRect();
+        const dxGrid = Math.round(((event.clientX - resize.startX) / zone.width) * GRID_LAYOUT.cols);
+        const dyGrid = Math.round(((event.clientY - resize.startY) / zone.height) * GRID_LAYOUT.rows);
+        const minW = 4;
+        const minH = 4;
+
+        let nextX = resize.startGridX;
+        let nextY = resize.startGridY;
+        let nextW = resize.startGridW;
+        let nextH = resize.startGridH;
+
+        if (dir.includes('l')) {
+          nextX = resize.startGridX + dxGrid;
+          nextW = resize.startGridW - dxGrid;
+        }
+        if (dir.includes('r')) {
+          nextW = resize.startGridW + dxGrid;
+        }
+        if (dir.includes('t')) {
+          nextY = resize.startGridY + dyGrid;
+          nextH = resize.startGridH - dyGrid;
+        }
+        if (dir.includes('b')) {
+          nextH = resize.startGridH + dyGrid;
+        }
+
+        // Optional aspect lock for corner resizing.
+        if (state.keepAspectResize && dir.length === 2) {
+          const aspect = resize.startGridW / Math.max(resize.startGridH, 1);
+          const deltaW = nextW - resize.startGridW;
+          const deltaH = nextH - resize.startGridH;
+          let lockW = nextW;
+          let lockH = nextH;
+          if (Math.abs(deltaW) >= Math.abs(deltaH)) {
+            lockW = Math.max(minW, nextW);
+            lockH = Math.max(minH, Math.round(lockW / aspect));
+          } else {
+            lockH = Math.max(minH, nextH);
+            lockW = Math.max(minW, Math.round(lockH * aspect));
+          }
+          nextW = lockW;
+          nextH = lockH;
+          if (dir.includes('l')) {
+            nextX = resize.startGridX + (resize.startGridW - nextW);
+          }
+          if (dir.includes('t')) {
+            nextY = resize.startGridY + (resize.startGridH - nextH);
+          }
+        }
+
+        nextW = Math.max(minW, nextW);
+        nextH = Math.max(minH, nextH);
+        nextX = clamp(nextX, 0, GRID_LAYOUT.cols - nextW);
+        nextY = clamp(nextY, 0, GRID_LAYOUT.rows - nextH);
+
+        if (nextX + nextW > GRID_LAYOUT.cols) {
+          nextW = GRID_LAYOUT.cols - nextX;
+        }
+        if (nextY + nextH > GRID_LAYOUT.rows) {
+          nextH = GRID_LAYOUT.rows - nextY;
+        }
+
+        layoutItem.grid_x = nextX;
+        layoutItem.grid_y = nextY;
+        layoutItem.grid_w = Math.max(minW, nextW);
+        layoutItem.grid_h = Math.max(minH, nextH);
+        layoutItem.left = gridToPercentX(layoutItem.grid_x);
+        layoutItem.top = gridToPercentY(layoutItem.grid_y);
+        layoutItem.width = gridToPercentX(layoutItem.grid_w);
+        layoutItem.height = gridToPercentY(layoutItem.grid_h);
+
+        node.style.left = `${layoutItem.left}%`;
+        node.style.top = `${layoutItem.top}%`;
+        node.style.width = `${layoutItem.width}%`;
+        node.style.height = `${layoutItem.height}%`;
+      });
+
+      handle.addEventListener('pointerup', (event) => {
+        if (!resize.active) return;
+        resize.active = false;
+        node.classList.remove('resizing');
+        if (handle.hasPointerCapture(event.pointerId)) {
+          handle.releasePointerCapture(event.pointerId);
+        }
+      });
+
+      handle.addEventListener('pointercancel', () => {
+        resize.active = false;
+        node.classList.remove('resizing');
+      });
+    }
+
     function useSelectedAssetsInLayout() {
       const existingIds = new Set(state.layoutItems.filter((item) => item.asset_id).map((item) => item.asset_id));
       getSelectedAssetIds().forEach((assetId) => {
         if (existingIds.has(assetId)) return;
         const asset = currentAssets().find((candidate) => candidate.asset_id === assetId);
-        if (asset) state.layoutItems.push({ id: `asset:${assetId}`, asset_id: assetId, image_path: asset.image_path, label: asset.asset_id });
+        if (asset) {
+          state.layoutItems.push({
+            id: `asset:${assetId}`,
+            asset_id: assetId,
+            image_path: asset.image_path,
+            label: asset.asset_id,
+            grid_x: 12 + (state.layoutItems.length % 3) * 32,
+            grid_y: 12 + Math.floor(state.layoutItems.length / 3) * 44,
+            grid_w: 28,
+            grid_h: 44,
+            width: gridToPercentX(28),
+            height: gridToPercentY(44),
+            z_index: state.layoutItems.length + 1,
+          });
+        }
       });
+      state.activeTemplateId = '';
+      state.pendingTemplateId = '';
+      state.activeLayoutId = state.layoutItems[0]?.id || '';
       state.droppedAssetIds = state.layoutItems.filter((item) => item.asset_id).map((item) => item.asset_id);
       renderCompositionDropZone();
-      loadCanvasImageFromAsset(currentDroppedAssets()[0] ?? null);
       renderSelectedPreview();
       els.galleryModal.classList.remove('open');
     }
 
     function resetInteractiveCanvas() {
-      const context = els.interactiveCanvas.getContext('2d');
-      context.clearRect(0, 0, els.interactiveCanvas.width, els.interactiveCanvas.height);
-      context.fillStyle = 'rgba(255,255,255,0.06)';
-      context.fillRect(0, 0, els.interactiveCanvas.width, els.interactiveCanvas.height);
-      interactiveCanvasState.image = null;
+      // User intent: clear the rectangle selection and prompt, keep the source
+      // image so they can continue editing or switch to another source block.
       interactiveCanvasState.points = [];
+      const activeLayout = state.layoutItems.find((item) => item.id === state.activeLayoutId);
+      if (activeLayout) {
+        delete activeLayout.edit_rect;
+        delete activeLayout.edit_prompt;
+      }
+      els.canvasPromptInput.value = '';
+      drawInteractivePoints();
     }
 
     function saveCanvasEditToLayout() {
@@ -1312,48 +1935,50 @@
         return;
       }
       if (interactiveCanvasState.points.length < 2) {
-        els.resultPreview.textContent = '请先在画布上完成画笔或矩形选区。';
+        els.resultPreview.textContent = '请先在画布上完成矩形选区。';
         return;
       }
-      const layoutId = `edit:${Date.now()}`;
-      const imageSrc = els.interactiveCanvas.toDataURL('image/png');
-      const intent = prompt || `对当前选区执行${els.canvasModeSelect.value === 'rect' ? '矩形' : '画笔'}编辑`;
-      state.layoutItems.push({
-        id: layoutId,
-        image_src: imageSrc,
-        label: `编辑产物 ${state.operationLog.length + 1}`,
-        kind: 'canvas_edit',
-        prompt,
-        selection_mode: els.canvasModeSelect.value,
-      });
+      const activeLayout = state.layoutItems.find((item) => item.id === state.activeLayoutId);
+      if (!activeLayout || !activeLayout.asset_id) {
+        els.resultPreview.textContent = '请先在布局中选择一个原始素材块，再保存编辑。';
+        return;
+      }
+      const normalizedRect = normalizeRectFromPoints(interactiveCanvasState.points, els.interactiveCanvas.width, els.interactiveCanvas.height);
+      if (!normalizedRect) {
+        els.resultPreview.textContent = '矩形选区无效，请重试。';
+        return;
+      }
+      const intent = prompt || '对当前选区执行矩形编辑';
+      activeLayout.edit_rect = normalizedRect;
+      activeLayout.edit_prompt = prompt;
       state.operationLog.push({
         intent,
         tool: 'interactive_canvas_edit',
-        status: '已保存到布局',
-        layoutId,
+        status: `已保存到素材 ${activeLayout.label}`,
+        layoutId: activeLayout.id,
       });
       renderCompositionDropZone();
       renderSelectedPreview();
-      els.resultPreview.textContent = '画布编辑已作为中间素材保存到布局，可继续载入图片或直接生成。';
+      els.resultPreview.textContent = '该素材的矩形选区与编辑提示已保存。你可以清空画布后切换其他素材继续编辑。';
     }
 
     function drawInteractivePoints() {
       const context = els.interactiveCanvas.getContext('2d');
       context.clearRect(0, 0, els.interactiveCanvas.width, els.interactiveCanvas.height);
-      if (interactiveCanvasState.image) context.drawImage(interactiveCanvasState.image, 0, 0, els.interactiveCanvas.width, els.interactiveCanvas.height);
+      if (interactiveCanvasState.image) {
+        context.drawImage(interactiveCanvasState.image, 0, 0, els.interactiveCanvas.width, els.interactiveCanvas.height);
+      } else {
+        context.fillStyle = 'rgba(255,255,255,0.06)';
+        context.fillRect(0, 0, els.interactiveCanvas.width, els.interactiveCanvas.height);
+      }
       if (interactiveCanvasState.points.length < 2) return;
       context.strokeStyle = 'rgba(255,255,255,0.95)';
       context.lineWidth = 3;
       context.beginPath();
       context.moveTo(interactiveCanvasState.points[0].x, interactiveCanvasState.points[0].y);
-      if (els.canvasModeSelect.value === 'rect') {
-        const start = interactiveCanvasState.points[0];
-        const end = interactiveCanvasState.points[interactiveCanvasState.points.length - 1];
-        context.strokeRect(start.x, start.y, end.x - start.x, end.y - start.y);
-        return;
-      }
-      interactiveCanvasState.points.slice(1).forEach((point) => context.lineTo(point.x, point.y));
-      context.stroke();
+      const start = interactiveCanvasState.points[0];
+      const end = interactiveCanvasState.points[interactiveCanvasState.points.length - 1];
+      context.strokeRect(start.x, start.y, end.x - start.x, end.y - start.y);
     }
 
     function bindInteractiveCanvas() {
@@ -1368,11 +1993,7 @@
         if (!interactiveCanvasState.drawing) return;
         const rect = canvas.getBoundingClientRect();
         const point = { x: ((event.clientX - rect.left) / rect.width) * canvas.width, y: ((event.clientY - rect.top) / rect.height) * canvas.height };
-        if (els.canvasModeSelect.value === 'rect') {
-          interactiveCanvasState.points = [interactiveCanvasState.points[0], point];
-        } else {
-          interactiveCanvasState.points.push(point);
-        }
+        interactiveCanvasState.points = [interactiveCanvasState.points[0], point];
         drawInteractivePoints();
       });
       canvas.addEventListener('pointerup', (event) => {
@@ -1565,7 +2186,7 @@
       renderAssets();
       renderCompositionDropZone();
       if (state.droppedAssetIds.length === 0) {
-        resetInteractiveCanvas();
+        clearInteractiveCanvasAll();
       }
       renderSelectedPreview();
       renderToolCatalog();
@@ -1573,26 +2194,42 @@
     }
 
     async function runGeneration(retryOptions = {}) {
+      const preset = CANVAS_PRESETS[state.canvasPreset] ?? CANVAS_PRESETS.xhs;
       const payload = {
         user_id: 'web-demo',
         text: buildGenerationIntent(),
         library_root: els.libraryRootInput.value.trim() || state.bootstrap?.library_root,
         selected_asset_ids: getLayoutAssetIds(),
         guided_tool_names: Array.from(state.selectedToolNames).sort(),
-        layout_context: state.layoutItems.map((item, index) => ({
+        layout_context: state.layoutItems.map((item, index) => {
+          const normalized = ensureLayoutItemGrid(item);
+          return ({
           order: index + 1,
           id: item.id,
           kind: item.kind || 'source_asset',
           label: item.label,
           asset_id: item.asset_id || '',
-          left: item.left ?? (18 + (index % 3) * 28),
-          top: item.top ?? (35 + Math.floor(index / 3) * 30),
-          width: item.width ?? 24,
-          height: item.height ?? 42,
+          left: normalized.left,
+          top: normalized.top,
+          width: normalized.width,
+          height: normalized.height,
+          grid_x: normalized.grid_x,
+          grid_y: normalized.grid_y,
+          grid_w: normalized.grid_w,
+          grid_h: normalized.grid_h,
           z_index: item.z_index ?? index + 1,
+          template_id: item.template_id || state.activeTemplateId || '',
+          canvas_preset: state.canvasPreset,
+          canvas_width: preset.width,
+          canvas_height: preset.height,
+          grid_cols: GRID_LAYOUT.cols,
+          grid_rows: GRID_LAYOUT.rows,
           prompt: item.prompt || '',
+          edit_prompt: item.edit_prompt || '',
+          edit_rect: item.edit_rect || null,
           selection_mode: item.selection_mode || '',
-        })),
+        });
+        }),
         operation_log: state.operationLog,
         input_image_paths: [],
         input_video_paths: [],
@@ -1626,14 +2263,19 @@
 
     function buildGenerationIntent() {
       const edits = state.operationLog.map((operation) => operation.intent).join('；');
-      const assetCount = state.layoutItems.filter((item) => item.kind !== 'canvas_edit').length;
-      const editCount = state.layoutItems.filter((item) => item.kind === 'canvas_edit').length;
-      return `请根据当前布局生成最终 Live Photo：调用 concat_clips 对布局中的 ${assetCount} 张原始图片做空间拼接，严格使用每个布局项的 left/top/width/height 和 z_index，不要仅按素材加入顺序排列${editCount ? `，并把 ${editCount} 个画布编辑产物叠加到拼接结果上` : ''}。${edits ? `处理中间步骤：${edits}。` : ''}当前测试只验证原始素材空间拼接，不需要分割。请保留完整的意图识别、工具使用和中间处理记录。`;
+      const assetCount = state.layoutItems.filter((item) => item.asset_id).length;
+      const editCount = state.layoutItems.filter((item) => item.edit_rect || item.edit_prompt).length;
+      const preset = CANVAS_PRESETS[state.canvasPreset] ?? CANVAS_PRESETS.xhs;
+      const template = TEMPLATE_LIBRARY.find((item) => item.id === state.activeTemplateId);
+      const templateClause = template
+        ? `本次使用模板 ${template.name}（${template.slots.length} 格）。`
+        : '本次为自由拖拽布局。';
+      return `请根据当前布局生成最终 Live Photo：固定画布为 ${preset.width}x${preset.height}（${preset.label}），布局按 ${GRID_LAYOUT.cols}x${GRID_LAYOUT.rows} 网格解析，调用 concat_clips 对布局中的 ${assetCount} 张原始图片做空间拼接，严格使用每个布局项的 grid_x/grid_y/grid_w/grid_h 与 z_index，顶层 z-index 覆盖底层，不要仅按素材加入顺序排列。${templateClause}${editCount ? `并把 ${editCount} 个画布编辑产物叠加到拼接结果上。` : ''}${edits ? `处理中间步骤：${edits}。` : ''}当前测试只验证原始素材空间拼接，不需要分割。请保留完整的意图识别、工具使用和中间处理记录。`;
     }
 
     els.refreshButton.addEventListener('click', () => refreshBootstrap().catch((error) => { els.resultPreview.textContent = String(error); }));
     els.addSelectedToLayoutButton.addEventListener('click', useSelectedAssetsInLayout);
-    els.clearLayoutButton.addEventListener('click', () => { state.droppedAssetIds = []; state.layoutItems = []; state.operationLog = []; renderCompositionDropZone(); resetInteractiveCanvas(); renderSelectedPreview(); });
+    els.clearLayoutButton.addEventListener('click', () => { state.droppedAssetIds = []; state.layoutItems = []; state.operationLog = []; state.activeLayoutId = ''; renderCompositionDropZone(); resetInteractiveCanvas(); renderSelectedPreview(); });
     els.openGalleryButton.addEventListener('click', () => {
       renderAssets();
       els.galleryModal.classList.add('open');
@@ -1644,8 +2286,28 @@
       if (event.target === els.galleryModal) els.galleryModal.classList.remove('open');
     });
     els.refreshGalleryButton.addEventListener('click', () => refreshBootstrap().catch((error) => { els.gallerySelectionSummary.textContent = String(error); }));
+    els.openTemplateButton.addEventListener('click', () => {
+      const selectedCount = getSelectedAssetIds().length;
+      if (selectedCount === 0) {
+        els.resultPreview.textContent = '请先在图片弹窗中勾选素材，再选择模板。';
+        return;
+      }
+      renderTemplateControls();
+      els.templateModal.classList.add('open');
+    });
+    els.closeTemplateButton.addEventListener('click', () => els.templateModal.classList.remove('open'));
+    els.cancelTemplateButton.addEventListener('click', () => els.templateModal.classList.remove('open'));
+    els.applyTemplateFromModalButton.addEventListener('click', () => applyActiveTemplateToLayout(state.pendingTemplateId || state.activeTemplateId));
+    els.templateModal.addEventListener('click', (event) => {
+      if (event.target === els.templateModal) els.templateModal.classList.remove('open');
+    });
     els.canvasResetButton.addEventListener('click', resetInteractiveCanvas);
     els.canvasPreviewButton.addEventListener('click', saveCanvasEditToLayout);
+    els.layerUpButton.addEventListener('click', () => moveActiveLayer(true));
+    els.layerDownButton.addEventListener('click', () => moveActiveLayer(false));
+    els.keepAspectResize.addEventListener('change', () => {
+      state.keepAspectResize = Boolean(els.keepAspectResize.checked);
+    });
     els.selectAllAssetsButton.addEventListener('click', () => {
       const assets = filteredAssets();
       setSelectedAssetIds(assets.map((asset) => asset.asset_id));
@@ -1684,6 +2346,7 @@
     els.feedbackModal.addEventListener('click', (event) => { if (event.target === els.feedbackModal) els.feedbackModal.classList.remove('open'); });
 
     renderCompositionDropZone();
+    resizeInteractiveCanvasToPreset();
     resetInteractiveCanvas();
     bindInteractiveCanvas();
     refreshBootstrap().catch((error) => {

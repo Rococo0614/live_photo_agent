@@ -4,6 +4,7 @@ import math
 import shutil
 from pathlib import Path
 
+from ..config import settings
 from ..foundation import LibraryService, MediaOps, MediaOpsError
 from ..models import LivePhotoAsset, ToolCall, ToolResult
 
@@ -138,7 +139,7 @@ class L0AtomicTools:
     def subject_segmentation(self, call: ToolCall, context: dict[str, object]) -> ToolResult:
         focus_assets = self._assets_for_l0(call, context)
         mode = str(call.arguments.get("mode", "person_first"))
-        workspace = self._workspace_dir(context)
+        workspace = self._segmentation_workspace_dir()
         masks: dict[str, str] = {}
         ratios: dict[str, float] = {}
 
@@ -173,7 +174,7 @@ class L0AtomicTools:
     def extract_subject_matte(self, call: ToolCall, context: dict[str, object]) -> ToolResult:
         focus_assets = self._assets_for_l0(call, context)
         mode = str(call.arguments.get("mode", "mog2")).strip().lower()
-        workspace = self._workspace_dir(context)
+        workspace = self._segmentation_workspace_dir()
         mattes: dict[str, dict[str, object]] = {}
         average_ratios: dict[str, float] = {}
         failed_asset_ids: list[str] = []
@@ -184,6 +185,8 @@ class L0AtomicTools:
                 failed_asset_ids.append(asset.asset_id)
                 continue
             output_dir = workspace / "subject_mattes" / asset.asset_id
+            if output_dir.exists():
+                shutil.rmtree(output_dir, ignore_errors=True)
             try:
                 result = self.media_ops.extract_subject_matte_frames(motion_path, output_dir, mode=mode)
             except MediaOpsError as exc:
@@ -264,6 +267,12 @@ class L0AtomicTools:
         timeline["subject_overlay_applied"] = True
         timeline["subject_overlay_asset_id"] = foreground_asset_id
         context["timeline"] = timeline
+
+        self._cleanup_subject_matte_temp(matte)
+        remaining_mattes = dict(context.get("subject_mattes", {}))
+        remaining_mattes.pop(foreground_asset_id, None)
+        context["subject_mattes"] = remaining_mattes
+
         context["subject_overlay"] = {
             "foreground_asset_id": foreground_asset_id,
             "anchor": anchor,
@@ -279,6 +288,14 @@ class L0AtomicTools:
             success=True,
             payload={"overlay_applied": True, "output_path": str(result_path)},
         )
+
+    def _cleanup_subject_matte_temp(self, matte: dict[str, object]) -> None:
+        frames_dir_raw = matte.get("frames_dir")
+        if not frames_dir_raw:
+            return
+        frames_dir = Path(str(frames_dir_raw))
+        if frames_dir.exists():
+            shutil.rmtree(frames_dir, ignore_errors=True)
 
     def select_cover_frame(self, call: ToolCall, context: dict[str, object]) -> ToolResult:
         focus_assets = self._assets_for_l0(call, context)
@@ -1017,6 +1034,12 @@ class L0AtomicTools:
     def _workspace_dir(self, context: dict[str, object]) -> Path:
         default_root = Path(context["library_root"]).resolve() / ".agent_work"
         root = Path(str(context.get("work_dir", default_root)))
+        root.mkdir(parents=True, exist_ok=True)
+        return root
+
+    def _segmentation_workspace_dir(self) -> Path:
+        # Keep segmentation/matte intermediates in a fixed workspace location.
+        root = settings.workspace_dir.resolve() / ".agent_work" / "segmentation"
         root.mkdir(parents=True, exist_ok=True)
         return root
 

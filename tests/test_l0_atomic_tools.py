@@ -1,8 +1,10 @@
 from pathlib import Path
+import shutil
 
 import pytest
 
 from live_photo_agent.capability.l0_atomic_tools import L0AtomicTools
+from live_photo_agent.config import settings
 from live_photo_agent.foundation.media_ops import MediaOpsError
 from live_photo_agent.foundation.library import LibraryService
 from live_photo_agent.models import LivePhotoAsset
@@ -303,6 +305,115 @@ def test_add_text_overlay_degrades_to_timeline_on_failure(tmp_path: Path, monkey
     assert result.success is True
     assert result.payload.get("overlay_applied") is False
     assert result.payload.get("fallback_to_timeline") is True
+
+
+def test_overlay_subject_clip_respects_arguments_and_cleans_temp_matte(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    service = LibraryService()
+    tools = L0AtomicTools(service)
+
+    timeline_path = tmp_path / "timeline.mp4"
+    timeline_path.write_bytes(b"timeline")
+
+    frames_dir = tmp_path / "subject_mattes" / "a1"
+    frames_dir.mkdir(parents=True)
+    (frames_dir / "frame_00000.png").write_bytes(b"png")
+
+    captured: dict[str, object] = {}
+
+    def _fake_composite(
+        *,
+        background_path: Path,
+        foreground_frames_dir: Path,
+        foreground_fps: float,
+        output_path: Path,
+        anchor: str,
+        scale: float,
+        x_offset: int,
+        y_offset: int,
+        fit_mode: str,
+    ) -> Path:
+        _ = background_path
+        _ = foreground_frames_dir
+        _ = foreground_fps
+        _ = scale
+        _ = fit_mode
+        captured["anchor"] = anchor
+        captured["x_offset"] = x_offset
+        captured["y_offset"] = y_offset
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        output_path.write_bytes(b"composited")
+        return output_path
+
+    monkeypatch.setattr(tools.media_ops, "composite_foreground_over_background", _fake_composite)
+
+    call = ToolCall(
+        tool=ToolName.OVERLAY_SUBJECT_CLIP,
+        reason="overlay",
+        arguments={"foreground_asset_id": "a1", "anchor": "center", "x_offset": 999, "y_offset": 888},
+    )
+    context: dict[str, object] = {
+        "library_root": tmp_path,
+        "timeline": {"path": str(timeline_path), "timeline_id": "t1"},
+        "subject_mattes": {
+            "a1": {
+                "frames_dir": str(frames_dir),
+                "fps": 25.0,
+            }
+        },
+    }
+
+    result = tools.overlay_subject_clip(call, context)
+
+    assert result.success is True
+    assert captured["anchor"] == "center"
+    assert captured["x_offset"] == 999
+    assert captured["y_offset"] == 888
+    assert not frames_dir.exists()
+    assert context["subject_mattes"] == {}
+
+
+def test_extract_subject_matte_clears_stale_output_dir(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    service = LibraryService()
+    tools = L0AtomicTools(service)
+
+    motion_path = tmp_path / "a1.mp4"
+    motion_path.write_bytes(b"video")
+    asset = LivePhotoAsset(asset_id="a1", image_path=tmp_path / "a1.jpg", motion_path=motion_path)
+
+    stale_file = settings.workspace_dir.resolve() / ".agent_work" / "segmentation" / "subject_mattes" / "a1" / "stale.txt"
+    stale_file.parent.mkdir(parents=True, exist_ok=True)
+    stale_file.write_text("stale")
+
+    def _fake_extract(video_path: Path, output_dir: Path, mode: str = "mog2") -> dict[str, object]:
+        _ = video_path
+        _ = mode
+        output_dir.mkdir(parents=True, exist_ok=True)
+        fresh = output_dir / "frame_00000.png"
+        fresh.write_bytes(b"png")
+        return {
+            "frames_dir": str(output_dir),
+            "frame_count": 1,
+            "fps": 25.0,
+            "width": 100,
+            "height": 100,
+            "average_foreground_ratio": 0.5,
+        }
+
+    monkeypatch.setattr(tools.media_ops, "extract_subject_matte_frames", _fake_extract)
+
+    call = ToolCall(tool=ToolName.EXTRACT_SUBJECT_MATTE, reason="matte", arguments={"asset_ids": ["a1"]})
+    context: dict[str, object] = {"library_root": tmp_path, "assets": [asset]}
+
+    result = tools.extract_subject_matte(call, context)
+
+    assert result.success is True
+    assert not stale_file.exists()
+    matte = context["subject_mattes"]["a1"]
+    assert Path(str(matte["frames_dir"])).exists()
+    shutil.rmtree(settings.workspace_dir.resolve() / ".agent_work" / "segmentation", ignore_errors=True)
 
 
 def test_export_mp4_fallback_copy_on_render_error(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
