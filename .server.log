@@ -3263,3 +3263,139 @@ INFO:     127.0.0.1:42864 - "GET /api/ui/media?path=%2Fhome%2Fvivo%2Flive_photo_
 INFO:     127.0.0.1:42864 - "GET /api/ui/media?path=%2Fhome%2Fvivo%2Flive_photo_agent%2Fdata%2Flive_photo%2F139.jpg HTTP/1.1" 200 OK
 INFO:     127.0.0.1:42846 - "GET /api/ui/media?path=%2Fhome%2Fvivo%2Flive_photo_agent%2Fdata%2Flive_photo%2F178.jpg HTTP/1.1" 200 OK
 INFO:     127.0.0.1:42858 - "GET /api/ui/media?path=%2Fhome%2Fvivo%2Flive_photo_agent%2Fdata%2Flive_photo%2F.agent_work%2Flive_photo%2Ffinal_video_cover.jpg HTTP/1.1" 200 OK
+INFO:     Started server process [71614]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://127.0.0.1:8000 (Press CTRL+C to quit)
+[LangSmith] tracing enabled → project: live-photo-agent
+INFO:     127.0.0.1:32798 - "GET /health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:33352 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:33352 - "GET /api/ui/bootstrap HTTP/1.1" 200 OK
+INFO:     127.0.0.1:33352 - "GET /api/ui/planner-config HTTP/1.1" 200 OK
+INFO:     127.0.0.1:33358 - "GET /api/ui/media?path=%2Fhome%2Fvivo%2Flive_photo_agent%2Fdata%2Flive_photo%2F1000.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:33368 - "GET /api/ui/media?path=%2Fhome%2Fvivo%2Flive_photo_agent%2Fdata%2Flive_photo%2F127.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:33384 - "GET /api/ui/media?path=%2Fhome%2Fvivo%2Flive_photo_agent%2Fdata%2Flive_photo%2F171.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:33368 - "GET /api/ui/media?path=%2Fhome%2Fvivo%2Flive_photo_agent%2Fdata%2Flive_photo%2F167.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:33384 - "GET /api/ui/media?path=%2Fhome%2Fvivo%2Flive_photo_agent%2Fdata%2Flive_photo%2F17.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:33358 - "GET /api/ui/media?path=%2Fhome%2Fvivo%2Flive_photo_agent%2Fdata%2Flive_photo%2F2.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:33358 - "GET /api/ui/media?path=%2Fhome%2Fvivo%2Flive_photo_agent%2Fdata%2Flive_photo%2F140.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:33384 - "GET /api/ui/media?path=%2Fhome%2Fvivo%2Flive_photo_agent%2Fdata%2Flive_photo%2F118.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:33368 - "GET /api/ui/media?path=%2Fhome%2Fvivo%2Flive_photo_agent%2Fdata%2Flive_photo%2F185.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:33384 - "GET /api/ui/media?path=%2Fhome%2Fvivo%2Flive_photo_agent%2Fdata%2Flive_photo%2F102.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:33368 - "GET /api/ui/media?path=%2Fhome%2Fvivo%2Flive_photo_agent%2Fdata%2Flive_photo%2F176.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:33358 - "GET /api/ui/media?path=%2Fhome%2Fvivo%2Flive_photo_agent%2Fdata%2Flive_photo%2F163.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:33352 - "GET /api/ui/media?path=%2Fhome%2Fvivo%2Flive_photo_agent%2Fdata%2Flive_photo%2F147.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:33384 - "GET /api/ui/media?path=%2Fhome%2Fvivo%2Flive_photo_agent%2Fdata%2Flive_photo%2F105.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:33390 - "GET /api/ui/media?path=%2Fhome%2Fvivo%2Flive_photo_agent%2Fdata%2Flive_photo%2F115.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:33400 - "GET /favicon.ico HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:33368 - "GET /api/ui/media?path=%2Fhome%2Fvivo%2Flive_photo_agent%2Fdata%2Flive_photo%2F101.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:33358 - "GET /api/ui/media?path=%2Fhome%2Fvivo%2Flive_photo_agent%2Fdata%2Flive_photo%2F112.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:33368 - "GET /api/ui/media?path=%2Fhome%2Fvivo%2Flive_photo_agent%2Fdata%2Flive_photo%2F141.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:33352 - "GET /api/ui/media?path=%2Fhome%2Fvivo%2Flive_photo_agent%2Fdata%2Flive_photo%2F156.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:33358 - "GET /api/ui/media?path=%2Fhome%2Fvivo%2Flive_photo_agent%2Fdata%2Flive_photo%2F181.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:33352 - "GET /api/ui/media?path=%2Fhome%2Fvivo%2Flive_photo_agent%2Fdata%2Flive_photo%2F182.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:33390 - "GET /api/ui/media?path=%2Fhome%2Fvivo%2Flive_photo_agent%2Fdata%2Flive_photo%2F117.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:33384 - "GET /api/ui/media?path=%2Fhome%2Fvivo%2Flive_photo_agent%2Fdata%2Flive_photo%2F173.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:33368 - "GET /api/ui/media?path=%2Fhome%2Fvivo%2Flive_photo_agent%2Fdata%2Flive_photo%2F142.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:33400 - "GET /api/ui/media?path=%2Fhome%2Fvivo%2Flive_photo_agent%2Fdata%2Flive_photo%2F126.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:33368 - "GET /api/ui/media?path=%2Fhome%2Fvivo%2Flive_photo_agent%2Fdata%2Flive_photo%2F108.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:33384 - "GET /api/ui/media?path=%2Fhome%2Fvivo%2Flive_photo_agent%2Fdata%2Flive_photo%2F12.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:33390 - "GET /api/ui/media?path=%2Fhome%2Fvivo%2Flive_photo_agent%2Fdata%2Flive_photo%2F157.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:33352 - "GET /api/ui/media?path=%2Fhome%2Fvivo%2Flive_photo_agent%2Fdata%2Flive_photo%2F125.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:33400 - "GET /api/ui/media?path=%2Fhome%2Fvivo%2Flive_photo_agent%2Fdata%2Flive_photo%2F172.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:33358 - "GET /api/ui/media?path=%2Fhome%2Fvivo%2Flive_photo_agent%2Fdata%2Flive_photo%2F143.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:33384 - "GET /api/ui/media?path=%2Fhome%2Fvivo%2Flive_photo_agent%2Fdata%2Flive_photo%2F148.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:33400 - "GET /api/ui/media?path=%2Fhome%2Fvivo%2Flive_photo_agent%2Fdata%2Flive_photo%2F145.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:33368 - "GET /api/ui/media?path=%2Fhome%2Fvivo%2Flive_photo_agent%2Fdata%2Flive_photo%2F180.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:33390 - "GET /api/ui/media?path=%2Fhome%2Fvivo%2Flive_photo_agent%2Fdata%2Flive_photo%2F184.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:33384 - "GET /api/ui/media?path=%2Fhome%2Fvivo%2Flive_photo_agent%2Fdata%2Flive_photo%2F123.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:33352 - "GET /api/ui/media?path=%2Fhome%2Fvivo%2Flive_photo_agent%2Fdata%2Flive_photo%2F114.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:33390 - "GET /api/ui/media?path=%2Fhome%2Fvivo%2Flive_photo_agent%2Fdata%2Flive_photo%2F11.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:33384 - "GET /api/ui/media?path=%2Fhome%2Fvivo%2Flive_photo_agent%2Fdata%2Flive_photo%2F128.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:33352 - "GET /api/ui/media?path=%2Fhome%2Fvivo%2Flive_photo_agent%2Fdata%2Flive_photo%2F129.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:33400 - "GET /api/ui/media?path=%2Fhome%2Fvivo%2Flive_photo_agent%2Fdata%2Flive_photo%2F15.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:33358 - "GET /api/ui/media?path=%2Fhome%2Fvivo%2Flive_photo_agent%2Fdata%2Flive_photo%2F130.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:33400 - "GET /api/ui/media?path=%2Fhome%2Fvivo%2Flive_photo_agent%2Fdata%2Flive_photo%2F14.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:33390 - "GET /api/ui/media?path=%2Fhome%2Fvivo%2Flive_photo_agent%2Fdata%2Flive_photo%2F161.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:33368 - "GET /api/ui/media?path=%2Fhome%2Fvivo%2Flive_photo_agent%2Fdata%2Flive_photo%2F168.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:33384 - "GET /api/ui/media?path=%2Fhome%2Fvivo%2Flive_photo_agent%2Fdata%2Flive_photo%2F186.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:33352 - "GET /api/ui/media?path=%2Fhome%2Fvivo%2Flive_photo_agent%2Fdata%2Flive_photo%2F183.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:33358 - "GET /api/ui/media?path=%2Fhome%2Fvivo%2Flive_photo_agent%2Fdata%2Flive_photo%2F164.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:33384 - "GET /api/ui/media?path=%2Fhome%2Fvivo%2Flive_photo_agent%2Fdata%2Flive_photo%2F136.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:33390 - "GET /api/ui/media?path=%2Fhome%2Fvivo%2Flive_photo_agent%2Fdata%2Flive_photo%2F103.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:33368 - "GET /api/ui/media?path=%2Fhome%2Fvivo%2Flive_photo_agent%2Fdata%2Flive_photo%2F138.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:33400 - "GET /api/ui/media?path=%2Fhome%2Fvivo%2Flive_photo_agent%2Fdata%2Flive_photo%2F111.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:33352 - "GET /api/ui/media?path=%2Fhome%2Fvivo%2Flive_photo_agent%2Fdata%2Flive_photo%2F175.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:33368 - "GET /api/ui/media?path=%2Fhome%2Fvivo%2Flive_photo_agent%2Fdata%2Flive_photo%2F119.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:33358 - "GET /api/ui/media?path=%2Fhome%2Fvivo%2Flive_photo_agent%2Fdata%2Flive_photo%2F169.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:33384 - "GET /api/ui/media?path=%2Fhome%2Fvivo%2Flive_photo_agent%2Fdata%2Flive_photo%2F150.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:33358 - "GET /api/ui/media?path=%2Fhome%2Fvivo%2Flive_photo_agent%2Fdata%2Flive_photo%2F177.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:33384 - "GET /api/ui/media?path=%2Fhome%2Fvivo%2Flive_photo_agent%2Fdata%2Flive_photo%2F133.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:33400 - "GET /api/ui/media?path=%2Fhome%2Fvivo%2Flive_photo_agent%2Fdata%2Flive_photo%2F132.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:33352 - "GET /api/ui/media?path=%2Fhome%2Fvivo%2Flive_photo_agent%2Fdata%2Flive_photo%2F151.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:33390 - "GET /api/ui/media?path=%2Fhome%2Fvivo%2Flive_photo_agent%2Fdata%2Flive_photo%2F18.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:33358 - "GET /api/ui/media?path=%2Fhome%2Fvivo%2Flive_photo_agent%2Fdata%2Flive_photo%2F107.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:33368 - "GET /api/ui/media?path=%2Fhome%2Fvivo%2Flive_photo_agent%2Fdata%2Flive_photo%2F155.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:33390 - "GET /api/ui/media?path=%2Fhome%2Fvivo%2Flive_photo_agent%2Fdata%2Flive_photo%2F121.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:33352 - "GET /api/ui/media?path=%2Fhome%2Fvivo%2Flive_photo_agent%2Fdata%2Flive_photo%2F149.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:33384 - "GET /api/ui/media?path=%2Fhome%2Fvivo%2Flive_photo_agent%2Fdata%2Flive_photo%2F165.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:33390 - "GET /api/ui/media?path=%2Fhome%2Fvivo%2Flive_photo_agent%2Fdata%2Flive_photo%2F144.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:33400 - "GET /api/ui/media?path=%2Fhome%2Fvivo%2Flive_photo_agent%2Fdata%2Flive_photo%2F162.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:33352 - "GET /api/ui/media?path=%2Fhome%2Fvivo%2Flive_photo_agent%2Fdata%2Flive_photo%2F134.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:33390 - "GET /api/ui/media?path=%2Fhome%2Fvivo%2Flive_photo_agent%2Fdata%2Flive_photo%2F179.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:33384 - "GET /api/ui/media?path=%2Fhome%2Fvivo%2Flive_photo_agent%2Fdata%2Flive_photo%2F131.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:33358 - "GET /api/ui/media?path=%2Fhome%2Fvivo%2Flive_photo_agent%2Fdata%2Flive_photo%2F124.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:33384 - "GET /api/ui/media?path=%2Fhome%2Fvivo%2Flive_photo_agent%2Fdata%2Flive_photo%2F16.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:33390 - "GET /api/ui/media?path=%2Fhome%2Fvivo%2Flive_photo_agent%2Fdata%2Flive_photo%2F187.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:33358 - "GET /api/ui/media?path=%2Fhome%2Fvivo%2Flive_photo_agent%2Fdata%2Flive_photo%2F113.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:33352 - "GET /api/ui/media?path=%2Fhome%2Fvivo%2Flive_photo_agent%2Fdata%2Flive_photo%2F104.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:33368 - "GET /api/ui/media?path=%2Fhome%2Fvivo%2Flive_photo_agent%2Fdata%2Flive_photo%2F139.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:33400 - "GET /api/ui/media?path=%2Fhome%2Fvivo%2Flive_photo_agent%2Fdata%2Flive_photo%2F178.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:33384 - "GET /api/ui/media?path=%2Fhome%2Fvivo%2Flive_photo_agent%2Fdata%2Flive_photo%2F122.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:33390 - "GET /api/ui/media?path=%2Fhome%2Fvivo%2Flive_photo_agent%2Fdata%2Flive_photo%2F.agent_work%2Flive_photo%2Ffinal_video_cover.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:39100 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:39100 - "GET /api/ui/bootstrap HTTP/1.1" 200 OK
+INFO:     127.0.0.1:39100 - "GET /api/ui/planner-config HTTP/1.1" 200 OK
+INFO:     127.0.0.1:45904 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:45904 - "GET /api/ui/bootstrap HTTP/1.1" 200 OK
+INFO:     127.0.0.1:45904 - "GET /api/ui/planner-config HTTP/1.1" 200 OK
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.
+INFO:     Finished server process [71614]
+INFO:     Started server process [77755]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://127.0.0.1:8000 (Press CTRL+C to quit)
+[LangSmith] tracing enabled → project: live-photo-agent
+INFO:     127.0.0.1:43080 - "GET /health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:43086 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:43086 - "GET /api/ui/bootstrap HTTP/1.1" 200 OK
+INFO:     127.0.0.1:43086 - "GET /api/ui/planner-config HTTP/1.1" 200 OK
+INFO:     127.0.0.1:43086 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:43086 - "GET /api/ui/bootstrap HTTP/1.1" 200 OK
+INFO:     127.0.0.1:43086 - "GET /api/ui/planner-config HTTP/1.1" 200 OK
+INFO:     127.0.0.1:42338 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:42338 - "GET /api/ui/bootstrap HTTP/1.1" 200 OK
+INFO:     127.0.0.1:42338 - "GET /api/ui/planner-config HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59964 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59964 - "GET /api/ui/bootstrap HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59964 - "GET /api/ui/planner-config HTTP/1.1" 200 OK
+INFO:     127.0.0.1:46840 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:46840 - "GET /api/ui/bootstrap HTTP/1.1" 200 OK
+INFO:     127.0.0.1:46840 - "GET /api/ui/planner-config HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54668 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54668 - "GET /api/ui/bootstrap HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54668 - "GET /api/ui/planner-config HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54668 - "GET /api/ui/media?path=%2Fhome%2Fvivo%2Flive_photo_agent%2Fdata%2Flive_photo%2FIMG_9259..PNG HTTP/1.1" 200 OK
+INFO:     127.0.0.1:42980 - "POST /agent/execute HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57770 - "POST /agent/execute HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57770 - "POST /agent/execute HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54722 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54722 - "GET /api/ui/bootstrap HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54722 - "GET /api/ui/planner-config HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54722 - "GET /api/ui/media?path=%2Fhome%2Fvivo%2Flive_photo_agent%2Fdata%2Flive_photo%2FIMG_9259..PNG HTTP/1.1" 200 OK
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.
+INFO:     Finished server process [77755]

@@ -418,13 +418,21 @@
       background-size: calc(100% / 12) calc(100% / 16);
       z-index: 0;
     }
-    .canvas-editor-grid { display: grid; grid-template-columns: minmax(180px, 0.65fr) minmax(240px, 1.35fr); gap: 12px; align-items: stretch; }
+    .canvas-editor-grid { display: grid; grid-template-columns: 1fr; gap: 12px; align-items: stretch; }
     .canvas-editor-controls { display: grid; align-content: start; gap: 10px; }
-    .canvas-stage { display: grid; align-content: center; min-width: 0; }
+    .canvas-stage { display: grid; align-content: start; gap: 8px; min-width: 0; }
+    .canvas-stage canvas {
+      display: block;
+      width: 100%;
+      height: auto;
+      aspect-ratio: var(--canvas-ratio, 3 / 4);
+      max-height: 520px;
+    }
     .editor-workbench {
       display: grid;
-      grid-template-columns: minmax(190px, 0.8fr) minmax(260px, 1.2fr);
+      grid-template-columns: minmax(0, 1fr) minmax(300px, 0.78fr) minmax(0, 1fr);
       gap: 12px;
+      align-items: start;
       padding-bottom: 12px;
     }
     .editor-workbench > .result-card { min-width: 0; }
@@ -484,11 +492,6 @@
       border: 1px solid rgba(125, 211, 252, 0.7);
       background: rgba(56, 189, 248, 0.2);
       border-radius: 6px;
-    }
-    .template-note {
-      margin-top: 10px;
-      color: var(--muted);
-      font-size: 12px;
     }
     .asset-loader-bar strong { display: block; margin-top: 4px; font-size: 14px; }
     .operation-card { margin-top: 14px; }
@@ -650,6 +653,19 @@
       background: rgba(125, 211, 252, 0.06);
     }
 
+    @media (max-width: 1320px) {
+      .editor-workbench {
+        grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+      }
+      .editor-workbench > .result-card:nth-child(2) {
+        grid-column: 1 / -1;
+      }
+    }
+
+    @media (max-width: 1180px) {
+      .editor-workbench { grid-template-columns: 1fr; }
+    }
+
     @media (max-width: 980px) {
       .hero, .workspace { grid-template-columns: 1fr; }
       .sidebar, .content, .chat { position: static; height: auto; min-height: 0; overflow: visible; }
@@ -793,7 +809,6 @@
             <button id="clearLayoutButton" type="button">清空布局</button>
           </div>
         </div>
-        <div class="template-note">画布已固定 1080x1440（3:4）。请先载入素材，再点“选择模板”。</div>
         <div class="editor-workbench">
           <div class="result-card">
             <div class="micro">布局</div>
@@ -803,22 +818,22 @@
           </div>
           <div class="result-card">
             <div class="micro" style="margin-bottom: 10px;">画布编辑</div>
-            <div class="canvas-editor-grid">
-              <div class="canvas-editor-controls">
-                <div class="field">
-                  <label for="canvasPromptInput">编辑提示</label>
-                  <textarea id="canvasPromptInput" placeholder="例如：把选区中的人物改成电影感光影" style="min-height: 90px;"></textarea>
-                </div>
-                <div class="micro">当前仅保留矩形框选。</div>
-                <div class="controls">
-                  <button id="canvasPreviewButton" class="primary" type="button">保存编辑到布局</button>
-                  <button id="canvasResetButton" type="button">清空画布</button>
-                </div>
+            <div class="canvas-editor-controls">
+              <div class="field">
+                <label for="canvasPromptInput">编辑提示</label>
+                <textarea id="canvasPromptInput" placeholder="例如：把选区中的人物改成电影感光影" style="min-height: 90px;"></textarea>
               </div>
-              <div id="canvasStage" class="canvas-stage" style="border: 1px dashed rgba(125, 211, 252, 0.28); border-radius: 18px; padding: 10px; background: rgba(125, 211, 252, 0.06);">
-                <div class="micro">画布预览</div>
-                <canvas id="interactiveCanvas" width="480" height="320" style="width: 100%; max-width: 100%; border-radius: 12px; background: linear-gradient(180deg, rgba(255,255,255,0.06), rgba(255,255,255,0.02));"></canvas>
+              <div class="micro">当前仅保留矩形框选。</div>
+              <div class="controls">
+                <button id="canvasPreviewButton" class="primary" type="button">保存编辑到布局</button>
+                <button id="canvasResetButton" type="button">清空画布</button>
               </div>
+            </div>
+          </div>
+          <div class="result-card">
+            <div class="micro" style="margin-bottom: 10px;">画布预览</div>
+            <div id="canvasStage" class="canvas-stage" style="border: 1px dashed rgba(125, 211, 252, 0.28); border-radius: 18px; padding: 10px; background: rgba(125, 211, 252, 0.06);">
+              <canvas id="interactiveCanvas" width="480" height="320" style="width: 100%; max-width: 100%; border-radius: 12px; background: linear-gradient(180deg, rgba(255,255,255,0.06), rgba(255,255,255,0.02));"></canvas>
             </div>
           </div>
         </div>
@@ -1035,6 +1050,7 @@
       selectAllButton: document.getElementById('selectAllButton'),
       compositionDropZone: document.getElementById('compositionDropZone'),
       compositionLayoutLayer: document.getElementById('compositionLayoutLayer'),
+      canvasStage: document.getElementById('canvasStage'),
       canvasPromptInput: document.getElementById('canvasPromptInput'),
       canvasPreviewButton: document.getElementById('canvasPreviewButton'),
       canvasResetButton: document.getElementById('canvasResetButton'),
@@ -1440,32 +1456,74 @@
       });
     }
 
-    const interactiveCanvasState = { image: null, points: [], drawing: false, sourceLayoutId: '' };
+    const interactiveCanvasState = {
+      image: null,
+      points: [],
+      drawing: false,
+      sourceLayoutId: '',
+      suspendedLayoutId: '',
+      viewport: { x: 0, y: 0, width: 1, height: 1 },
+    };
 
     function currentDroppedAssets() {
       return state.layoutItems.filter((item) => item.asset_id).map((item) => currentAssets().find((asset) => asset.asset_id === item.asset_id)).filter(Boolean);
     }
 
-    function normalizeRectFromPoints(points, width, height) {
-      if (!Array.isArray(points) || points.length < 2 || width <= 0 || height <= 0) {
-        return null;
+    function resolveInteractiveViewport(layoutItem) {
+      const canvasWidth = Math.max(els.interactiveCanvas.width, 1);
+      const canvasHeight = Math.max(els.interactiveCanvas.height, 1);
+      if (!layoutItem) {
+        return { x: 0, y: 0, width: canvasWidth, height: canvasHeight };
       }
-      const start = points[0];
-      const end = points[points.length - 1];
-      const left = Math.min(start.x, end.x);
-      const top = Math.min(start.y, end.y);
-      const right = Math.max(start.x, end.x);
-      const bottom = Math.max(start.y, end.y);
+      ensureLayoutItemGrid(layoutItem);
+      const widthRatio = clamp(Number(layoutItem.grid_w) / GRID_LAYOUT.cols, 0.03, 1);
+      const heightRatio = clamp(Number(layoutItem.grid_h) / GRID_LAYOUT.rows, 0.03, 1);
+      const viewWidth = clamp(Math.round(canvasWidth * widthRatio), 24, canvasWidth);
+      const viewHeight = clamp(Math.round(canvasHeight * heightRatio), 24, canvasHeight);
       return {
-        x: left / width,
-        y: top / height,
-        w: (right - left) / width,
-        h: (bottom - top) / height,
+        x: Math.round((canvasWidth - viewWidth) / 2),
+        y: Math.round((canvasHeight - viewHeight) / 2),
+        width: viewWidth,
+        height: viewHeight,
       };
     }
 
-    function pointsFromNormalizedRect(rect, width, height) {
-      if (!rect || typeof rect !== 'object') {
+    function pointInViewport(point, viewport) {
+      if (!point || !viewport) return false;
+      return point.x >= viewport.x
+        && point.x <= viewport.x + viewport.width
+        && point.y >= viewport.y
+        && point.y <= viewport.y + viewport.height;
+    }
+
+    function clampPointToViewport(point, viewport) {
+      if (!viewport) return point;
+      return {
+        x: clamp(point.x, viewport.x, viewport.x + viewport.width),
+        y: clamp(point.y, viewport.y, viewport.y + viewport.height),
+      };
+    }
+
+    function normalizeRectFromPoints(points, viewport) {
+      if (!Array.isArray(points) || points.length < 2 || !viewport || viewport.width <= 0 || viewport.height <= 0) {
+        return null;
+      }
+      const start = clampPointToViewport(points[0], viewport);
+      const end = clampPointToViewport(points[points.length - 1], viewport);
+      const left = clamp(Math.min(start.x, end.x) - viewport.x, 0, viewport.width);
+      const top = clamp(Math.min(start.y, end.y) - viewport.y, 0, viewport.height);
+      const right = clamp(Math.max(start.x, end.x) - viewport.x, 0, viewport.width);
+      const bottom = clamp(Math.max(start.y, end.y) - viewport.y, 0, viewport.height);
+      return {
+        x: left / viewport.width,
+        y: top / viewport.height,
+        w: (right - left) / viewport.width,
+        h: (bottom - top) / viewport.height,
+      };
+    }
+
+    function pointsFromNormalizedRect(rect, viewport) {
+      if (!rect || typeof rect !== 'object' || !viewport || viewport.width <= 0 || viewport.height <= 0) {
         return [];
       }
       const x = Number(rect.x);
@@ -1476,8 +1534,8 @@
         return [];
       }
       return [
-        { x: x * width, y: y * height },
-        { x: (x + w) * width, y: (y + h) * height },
+        { x: viewport.x + x * viewport.width, y: viewport.y + y * viewport.height },
+        { x: viewport.x + (x + w) * viewport.width, y: viewport.y + (y + h) * viewport.height },
       ];
     }
 
@@ -1489,12 +1547,19 @@
       interactiveCanvasState.image = null;
       interactiveCanvasState.points = [];
       interactiveCanvasState.sourceLayoutId = '';
+      interactiveCanvasState.viewport = {
+        x: 0,
+        y: 0,
+        width: Math.max(els.interactiveCanvas.width, 1),
+        height: Math.max(els.interactiveCanvas.height, 1),
+      };
     }
 
     function loadCanvasForLayoutItem(layoutItem) {
       if (!layoutItem || !layoutItem.asset_id) {
         return;
       }
+      interactiveCanvasState.suspendedLayoutId = '';
       const asset = currentAssets().find((candidate) => candidate.asset_id === layoutItem.asset_id);
       if (!asset?.image_path) {
         clearInteractiveCanvasAll();
@@ -1504,7 +1569,8 @@
       const image = new Image();
       image.onload = () => {
         interactiveCanvasState.image = image;
-        interactiveCanvasState.points = pointsFromNormalizedRect(layoutItem.edit_rect, els.interactiveCanvas.width, els.interactiveCanvas.height);
+        interactiveCanvasState.viewport = resolveInteractiveViewport(layoutItem);
+        interactiveCanvasState.points = pointsFromNormalizedRect(layoutItem.edit_rect, interactiveCanvasState.viewport);
         if (typeof layoutItem.edit_prompt === 'string') {
           els.canvasPromptInput.value = layoutItem.edit_prompt;
         }
@@ -1526,6 +1592,9 @@
         // base preview instead of clearing it.
         return;
       }
+      if (interactiveCanvasState.suspendedLayoutId && interactiveCanvasState.suspendedLayoutId === activeLayout.id) {
+        return;
+      }
       loadCanvasForLayoutItem(activeLayout);
     }
 
@@ -1543,6 +1612,8 @@
       const helper = state.layoutItems.length === 0 ? '<div class="composition-layout-helper">先载入图片，或将画布编辑保存为布局素材。</div>' : '';
       const preset = CANVAS_PRESETS[state.canvasPreset] ?? CANVAS_PRESETS.xhs;
       els.compositionDropZone.style.setProperty('--canvas-ratio', preset.ratio);
+      els.canvasStage.style.setProperty('--canvas-ratio', preset.ratio);
+      els.interactiveCanvas.style.setProperty('--canvas-ratio', preset.ratio);
       const items = state.layoutItems.map((item) => ensureLayoutItemGrid(item));
       const sortedItems = items.slice().sort((a, b) => Number(a.z_index ?? 0) - Number(b.z_index ?? 0));
       if (!state.activeLayoutId && sortedItems.length > 0) {
@@ -1626,13 +1697,30 @@
 
     function resizeInteractiveCanvasToPreset() {
       const preset = CANVAS_PRESETS[state.canvasPreset] ?? CANVAS_PRESETS.xhs;
-      const maxWidth = 640;
-      const scale = Math.min(1, maxWidth / preset.width);
-      const width = Math.max(280, Math.round(preset.width * scale));
-      const height = Math.max(220, Math.round(preset.height * scale));
+      const zoneRect = els.compositionDropZone.getBoundingClientRect();
+      let width = Math.round(zoneRect.width);
+      let height = Math.round(zoneRect.height);
+      if (width <= 0 || height <= 0) {
+        const maxWidth = 640;
+        const scale = Math.min(1, maxWidth / preset.width);
+        width = Math.max(280, Math.round(preset.width * scale));
+        height = Math.max(220, Math.round(preset.height * scale));
+      }
       els.interactiveCanvas.width = width;
       els.interactiveCanvas.height = height;
-      drawInteractivePoints();
+      els.interactiveCanvas.style.width = `${width}px`;
+      els.interactiveCanvas.style.height = `${height}px`;
+      if (state.activeLayoutId) {
+        loadCanvasForActiveLayout();
+      } else {
+        interactiveCanvasState.viewport = {
+          x: 0,
+          y: 0,
+          width,
+          height,
+        };
+        drawInteractivePoints();
+      }
     }
 
     function applyActiveTemplateToLayout(templateId) {
@@ -1916,16 +2004,16 @@
     }
 
     function resetInteractiveCanvas() {
-      // User intent: clear the rectangle selection and prompt, keep the source
-      // image so they can continue editing or switch to another source block.
-      interactiveCanvasState.points = [];
       const activeLayout = state.layoutItems.find((item) => item.id === state.activeLayoutId);
+      interactiveCanvasState.suspendedLayoutId = activeLayout?.id || '';
       if (activeLayout) {
         delete activeLayout.edit_rect;
         delete activeLayout.edit_prompt;
       }
       els.canvasPromptInput.value = '';
-      drawInteractivePoints();
+      clearInteractiveCanvasAll();
+      renderCompositionDropZone();
+      renderSelectedPreview();
     }
 
     function saveCanvasEditToLayout() {
@@ -1943,7 +2031,7 @@
         els.resultPreview.textContent = '请先在布局中选择一个原始素材块，再保存编辑。';
         return;
       }
-      const normalizedRect = normalizeRectFromPoints(interactiveCanvasState.points, els.interactiveCanvas.width, els.interactiveCanvas.height);
+      const normalizedRect = normalizeRectFromPoints(interactiveCanvasState.points, interactiveCanvasState.viewport);
       if (!normalizedRect) {
         els.resultPreview.textContent = '矩形选区无效，请重试。';
         return;
@@ -1962,14 +2050,57 @@
       els.resultPreview.textContent = '该素材的矩形选区与编辑提示已保存。你可以清空画布后切换其他素材继续编辑。';
     }
 
+    function drawImageCover(context, image, viewport) {
+      if (!context || !image || !viewport || viewport.width <= 0 || viewport.height <= 0) {
+        return;
+      }
+      const sourceWidth = Math.max(Number(image.naturalWidth || image.width || 0), 1);
+      const sourceHeight = Math.max(Number(image.naturalHeight || image.height || 0), 1);
+      const sourceAspect = sourceWidth / sourceHeight;
+      const targetAspect = viewport.width / viewport.height;
+
+      let cropWidth = sourceWidth;
+      let cropHeight = sourceHeight;
+      if (sourceAspect > targetAspect) {
+        cropWidth = Math.round(sourceHeight * targetAspect);
+      } else if (sourceAspect < targetAspect) {
+        cropHeight = Math.round(sourceWidth / targetAspect);
+      }
+      const sx = Math.max(0, Math.round((sourceWidth - cropWidth) / 2));
+      const sy = Math.max(0, Math.round((sourceHeight - cropHeight) / 2));
+
+      context.drawImage(
+        image,
+        sx,
+        sy,
+        cropWidth,
+        cropHeight,
+        viewport.x,
+        viewport.y,
+        viewport.width,
+        viewport.height,
+      );
+    }
+
     function drawInteractivePoints() {
       const context = els.interactiveCanvas.getContext('2d');
+      const canvasWidth = els.interactiveCanvas.width;
+      const canvasHeight = els.interactiveCanvas.height;
+      const viewport = interactiveCanvasState.viewport && interactiveCanvasState.viewport.width > 0 && interactiveCanvasState.viewport.height > 0
+        ? interactiveCanvasState.viewport
+        : { x: 0, y: 0, width: canvasWidth, height: canvasHeight };
       context.clearRect(0, 0, els.interactiveCanvas.width, els.interactiveCanvas.height);
+      context.fillStyle = 'rgba(255,255,255,0.06)';
+      context.fillRect(0, 0, canvasWidth, canvasHeight);
       if (interactiveCanvasState.image) {
-        context.drawImage(interactiveCanvasState.image, 0, 0, els.interactiveCanvas.width, els.interactiveCanvas.height);
-      } else {
-        context.fillStyle = 'rgba(255,255,255,0.06)';
-        context.fillRect(0, 0, els.interactiveCanvas.width, els.interactiveCanvas.height);
+        drawImageCover(context, interactiveCanvasState.image, viewport);
+      }
+      if (viewport.width < canvasWidth || viewport.height < canvasHeight) {
+        context.strokeStyle = 'rgba(125, 211, 252, 0.85)';
+        context.lineWidth = 2;
+        context.setLineDash([8, 6]);
+        context.strokeRect(viewport.x, viewport.y, viewport.width, viewport.height);
+        context.setLineDash([]);
       }
       if (interactiveCanvasState.points.length < 2) return;
       context.strokeStyle = 'rgba(255,255,255,0.95)';
@@ -1985,14 +2116,27 @@
       const canvas = els.interactiveCanvas;
       canvas.addEventListener('pointerdown', (event) => {
         const rect = canvas.getBoundingClientRect();
+        const rawPoint = {
+          x: ((event.clientX - rect.left) / rect.width) * canvas.width,
+          y: ((event.clientY - rect.top) / rect.height) * canvas.height,
+        };
+        const viewport = interactiveCanvasState.viewport;
+        if (!pointInViewport(rawPoint, viewport)) {
+          return;
+        }
+        const startPoint = clampPointToViewport(rawPoint, viewport);
         interactiveCanvasState.drawing = true;
         canvas.setPointerCapture(event.pointerId);
-        interactiveCanvasState.points = [{ x: ((event.clientX - rect.left) / rect.width) * canvas.width, y: ((event.clientY - rect.top) / rect.height) * canvas.height }];
+        interactiveCanvasState.points = [startPoint];
       });
       canvas.addEventListener('pointermove', (event) => {
         if (!interactiveCanvasState.drawing) return;
         const rect = canvas.getBoundingClientRect();
-        const point = { x: ((event.clientX - rect.left) / rect.width) * canvas.width, y: ((event.clientY - rect.top) / rect.height) * canvas.height };
+        const rawPoint = {
+          x: ((event.clientX - rect.left) / rect.width) * canvas.width,
+          y: ((event.clientY - rect.top) / rect.height) * canvas.height,
+        };
+        const point = clampPointToViewport(rawPoint, interactiveCanvasState.viewport);
         interactiveCanvasState.points = [interactiveCanvasState.points[0], point];
         drawInteractivePoints();
       });
@@ -2366,6 +2510,15 @@
     resizeInteractiveCanvasToPreset();
     resetInteractiveCanvas();
     bindInteractiveCanvas();
+    if (typeof ResizeObserver === 'function') {
+      const canvasSyncObserver = new ResizeObserver(() => {
+        resizeInteractiveCanvasToPreset();
+      });
+      canvasSyncObserver.observe(els.compositionDropZone);
+    }
+    window.addEventListener('resize', () => {
+      resizeInteractiveCanvasToPreset();
+    });
     refreshBootstrap().catch((error) => {
       els.resultPreview.textContent = String(error);
       els.assetGrid.innerHTML = '<div class="empty-state">页面初始化失败，请检查后端是否启动。</div>';

@@ -473,6 +473,8 @@ class QwenPlanner:
 
     def _build_planner_payload(self, request: AgentRequest, library_summary: dict[str, object]) -> dict[str, object]:
         tool_choices = "|".join(spec.name.value for spec in TOOL_SPECS)
+        layout_assets = self._extract_layout_assets(request.layout_context)
+        edit_directives = self._extract_edit_directives(request.layout_context)
         tool_catalog = [
             {
                 "tool": spec.name.value,
@@ -504,6 +506,8 @@ class QwenPlanner:
                         "Return only valid JSON that matches the ExecutionPlan schema. "
                         "Use only tools from tool_catalog. "
                         "If guided_tool_names is non-empty, prefer those tools when they fit the request and explain any omission in tool_calls.reason. "
+                        "Treat request.layout_assets and request.edit_directives as authoritative user-provided edit constraints. "
+                        "If request.edit_directives is non-empty, you must preserve those edit intents in the planned reasoning and relevant tool arguments when applicable. "
                         "If library_summary.reusable_strategies is provided, treat it as prior successful candidates "
                         "and adapt only when it fits the current request; do not copy blindly. "
                         "Do not infer hidden rules or default workflow stages beyond tool boundaries. "
@@ -520,6 +524,9 @@ class QwenPlanner:
                                 "guided_tool_names": [tool.value for tool in request.guided_tool_names],
                                 "library_root": str(request.library_root),
                                 "layout_context": request.layout_context,
+                                "layout_assets": layout_assets,
+                                "edit_directives": edit_directives,
+                                "has_canvas_edits": bool(edit_directives),
                                 "operation_log": request.operation_log,
                             },
                             "library_summary": library_summary,
@@ -546,6 +553,51 @@ class QwenPlanner:
                 },
             ],
         }
+
+    def _extract_layout_assets(self, layout_context: list[dict[str, object]]) -> list[dict[str, object]]:
+        assets: list[dict[str, object]] = []
+        for item in layout_context:
+            if not isinstance(item, dict):
+                continue
+            asset_id = item.get("asset_id")
+            if not asset_id:
+                continue
+            assets.append(
+                {
+                    "asset_id": str(asset_id),
+                    "id": str(item.get("id", "")),
+                    "label": str(item.get("label", "")),
+                    "order": int(item.get("order", 0)) if isinstance(item.get("order"), int) else item.get("order"),
+                    "grid": {
+                        "x": item.get("grid_x"),
+                        "y": item.get("grid_y"),
+                        "w": item.get("grid_w"),
+                        "h": item.get("grid_h"),
+                    },
+                    "z_index": item.get("z_index"),
+                }
+            )
+        return assets
+
+    def _extract_edit_directives(self, layout_context: list[dict[str, object]]) -> list[dict[str, object]]:
+        directives: list[dict[str, object]] = []
+        for item in layout_context:
+            if not isinstance(item, dict):
+                continue
+            edit_rect = item.get("edit_rect")
+            edit_prompt = item.get("edit_prompt")
+            if not edit_rect and not edit_prompt:
+                continue
+            directives.append(
+                {
+                    "asset_id": str(item.get("asset_id", "")),
+                    "layout_id": str(item.get("id", "")),
+                    "label": str(item.get("label", "")),
+                    "edit_prompt": str(edit_prompt or "").strip(),
+                    "edit_rect": edit_rect if isinstance(edit_rect, dict) else None,
+                }
+            )
+        return directives
 
     def _parse_plan_response(self, response_text: str) -> dict[str, object]:
         decoded = json.loads(response_text)
@@ -637,6 +689,10 @@ class QwenPlanner:
                         "text": request.text,
                         "selected_asset_ids": request.selected_asset_ids,
                         "guided_tool_names": [tool.value for tool in request.guided_tool_names],
+                        "layout_context": request.layout_context,
+                        "layout_assets": self._extract_layout_assets(request.layout_context),
+                        "edit_directives": self._extract_edit_directives(request.layout_context),
+                        "operation_log": request.operation_log,
                         "library_summary": library_summary,
                         "tool_catalog": tool_catalog,
                     },

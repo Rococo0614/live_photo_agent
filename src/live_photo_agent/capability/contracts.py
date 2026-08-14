@@ -453,6 +453,8 @@ class CapabilityLayer:
         if not request.selected_asset_ids and not request.layout_context:
             return calls
 
+        foreground_asset_id = self._foreground_asset_from_layout_edits(request.layout_context)
+
         layout_order = [
             str(item["asset_id"])
             for item in sorted(
@@ -463,17 +465,27 @@ class CapabilityLayer:
         ]
         constrained: list[ToolCall] = []
         for call in calls:
-            if call.tool != ToolName.CONCAT_CLIPS:
+            if call.tool not in {ToolName.CONCAT_CLIPS, ToolName.EXTRACT_SUBJECT_MATTE, ToolName.OVERLAY_SUBJECT_CLIP}:
                 constrained.append(call)
                 continue
 
             updated_args = dict(call.arguments)
-            if request.selected_asset_ids and not updated_args.get("asset_ids"):
-                updated_args["asset_ids"] = list(request.selected_asset_ids)
-            if layout_order and not updated_args.get("order"):
-                updated_args["order"] = layout_order
-            if request.layout_context and not updated_args.get("canvas"):
-                updated_args["canvas"] = "1080x1920"
+            if call.tool == ToolName.CONCAT_CLIPS:
+                if request.selected_asset_ids and not updated_args.get("asset_ids"):
+                    updated_args["asset_ids"] = list(request.selected_asset_ids)
+                if layout_order and not updated_args.get("order"):
+                    updated_args["order"] = layout_order
+                if request.layout_context and not updated_args.get("canvas"):
+                    updated_args["canvas"] = "1080x1920"
+
+            if call.tool == ToolName.EXTRACT_SUBJECT_MATTE and foreground_asset_id:
+                if not updated_args.get("asset_ids"):
+                    updated_args["asset_ids"] = [foreground_asset_id]
+
+            if call.tool == ToolName.OVERLAY_SUBJECT_CLIP and foreground_asset_id:
+                if not updated_args.get("foreground_asset_id"):
+                    updated_args["foreground_asset_id"] = foreground_asset_id
+
             constrained.append(ToolCall(tool=call.tool, reason=call.reason, arguments=updated_args))
         return constrained
 
@@ -503,6 +515,31 @@ class CapabilityLayer:
             normalized = [call for call in normalized if call.tool != ToolName.FILTER_SELECTED]
 
         sequence = [call.tool for call in normalized]
+        segmentation_markers = ["分割", "抠图", "主体", "matte", "segment", "subject", "overlay", "叠加"]
+        has_segmentation_intent = any(marker in request.text.lower() for marker in segmentation_markers)
+        foreground_asset_id = self._foreground_asset_from_layout_edits(request.layout_context)
+
+        if has_segmentation_intent and foreground_asset_id and ToolName.OVERLAY_SUBJECT_CLIP not in sequence:
+            insert_index = len(normalized)
+            if ToolName.EXPORT_MP4 in sequence:
+                insert_index = sequence.index(ToolName.EXPORT_MP4)
+            normalized.insert(
+                insert_index,
+                ToolCall(
+                    tool=ToolName.EXTRACT_SUBJECT_MATTE,
+                    reason="Layout edits indicate subject cutout intent; extract matte for the edited foreground asset.",
+                    arguments={"asset_ids": [foreground_asset_id], "mode": "mog2"},
+                ),
+            )
+            normalized.insert(
+                insert_index + 1,
+                ToolCall(
+                    tool=ToolName.OVERLAY_SUBJECT_CLIP,
+                    reason="Composite extracted subject matte onto the composed timeline for segmented overlay output.",
+                    arguments={"foreground_asset_id": foreground_asset_id, "fit_mode": "loop"},
+                ),
+            )
+            sequence = [call.tool for call in normalized]
 
         # Guard 3: select_cover_frame depends on key frame extraction.
         if ToolName.SELECT_COVER_FRAME in sequence and ToolName.EXTRACT_KEY_FRAMES not in sequence:
@@ -607,3 +644,15 @@ class CapabilityLayer:
         }
 
         return ToolCall(tool=call.tool, reason=call.reason, arguments=args)
+
+    def _foreground_asset_from_layout_edits(self, layout_context: list[dict[str, object]]) -> str:
+        for item in layout_context:
+            if not isinstance(item, dict):
+                continue
+            has_edit = bool(item.get("edit_rect")) or bool(str(item.get("edit_prompt", "")).strip())
+            if not has_edit:
+                continue
+            asset_id = str(item.get("asset_id", "")).strip()
+            if asset_id:
+                return asset_id
+        return ""

@@ -181,14 +181,14 @@ class L0AtomicTools:
 
         for asset in focus_assets:
             motion_path = self._asset_motion_path(asset)
-            if motion_path is None:
-                failed_asset_ids.append(asset.asset_id)
-                continue
             output_dir = workspace / "subject_mattes" / asset.asset_id
             if output_dir.exists():
                 shutil.rmtree(output_dir, ignore_errors=True)
             try:
-                result = self.media_ops.extract_subject_matte_frames(motion_path, output_dir, mode=mode)
+                if motion_path is not None:
+                    result = self.media_ops.extract_subject_matte_frames(motion_path, output_dir, mode=mode)
+                else:
+                    result = self._extract_subject_matte_from_still(asset, output_dir)
             except MediaOpsError as exc:
                 failed_asset_ids.append(asset.asset_id)
                 return ToolResult(
@@ -210,6 +210,39 @@ class L0AtomicTools:
                 "failed_asset_ids": failed_asset_ids,
             },
         )
+
+    def _extract_subject_matte_from_still(self, asset: LivePhotoAsset, output_dir: Path) -> dict[str, object]:
+        output_dir.mkdir(parents=True, exist_ok=True)
+        mask_path = output_dir / "mask.png"
+        segmentation = self.media_ops.segment_subject(Path(asset.image_path), mask_path, mode="person_first")
+
+        try:
+            import cv2
+        except ImportError as exc:
+            raise MediaOpsError("opencv_missing") from exc
+
+        image = cv2.imread(str(asset.image_path), cv2.IMREAD_COLOR)
+        alpha = cv2.imread(str(mask_path), cv2.IMREAD_GRAYSCALE)
+        if image is None or alpha is None:
+            raise MediaOpsError(f"image_decode_failed: {asset.image_path}")
+
+        rgba = cv2.cvtColor(image, cv2.COLOR_BGR2BGRA)
+        rgba[:, :, 3] = alpha
+
+        frame_count = 45
+        for index in range(frame_count):
+            frame_path = output_dir / f"frame_{index:05d}.png"
+            cv2.imwrite(str(frame_path), rgba)
+
+        return {
+            "frames_dir": str(output_dir),
+            "frame_count": frame_count,
+            "fps": 15.0,
+            "width": int(image.shape[1]),
+            "height": int(image.shape[0]),
+            "average_foreground_ratio": float(segmentation.get("foreground_ratio", 0.0)),
+            "source_type": "still_image",
+        }
 
     def overlay_subject_clip(self, call: ToolCall, context: dict[str, object]) -> ToolResult:
         foreground_asset_id = str(call.arguments.get("foreground_asset_id", "")).strip()
