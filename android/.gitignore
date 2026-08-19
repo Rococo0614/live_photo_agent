@@ -1,0 +1,16 @@
+# 构建产物：app/build 单独就有 129M，务必排除
+build/
+.gradle/
+.kotlin/
+.cxx/
+
+# 机器专属路径（sdk.dir），换机器必然不同，不能入库
+local.properties
+
+# IDE
+.idea/
+*.iml
+
+# 注意：app/libs/*.aar 与 app/src/main/jniLibs/**/*.so 是**故意入库**的，
+# 不要在此处忽略。这两个 SDK 在任何公共 Maven 仓库都取不到，不入库则
+# clone 后无法构建。来源与用途见 docs/vendored_binaries.md。

@@ -72,7 +72,10 @@ def is_live_photo_container(input_path: Path) -> bool:
     except Exception:  # noqa: BLE001
         return False
 
-    if mp4_start <= jpeg_end:
+    # 注意: MP4 紧接 JPEG EOI 之后(间隙为 0, 即 mp4_start == jpeg_end)是标准布局,
+    # vivo 相机产出的 Live Photo 均为此形态。此处必须用 '<' 而非 '<=',
+    # 否则所有正常 Live Photo 都会被误判为非容器。
+    if mp4_start < jpeg_end:
         return False
     if len(raw) - mp4_start < 16:
         return False

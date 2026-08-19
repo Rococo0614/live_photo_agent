@@ -24,22 +24,32 @@
 
 ### 1) 创建环境
 
+先确认 `ffmpeg` 可用（L0 媒体工具依赖 `ffmpeg`/`ffprobe`，且必须带 `libx264`）：
+
 ```bash
-# Option A1: conda CPU profile (recommended default)
+ffmpeg -encoders | grep libx264   # 无输出则需先安装
+# Ubuntu/Debian: sudo apt install ffmpeg
+# 或装进 conda 环境: conda install -c conda-forge ffmpeg
+```
+
+```bash
+# Option A1: conda GPU profile (NVIDIA, CUDA 12.8 wheel)
+conda env create -f environment.gpu.yml
+conda activate live-photo-agent
+
+# Option A2: conda CPU profile (无显卡机器 / 仅调用云端 endpoint)
 conda env create -f environment.cpu.yml
 conda activate live-photo-agent-cpu
-
-# Option A2: conda GPU profile (NVIDIA + CUDA 12.1 wheel)
-conda env create -f environment.gpu.yml
-conda activate live-photo-agent-gpu
 
 # Option B: venv
 python -m venv .venv
 source .venv/bin/activate
-pip install -e .[dev,iqa]
-# local_hf planner backend requires:
-pip install --extra-index-url https://download.pytorch.org/whl/cpu 'torch==2.3.1+cpu' 'torchvision==0.18.1+cpu'
-pip install 'transformers>=4.46,<5.0' 'accelerate>=0.34,<1.0'
+pip install -e .[dev]
+# local_hf planner backend requires (GPU, CUDA 12.8):
+pip install --extra-index-url https://download.pytorch.org/whl/cu128 'torch==2.9.1+cu128' 'torchvision==0.24.1+cu128'
+# ...or CPU-only:
+pip install --extra-index-url https://download.pytorch.org/whl/cpu 'torch==2.9.1+cpu' 'torchvision==0.24.1+cpu'
+pip install 'transformers==4.57.6' 'accelerate>=1.0,<2.0'
 # live photo pack mode requires:
 pip install 'pyexiv2>=2.15,<3.0'
 
@@ -48,10 +58,23 @@ uvicorn live_photo_agent.api:app --reload
 
 ### 2) 环境说明
 
-- `environment.cpu.yml`: 默认推荐，CPU 推理与 endpoint 调用均可。
-- `environment.gpu.yml`: 本地 GPU 推理，使用 CUDA 12.1 对应 wheel。
-- 两个 profile 都固定了 `torch`/`torchvision` 兼容组合，避免 IQA 依赖链冲突。
+- `environment.gpu.yml`（env 名 `live-photo-agent`）: 本地 GPU 推理，CUDA 12.8 wheel。
+- `environment.cpu.yml`（env 名 `live-photo-agent-cpu`）: 无显卡机器，CPU 推理与 endpoint 调用均可。
+- 两个 profile 都固定了 `torch`/`torchvision` 兼容组合。
+- **CUDA 版本下限**：`torch` 必须是 **cu128 及以上**。Blackwell 显卡（RTX 50xx）算力为 `sm_120`，
+  任何 cu121 wheel 都不含该架构，跑 CUDA kernel 会直接报
+  `no kernel image is available for execution on the device`。
+- **transformers 版本下限**：加载 `Qwen/Qwen3-VL-8B`（见 `config.py` 的 `qwen_model`）
+  需要 **>=4.57**，`qwen3_vl` 架构在 4.57.0 才合入，更早版本会 `KeyError: 'qwen3_vl'`。
+- `ffmpeg` 不从 conda `defaults` 安装：该 channel 的构建剥离了 GPL 组件、不含 `libx264`，
+  会导致 L0 的 trim/concat/export 失败。请用系统 ffmpeg 或 conda-forge 版本。
+- IQA 评测依赖（`pip install -e .[iqa]`）与新版 `torch` 可能冲突，需要时再单独安装。
 - For GPU profile, ensure `nvidia-smi` works before running local_hf backend.
+
+当前分割相关说明：`media_ops.segment_subject` 使用 `cv2.grabCut`，
+`extract_subject_matte_frames` 使用 MOG2/KNN 背景减除，**均为 CPU 实现**。
+pip 版 `opencv-python-headless` 不带 CUDA，且 OpenCV 本身没有 CUDA 版 grabCut，
+因此这两个算子无法通过装 GPU 版 OpenCV 加速。
 
 ### 3) 运行测试
 
@@ -187,7 +210,7 @@ Notes:
 
 - Use `live_photo_cli.py` as the single conversion entrypoint for unpack/pack/layout tasks.
 - Internal processing in this project still uses split `jpg + mp4` for tool compatibility.
-- `pack` mode requires `pyexiv2` (already included in conda environment files).
+- `pack` mode requires `pyexiv2` (included in both conda environment files).
 - Recommended data layout is exactly:
   - `data/live_photo` (source single-file live photos)
   - `data/live_photo_decoded` (decoded jpg/mp4 pairs)
