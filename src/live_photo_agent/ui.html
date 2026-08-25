@@ -1,0 +1,2559 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Live Photo Agent Console</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #0b1020;
+      --panel: rgba(13, 19, 39, 0.88);
+      --line: rgba(172, 190, 255, 0.18);
+      --text: #edf2ff;
+      --muted: #a9b4d0;
+      --accent: #7dd3fc;
+      --accent-strong: #38bdf8;
+      --shadow: 0 24px 80px rgba(2, 6, 23, 0.45);
+    }
+
+    * { box-sizing: border-box; }
+    html, body { min-height: 100%; }
+    body {
+      margin: 0;
+      font-family: "Trebuchet MS", "Gill Sans", "Lucida Grande", sans-serif;
+      color: var(--text);
+      background:
+        radial-gradient(circle at top left, rgba(56, 189, 248, 0.24), transparent 30%),
+        radial-gradient(circle at 85% 10%, rgba(129, 140, 248, 0.18), transparent 24%),
+        linear-gradient(180deg, #08101d 0%, #09111f 42%, #050914 100%);
+    }
+
+    .shell { max-width: 1680px; margin: 0 auto; padding: 24px 24px 40px; }
+    .hero {
+      display: grid;
+      grid-template-columns: minmax(0, 1.2fr) minmax(420px, 1fr);
+      gap: 16px;
+      align-items: stretch;
+      margin-bottom: 16px;
+    }
+
+    .panel {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 22px;
+      box-shadow: var(--shadow);
+      backdrop-filter: blur(20px);
+    }
+
+    .hero-copy { padding: 22px 26px; position: relative; overflow: hidden; }
+    .hero-copy::after {
+      content: "";
+      position: absolute;
+      inset: auto -80px -80px auto;
+      width: 240px;
+      height: 240px;
+      border-radius: 50%;
+      background: radial-gradient(circle, rgba(125, 211, 252, 0.28), transparent 65%);
+      pointer-events: none;
+    }
+
+    .eyebrow {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 12px;
+      border-radius: 999px;
+      background: rgba(125, 211, 252, 0.1);
+      color: var(--accent);
+      font-size: 12px;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+
+    h1 {
+      margin: 12px 0 8px;
+      font-family: Georgia, "Times New Roman", serif;
+      font-size: clamp(28px, 3.2vw, 46px);
+      line-height: 1;
+      letter-spacing: -0.04em;
+    }
+
+    .subtitle { margin: 0; max-width: 62ch; color: var(--muted); font-size: 13px; line-height: 1.55; }
+    .hero-meta { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; }
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 10px;
+      border-radius: 14px;
+      background: rgba(255, 255, 255, 0.04);
+      border: 1px solid var(--line);
+      color: var(--text);
+      font-size: 13px;
+    }
+
+    .hero-stats {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 12px;
+      padding: 12px;
+      background: linear-gradient(180deg, rgba(17, 25, 54, 0.95), rgba(8, 12, 27, 0.95));
+    }
+
+    .stat {
+      padding: 14px;
+      border-radius: 18px;
+      background: linear-gradient(180deg, rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0.02));
+      border: 1px solid rgba(255, 255, 255, 0.08);
+    }
+
+    .stat-value { display: block; font-size: 26px; font-weight: 700; letter-spacing: -0.05em; }
+    .stat-label { display: block; margin-top: 4px; color: var(--muted); font-size: 13px; }
+
+    .workspace {
+      display: grid;
+      grid-template-columns: 248px minmax(0, 1fr);
+      gap: 16px;
+      align-items: start;
+    }
+
+    .sidebar, .content {
+      min-height: 0;
+      height: calc(100vh - 350px);
+      min-height: 520px;
+      padding: 18px;
+      overflow-y: auto;
+      scrollbar-gutter: stable;
+    }
+    .chat {
+      min-width: 0;
+      padding: 18px;
+    }
+    .sidebar {
+      position: sticky;
+      top: 18px;
+      align-self: stretch;
+      height: auto;
+      min-height: calc(100vh - 36px);
+    }
+    .section-title { margin: 0 0 14px; font-size: 14px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
+    .field { display: grid; gap: 8px; margin-bottom: 14px; }
+    .field label { font-size: 12px; color: var(--muted); letter-spacing: 0.04em; }
+    input, select, textarea, button {
+      font: inherit;
+      border-radius: 14px;
+      border: 1px solid var(--line);
+      color: var(--text);
+      background: rgba(6, 10, 22, 0.72);
+    }
+    input, select, textarea { width: 100%; padding: 12px 14px; }
+    textarea { min-height: 110px; resize: vertical; line-height: 1.6; }
+    button {
+      cursor: pointer;
+      padding: 12px 16px;
+      transition: transform 0.15s ease, border-color 0.15s ease, background 0.15s ease;
+    }
+    button:hover { transform: translateY(-1px); border-color: rgba(125, 211, 252, 0.45); }
+    button.primary {
+      border: 0;
+      background: linear-gradient(135deg, var(--accent-strong), #6366f1);
+      color: #fff;
+      font-weight: 700;
+      box-shadow: 0 16px 28px rgba(56, 189, 248, 0.24);
+    }
+
+    .album-list, .asset-grid, .results-layout { display: grid; gap: 12px; }
+    .chip-list {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin: 10px 0 14px;
+    }
+    .chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 10px;
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.04);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      color: var(--text);
+      font-size: 12px;
+    }
+    .chip.selected {
+      border-color: rgba(125, 211, 252, 0.5);
+      background: rgba(56, 189, 248, 0.12);
+      color: #d7f8ff;
+    }
+    .album-card, .asset-card, .result-card {
+      padding: 14px;
+      border-radius: 18px;
+      background: rgba(255, 255, 255, 0.035);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+    }
+    .album-card { display: flex; justify-content: space-between; gap: 10px; align-items: center; }
+    .album-card.active { border-color: rgba(125, 211, 252, 0.55); background: rgba(56, 189, 248, 0.12); }
+    .album-name { font-weight: 700; }
+    .album-meta, .asset-meta, .micro { color: var(--muted); font-size: 12px; }
+
+    .tool-grid {
+      display: grid;
+      gap: 10px;
+      max-height: 360px;
+      overflow: auto;
+      padding-right: 4px;
+    }
+    .config-panel {
+      display: grid;
+      gap: 8px;
+      margin-top: 20px;
+      padding: 12px;
+      border-radius: 14px;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      background: rgba(255, 255, 255, 0.02);
+    }
+    .config-inline {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+    }
+    .tool-card {
+      text-align: left;
+      width: 100%;
+      padding: 12px;
+      border-radius: 16px;
+      background: rgba(255, 255, 255, 0.03);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      transition: border-color 0.15s ease, background 0.15s ease, transform 0.15s ease;
+    }
+    .tool-card:hover { transform: translateY(-1px); border-color: rgba(125, 211, 252, 0.45); }
+    .tool-card.selected { border-color: rgba(125, 211, 252, 0.65); background: rgba(56, 189, 248, 0.1); }
+    .tool-card-header { display: flex; justify-content: space-between; gap: 10px; align-items: flex-start; }
+    .tool-name { font-weight: 700; }
+    .tool-purpose { margin-top: 8px; color: var(--text); font-size: 12px; line-height: 1.55; }
+    .tool-schema { margin-top: 8px; color: var(--muted); font-size: 11px; line-height: 1.5; }
+    .tool-details { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 8px; }
+    .tool-pill {
+      display: inline-flex;
+      align-items: center;
+      padding: 4px 8px;
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.04);
+      color: var(--muted);
+      font-size: 11px;
+    }
+
+    .asset-grid {
+      grid-template-columns: repeat(6, minmax(76px, 1fr));
+      grid-auto-rows: max-content;
+      max-height: calc(100% - 76px);
+      overflow-y: auto;
+      padding-right: 6px;
+      align-items: start;
+    }
+    .gallery-modal {
+      position: fixed;
+      inset: 0;
+      z-index: 15;
+      display: none;
+      padding: 28px;
+      background: rgba(2, 6, 23, 0.78);
+      backdrop-filter: blur(12px);
+    }
+    .gallery-modal.open { display: block; }
+    .gallery-dialog {
+      display: grid;
+      grid-template-rows: auto auto minmax(0, 1fr) auto;
+      width: min(1180px, 100%);
+      height: min(780px, 100%);
+      margin: 0 auto;
+      padding: 22px;
+      overflow: hidden;
+      border: 1px solid var(--line);
+      border-radius: 24px;
+      background: #101a31;
+      box-shadow: 0 30px 100px rgba(2, 6, 23, 0.6);
+    }
+    .gallery-dialog-header { display: flex; align-items: start; justify-content: space-between; gap: 16px; }
+    .gallery-dialog-title { margin: 0; font-size: 22px; }
+    .gallery-dialog .asset-grid { max-height: none; min-height: 0; overflow-y: auto; padding: 4px 8px 4px 0; }
+    .gallery-dialog-footer { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding-top: 14px; }
+    .gallery-dialog-footer .controls { justify-content: flex-end; }
+    .load-images-button { display: inline-flex; align-items: center; gap: 8px; }
+    .asset-card {
+      position: relative;
+      display: block;
+      width: 100%;
+      min-width: 0;
+      aspect-ratio: 4 / 3;
+      padding: 0;
+      overflow: hidden;
+      cursor: pointer;
+    }
+    .asset-thumb {
+      position: relative;
+      height: 100%;
+      border-radius: 14px;
+      overflow: hidden;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      background: linear-gradient(180deg, rgba(125, 211, 252, 0.16), rgba(255, 255, 255, 0.02));
+    }
+    .asset-card:has(input:checked) .asset-thumb { border-color: var(--accent); box-shadow: 0 0 0 2px rgba(125, 211, 252, 0.28); }
+    .asset-select { position: absolute; top: 8px; right: 8px; z-index: 1; width: 18px; height: 18px; margin: 0; accent-color: var(--accent); }
+    .live-photo-badge {
+      position: absolute;
+      left: 8px;
+      top: 8px;
+      z-index: 1;
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      padding: 5px 7px;
+      border: 1px solid rgba(255, 255, 255, 0.46);
+      border-radius: 8px;
+      background: rgba(2, 6, 23, 0.72);
+      color: #fff;
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 0.02em;
+    }
+    .live-photo-badge::before {
+      content: '';
+      width: 8px;
+      height: 8px;
+      border: 1px solid currentColor;
+      border-radius: 50%;
+      box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.24);
+    }
+    .asset-thumb img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      display: block;
+    }
+    .asset-thumb-placeholder {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 100%;
+      height: 100%;
+      color: var(--muted);
+      font-size: 12px;
+      text-align: center;
+      padding: 12px;
+    }
+    .composition-drop-zone { position: relative; min-height: 240px; overflow: hidden; border: 1px dashed rgba(125, 211, 252, 0.3); border-radius: 16px; background: rgba(125, 211, 252, 0.06); }
+    .composition-drop-zone {
+      aspect-ratio: var(--canvas-ratio, 3 / 4);
+      max-height: 520px;
+    }
+    .composition-layout-layer { position: absolute; inset: 0; }
+    .composition-layout-item { position: absolute; width: 24%; height: 42%; min-width: 72px; min-height: 72px; overflow: hidden; border: 1px solid rgba(125, 211, 252, 0.35); border-radius: 14px; cursor: grab; touch-action: none; user-select: none; }
+    .composition-layout-item.dragging { cursor: grabbing; z-index: 2; }
+    .composition-layout-item.resizing { cursor: nwse-resize; z-index: 3; }
+    .composition-layout-item.active { border-color: var(--accent); box-shadow: 0 0 0 2px rgba(125, 211, 252, 0.28); }
+    .composition-layout-item img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      display: block;
+      pointer-events: none;
+      -webkit-user-drag: none;
+      user-drag: none;
+    }
+    .composition-layout-label { position: absolute; left: 6px; right: 6px; bottom: 6px; padding: 4px 6px; border-radius: 8px; background: rgba(2, 6, 23, 0.72); color: var(--text); font-size: 10px; text-align: center; pointer-events: none; }
+    .composition-edit-badge {
+      position: absolute;
+      left: 8px;
+      top: 8px;
+      z-index: 2;
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      padding: 5px 7px;
+      border: 1px solid rgba(74, 222, 128, 0.5);
+      border-radius: 8px;
+      background: rgba(16, 42, 27, 0.78);
+      color: #bbf7d0;
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 0.02em;
+      pointer-events: none;
+    }
+    .composition-edit-badge::before {
+      content: '';
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: currentColor;
+      box-shadow: 0 0 0 2px rgba(187, 247, 208, 0.22);
+    }
+    .resize-handle {
+      position: absolute;
+      z-index: 4;
+      background: rgba(56, 189, 248, 0.96);
+      border: 1px solid rgba(255, 255, 255, 0.7);
+      border-radius: 6px;
+      width: 10px;
+      height: 10px;
+      touch-action: none;
+    }
+    .resize-handle.tl { left: -5px; top: -5px; cursor: nwse-resize; }
+    .resize-handle.tr { right: -5px; top: -5px; cursor: nesw-resize; }
+    .resize-handle.bl { left: -5px; bottom: -5px; cursor: nesw-resize; }
+    .resize-handle.br { right: -5px; bottom: -5px; cursor: nwse-resize; }
+    .resize-handle.t { left: calc(50% - 5px); top: -5px; cursor: ns-resize; }
+    .resize-handle.b { left: calc(50% - 5px); bottom: -5px; cursor: ns-resize; }
+    .resize-handle.l { left: -5px; top: calc(50% - 5px); cursor: ew-resize; }
+    .resize-handle.r { right: -5px; top: calc(50% - 5px); cursor: ew-resize; }
+    .composition-layout-helper { position: absolute; inset: 0; display: grid; place-items: center; padding: 18px; color: var(--muted); text-align: center; }
+    .composition-grid-overlay {
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+      background-image:
+        linear-gradient(to right, rgba(125, 211, 252, 0.08) 1px, transparent 1px),
+        linear-gradient(to bottom, rgba(125, 211, 252, 0.06) 1px, transparent 1px);
+      background-size: calc(100% / 12) calc(100% / 16);
+      z-index: 0;
+    }
+    .canvas-editor-grid { display: grid; grid-template-columns: 1fr; gap: 12px; align-items: stretch; }
+    .canvas-editor-controls { display: grid; align-content: start; gap: 10px; }
+    .canvas-stage { display: grid; align-content: start; gap: 8px; min-width: 0; }
+    .canvas-stage canvas {
+      display: block;
+      width: 100%;
+      height: auto;
+      aspect-ratio: var(--canvas-ratio, 3 / 4);
+      max-height: 520px;
+    }
+    .editor-workbench {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) minmax(300px, 0.78fr) minmax(0, 1fr);
+      gap: 12px;
+      align-items: start;
+      padding-bottom: 12px;
+    }
+    .editor-workbench > .result-card { min-width: 0; }
+    .asset-loader-bar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      margin-bottom: 14px;
+      padding: 14px 16px;
+      border: 1px solid rgba(125, 211, 252, 0.2);
+      border-radius: 16px;
+      background: rgba(56, 189, 248, 0.08);
+    }
+    .template-toolbar {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(180px, 1fr));
+      gap: 10px;
+      margin-bottom: 12px;
+      padding: 14px;
+      border: 1px solid rgba(125, 211, 252, 0.2);
+      border-radius: 16px;
+      background: rgba(255, 255, 255, 0.03);
+    }
+    .template-toolbar .controls { grid-column: 1 / -1; }
+    .template-gallery {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 10px;
+      margin-bottom: 14px;
+    }
+    .template-card {
+      text-align: left;
+      padding: 10px;
+      border-radius: 14px;
+      background: rgba(255, 255, 255, 0.03);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      cursor: pointer;
+      transition: border-color 0.15s ease, transform 0.15s ease;
+    }
+    .template-card:hover { transform: translateY(-1px); border-color: rgba(125, 211, 252, 0.45); }
+    .template-card.active { border-color: rgba(125, 211, 252, 0.65); background: rgba(56, 189, 248, 0.12); }
+    .template-card-name { font-size: 12px; font-weight: 700; }
+    .template-card-meta { margin-top: 4px; color: var(--muted); font-size: 11px; }
+    .template-thumb {
+      position: relative;
+      margin-top: 8px;
+      width: 100%;
+      aspect-ratio: 3 / 4;
+      border-radius: 10px;
+      background: rgba(3, 8, 22, 0.9);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      overflow: hidden;
+    }
+    .template-thumb-slot {
+      position: absolute;
+      border: 1px solid rgba(125, 211, 252, 0.7);
+      background: rgba(56, 189, 248, 0.2);
+      border-radius: 6px;
+    }
+    .asset-loader-bar strong { display: block; margin-top: 4px; font-size: 14px; }
+    .operation-card { margin-top: 14px; }
+    .operation-log { display: grid; gap: 8px; margin-top: 10px; }
+    .operation-item { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 9px 10px; border-radius: 10px; background: rgba(255, 255, 255, 0.04); color: var(--muted); font-size: 12px; }
+    .operation-item strong { color: var(--text); font-weight: 600; }
+    .operation-remove { padding: 4px 8px; font-size: 11px; }
+    .tag {
+      display: inline-flex;
+      align-items: center;
+      padding: 5px 8px;
+      border-radius: 999px;
+      background: rgba(125, 211, 252, 0.12);
+      color: var(--accent);
+      font-size: 11px;
+    }
+
+    .result-card pre {
+      margin: 0;
+      white-space: pre-wrap;
+      word-break: break-word;
+      color: #dbeafe;
+      font-family: "SFMono-Regular", Consolas, monospace;
+      font-size: 12px;
+      line-height: 1.6;
+    }
+
+    .summary-grid {
+      display: grid;
+      gap: 10px;
+    }
+    .summary-section {
+      padding: 12px;
+      border-radius: 14px;
+      background: rgba(255, 255, 255, 0.035);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+    }
+    .summary-title {
+      margin-bottom: 6px;
+      color: var(--muted);
+      font-size: 11px;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+    .summary-body {
+      color: var(--text);
+      font-size: 13px;
+      line-height: 1.6;
+      word-break: break-word;
+    }
+
+    .controls { display: flex; gap: 10px; flex-wrap: wrap; }
+    .controls button { flex: 1 1 140px; }
+
+    .timeline { display: grid; gap: 0; }
+    .timeline-step {
+      position: relative;
+      padding: 10px 0 10px 26px;
+      border-left: 2px solid rgba(255, 255, 255, 0.1);
+    }
+    .timeline-step:last-child { border-left-color: transparent; }
+    .timeline-step::before {
+      content: '';
+      position: absolute;
+      left: -7px;
+      top: 14px;
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      background: rgba(125, 211, 252, 0.25);
+      border: 2px solid var(--accent);
+    }
+    .timeline-step.done::before { background: var(--accent-strong); }
+    .timeline-stage { font-weight: 700; font-size: 12px; letter-spacing: 0.04em; text-transform: uppercase; color: var(--accent); }
+    .timeline-detail { margin-top: 4px; color: var(--text); font-size: 12px; line-height: 1.55; }
+
+    .trace-log { display: grid; gap: 8px; max-height: 260px; overflow: auto; padding-right: 4px; }
+    .trace-item {
+      padding: 8px 10px;
+      border-radius: 12px;
+      background: rgba(255, 255, 255, 0.03);
+      border: 1px solid rgba(255, 255, 255, 0.07);
+      font-size: 11px;
+      line-height: 1.5;
+    }
+    .trace-item .trace-node { color: var(--accent); font-weight: 700; }
+    .trace-item .trace-event { color: var(--text); }
+    .trace-item .trace-ts { color: var(--muted); }
+
+    .status-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 6px 12px;
+      border-radius: 999px;
+      font-size: 12px;
+      font-weight: 700;
+    }
+    .status-pending { background: rgba(250, 204, 21, 0.14); color: #facc15; border: 1px solid rgba(250, 204, 21, 0.35); }
+    .status-accepted { background: rgba(74, 222, 128, 0.14); color: #4ade80; border: 1px solid rgba(74, 222, 128, 0.35); }
+    .status-rejected { background: rgba(248, 113, 113, 0.14); color: #f87171; border: 1px solid rgba(248, 113, 113, 0.35); }
+    .status-none { background: rgba(255, 255, 255, 0.05); color: var(--muted); border: 1px solid rgba(255, 255, 255, 0.08); }
+
+    .feedback-actions button.accept { background: rgba(74, 222, 128, 0.16); border-color: rgba(74, 222, 128, 0.4); color: #bbf7d0; }
+    .feedback-actions button.reject { background: rgba(248, 113, 113, 0.16); border-color: rgba(248, 113, 113, 0.4); color: #fecaca; }
+    .feedback-actions button.retry { background: rgba(250, 204, 21, 0.16); border-color: rgba(250, 204, 21, 0.4); color: #fde68a; }
+    .feedback-actions button:disabled { opacity: 0.45; cursor: not-allowed; transform: none; }
+    .feedback-trigger { display: none; margin-top: 12px; }
+    .feedback-trigger.visible { display: inline-flex; }
+    .feedback-modal {
+      position: fixed;
+      inset: 0;
+      z-index: 20;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+      background: rgba(2, 6, 23, 0.72);
+      backdrop-filter: blur(10px);
+    }
+    .feedback-modal.open { display: flex; }
+    .feedback-dialog {
+      width: min(560px, 100%);
+      max-height: min(86vh, 760px);
+      overflow-y: auto;
+      padding: 22px;
+      border: 1px solid var(--line);
+      border-radius: 22px;
+      background: #111a31;
+      box-shadow: 0 30px 100px rgba(2, 6, 23, 0.55);
+    }
+    .feedback-dialog-header { display: flex; justify-content: space-between; gap: 12px; align-items: start; margin-bottom: 16px; }
+    .feedback-dialog-title { margin: 0; font-size: 20px; }
+    .feedback-dialog-close { padding: 6px 10px; }
+    .feedback-output {
+      display: grid;
+      gap: 10px;
+      margin: 16px 0;
+      padding: 14px;
+      border: 1px solid rgba(125, 211, 252, 0.22);
+      border-radius: 14px;
+      background: rgba(56, 189, 248, 0.07);
+    }
+    .feedback-output-section { display: grid; gap: 5px; }
+    .feedback-output-title { color: var(--accent); font-size: 11px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; }
+    .feedback-output-body { color: var(--text); font-size: 13px; line-height: 1.55; white-space: pre-wrap; overflow-wrap: anywhere; }
+    .feedback-dialog-footer { display: flex; flex-wrap: wrap; gap: 10px; justify-content: flex-end; margin-top: 16px; }
+    .compact-result { display: grid; gap: 10px; }
+    .intent-line { font-size: 17px; line-height: 1.45; }
+    .tool-summary { color: var(--muted); font-size: 12px; }
+    .debug-details { margin-top: 12px; }
+    .debug-details summary { cursor: pointer; color: var(--muted); font-size: 12px; }
+
+    .empty-state {
+      padding: 22px;
+      border-radius: 18px;
+      color: var(--muted);
+      border: 1px dashed rgba(125, 211, 252, 0.28);
+      background: rgba(125, 211, 252, 0.06);
+    }
+
+    @media (max-width: 1320px) {
+      .editor-workbench {
+        grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+      }
+      .editor-workbench > .result-card:nth-child(2) {
+        grid-column: 1 / -1;
+      }
+    }
+
+    @media (max-width: 1180px) {
+      .editor-workbench { grid-template-columns: 1fr; }
+    }
+
+    @media (max-width: 980px) {
+      .hero, .workspace { grid-template-columns: 1fr; }
+      .sidebar, .content, .chat { position: static; height: auto; min-height: 0; overflow: visible; }
+      .asset-grid { max-height: 60vh; }
+    }
+
+    @media (max-width: 720px) {
+      .shell { padding: 16px 12px 28px; }
+      .hero-copy, .hero-stats, .sidebar, .content, .chat { padding: 16px; }
+      .hero-stats { grid-template-columns: 1fr; }
+      .asset-grid { grid-template-columns: repeat(4, minmax(64px, 1fr)); }
+      .canvas-editor-grid { grid-template-columns: 1fr; }
+      .editor-workbench { grid-template-columns: 1fr; }
+      .asset-loader-bar { align-items: stretch; flex-direction: column; }
+      .template-toolbar { grid-template-columns: 1fr; }
+      .template-gallery { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .gallery-modal { padding: 12px; }
+      .gallery-dialog { height: calc(100vh - 24px); padding: 16px; }
+    }
+  </style>
+</head>
+<body>
+  <div class="shell">
+    <section class="hero">
+      <div class="panel hero-copy">
+        <div class="eyebrow">Live Photo Agent Console</div>
+        <h1>让资产、模型和生成过程在一个页面里看得见。</h1>
+        <p class="subtitle">你可以先浏览当前相册资产，按相册切换和勾选素材，再输入一句需求，让系统直接展示 planner、工具编排和最终生成结果。</p>
+        <div class="hero-meta">
+          <div class="badge"><span>库根目录</span><strong id="libraryRootLabel">-</strong></div>
+          <div class="badge"><span>模型</span><strong id="modelLabel">-</strong></div>
+          <div class="badge"><span>后端</span><strong id="backendLabel">-</strong></div>
+        </div>
+      </div>
+      <div class="panel hero-stats">
+        <div class="stat"><span class="stat-value" id="assetCount">0</span><span class="stat-label">当前资产</span></div>
+        <div class="stat"><span class="stat-value" id="albumCount">0</span><span class="stat-label">相册分组</span></div>
+        <div class="stat"><span class="stat-value" id="livePhotoCount">0</span><span class="stat-label">Live Photo</span></div>
+        <div class="stat"><span class="stat-value" id="motionReadyCount">0</span><span class="stat-label">带运动段</span></div>
+      </div>
+    </section>
+
+    <section class="workspace">
+      <aside class="panel sidebar">
+        <h2 class="section-title">资产概览</h2>
+        <div class="field">
+          <label for="libraryRootInput">库根目录</label>
+          <input id="libraryRootInput" placeholder="/home/you/DCIM">
+        </div>
+        <div class="controls">
+          <button id="refreshButton">刷新资产</button>
+          <button id="selectAllAssetsButton">全选当前相册</button>
+        </div>
+        <div class="field" style="margin-top: 14px;">
+          <label for="albumSelect">选择相册</label>
+          <select id="albumSelect"></select>
+        </div>
+        <div id="albumList" class="album-list"></div>
+
+        <details class="config-panel">
+          <summary class="section-title" style="margin: 0; cursor: pointer;">大脑配置</summary>
+          <div class="field" style="margin: 0;">
+            <label for="plannerBackendSelect">Backend</label>
+            <select id="plannerBackendSelect">
+              <option value="auto">auto</option>
+              <option value="endpoint">endpoint</option>
+              <option value="local_hf">local_hf</option>
+            </select>
+          </div>
+          <div class="field" style="margin: 0;">
+            <label for="plannerModelInput">Model</label>
+            <input id="plannerModelInput" placeholder="Qwen/Qwen3-VL-8B">
+          </div>
+          <div class="field" style="margin: 0;">
+            <label for="plannerEndpointInput">Endpoint URL</label>
+            <input id="plannerEndpointInput" placeholder="https://.../chat/completions">
+          </div>
+          <div class="field" style="margin: 0;">
+            <label for="plannerTokenInput">Endpoint Token</label>
+            <input id="plannerTokenInput" type="password" placeholder="可选，留空不改">
+            <small id="plannerTokenHint" style="opacity:.8"></small>
+          </div>
+          <div class="field" style="margin: 0;">
+            <label for="plannerWorkspaceInput">Workspace ID</label>
+            <input id="plannerWorkspaceInput" placeholder="可选">
+          </div>
+          <div class="config-inline">
+            <div class="field" style="margin: 0;">
+              <label for="plannerTimeoutInput">Timeout(s)</label>
+              <input id="plannerTimeoutInput" type="number" step="1" min="1" placeholder="60">
+            </div>
+            <div class="field" style="margin: 0;">
+              <label for="plannerMaxTokensInput">Max New Tokens</label>
+              <input id="plannerMaxTokensInput" type="number" step="1" min="1" placeholder="384">
+            </div>
+          </div>
+          <div class="field" style="margin: 0;">
+            <label for="plannerLocalModelDirInput">Local Model Dir</label>
+            <input id="plannerLocalModelDirInput" placeholder="/path/to/local/model">
+          </div>
+          <div class="config-inline">
+            <div class="field" style="margin: 0;">
+              <label for="plannerLocalDeviceInput">Local Device</label>
+              <input id="plannerLocalDeviceInput" placeholder="cpu/cuda/auto">
+            </div>
+            <div class="field" style="margin: 0;">
+              <label for="plannerLocalDtypeInput">Local DType</label>
+              <input id="plannerLocalDtypeInput" placeholder="float32/float16/bfloat16/auto">
+            </div>
+          </div>
+          <div class="controls">
+            <button id="plannerApplyButton">应用配置</button>
+            <button id="plannerResetButton">恢复默认</button>
+          </div>
+          <pre id="plannerConfigPreview">等待加载配置。</pre>
+        </details>
+
+        <details style="margin-top: 20px;">
+          <summary class="section-title" style="cursor: pointer;">工具规划</summary>
+          <div class="micro">点选工具后，会作为 guidance 发送给 planner，帮助它优先编排这些工具。</div>
+          <div id="guidedToolsPreview" class="chip-list"></div>
+          <div id="toolCatalog" class="tool-grid"></div>
+        </details>
+      </aside>
+
+      <section class="panel chat">
+        <h2 class="section-title">布局、编辑与生成</h2>
+        <div class="asset-loader-bar">
+          <div>
+            <div class="micro">当前素材</div>
+            <strong id="loadedAssetSummary">尚未载入图片</strong>
+          </div>
+          <div class="controls">
+            <button id="openGalleryButton" class="load-images-button primary" type="button">＋ 载入图片</button>
+            <button id="openTemplateButton" type="button">选择模板</button>
+            <label class="chip" style="gap: 6px; cursor: pointer;">
+              <input id="keepAspectResize" type="checkbox" style="width: 14px; height: 14px; margin: 0;">
+              等比缩放
+            </label>
+            <button id="layerUpButton" type="button">当前素材置顶</button>
+            <button id="layerDownButton" type="button">当前素材置底</button>
+            <button id="clearLayoutButton" type="button">清空布局</button>
+          </div>
+        </div>
+        <div class="editor-workbench">
+          <div class="result-card">
+            <div class="micro">布局</div>
+            <div id="compositionDropZone" class="composition-drop-zone">
+              <div id="compositionLayoutLayer" class="composition-layout-layer"></div>
+            </div>
+          </div>
+          <div class="result-card">
+            <div class="micro" style="margin-bottom: 10px;">画布编辑</div>
+            <div class="canvas-editor-controls">
+              <div class="field">
+                <label for="canvasPromptInput">编辑提示</label>
+                <textarea id="canvasPromptInput" placeholder="例如：把选区中的人物改成电影感光影" style="min-height: 90px;"></textarea>
+              </div>
+              <div class="micro">当前仅保留矩形框选。</div>
+              <div class="controls">
+                <button id="canvasPreviewButton" class="primary" type="button">保存编辑到布局</button>
+                <button id="canvasResetButton" type="button">清空画布</button>
+              </div>
+            </div>
+          </div>
+          <div class="result-card">
+            <div class="micro" style="margin-bottom: 10px;">画布预览</div>
+            <div id="canvasStage" class="canvas-stage" style="border: 1px dashed rgba(125, 211, 252, 0.28); border-radius: 18px; padding: 10px; background: rgba(125, 211, 252, 0.06);">
+              <canvas id="interactiveCanvas" width="480" height="320" style="width: 100%; max-width: 100%; border-radius: 12px; background: linear-gradient(180deg, rgba(255,255,255,0.06), rgba(255,255,255,0.02));"></canvas>
+            </div>
+          </div>
+        </div>
+        <div class="controls">
+          <button id="generateButton" class="primary">根据当前布局生成</button>
+          <button id="clearButton">清空结果</button>
+        </div>
+        <div class="result-card operation-card">
+          <div class="micro">当前处理记录</div>
+          <div id="operationLog" class="operation-log">还没有画布编辑记录。</div>
+        </div>
+        <div class="results-layout" style="margin-top: 16px;">
+          <div class="result-card compact-result">
+            <div class="micro">生成计划</div>
+            <div id="planPreview" class="intent-line">等待生成。这里会显示系统对整体需求的理解。</div>
+            <div id="selectedAssetPreview" class="tool-summary">已选素材 0 张 · 工具 guidance 0 个</div>
+            <button id="feedbackOpenButton" class="feedback-trigger" type="button">查看结果并反馈</button>
+          </div>
+          <div class="result-card compact-result">
+            <div class="micro">执行结果</div>
+            <div id="resultPreview" class="summary-grid">等待生成。</div>
+            <details class="debug-details" open>
+              <summary>执行阶段与思维链记录</summary>
+              <div id="stagePreview" class="timeline" style="margin-top: 10px;">等待生成。</div>
+              <div id="tracePreview" class="trace-log" style="margin-top: 10px;">等待生成。</div>
+              <details style="margin-top: 10px;">
+                <summary>原始 JSON</summary>
+                <pre id="traceRawPreview">-</pre>
+              </details>
+            </details>
+          </div>
+        </div>
+      </section>
+    </section>
+  </div>
+
+  <div id="galleryModal" class="gallery-modal" role="dialog" aria-modal="true" aria-labelledby="galleryDialogTitle">
+    <div class="gallery-dialog">
+      <div class="gallery-dialog-header">
+        <div>
+          <h2 id="galleryDialogTitle" class="gallery-dialog-title">载入图片</h2>
+          <div class="micro" style="margin-top: 6px;">选择要加入当前布局的图片，完成后点击“载入到布局”。</div>
+        </div>
+        <button id="closeGalleryButton" type="button" aria-label="关闭图片画廊">关闭</button>
+      </div>
+      <div class="controls" style="margin: 16px 0 12px;">
+        <button id="refreshGalleryButton" type="button">刷新资产</button>
+        <button id="selectAllButton" type="button">全选当前相册</button>
+        <select id="galleryAlbumSelect" aria-label="选择相册"></select>
+      </div>
+      <div id="assetGrid" class="asset-grid"></div>
+      <div class="gallery-dialog-footer">
+        <span id="gallerySelectionSummary" class="micro">已选择 0 张</span>
+        <div class="controls">
+          <button id="cancelGalleryButton" type="button">取消</button>
+          <button id="addSelectedToLayoutButton" class="primary" type="button">载入到布局</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="templateModal" class="gallery-modal" role="dialog" aria-modal="true" aria-labelledby="templateDialogTitle">
+    <div class="gallery-dialog">
+      <div class="gallery-dialog-header">
+        <div>
+          <h2 id="templateDialogTitle" class="gallery-dialog-title">选择模板</h2>
+          <div id="templateDialogHint" class="micro" style="margin-top: 6px;">先选素材，再按素材数量匹配模板。</div>
+        </div>
+        <button id="closeTemplateButton" type="button" aria-label="关闭模板弹窗">关闭</button>
+      </div>
+      <div id="templateGrid" class="template-gallery" style="overflow-y: auto; padding-right: 8px;"></div>
+      <div class="gallery-dialog-footer">
+        <span id="templateSelectionSummary" class="micro">尚未选择模板</span>
+        <div class="controls">
+          <button id="cancelTemplateButton" type="button">取消</button>
+          <button id="applyTemplateFromModalButton" class="primary" type="button">应用模板到画布</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="feedbackModal" class="feedback-modal" role="dialog" aria-modal="true" aria-labelledby="feedbackDialogTitle">
+    <div class="feedback-dialog">
+      <div class="feedback-dialog-header">
+        <div>
+          <h2 id="feedbackDialogTitle" class="feedback-dialog-title">确认这次生成结果</h2>
+          <div id="feedbackStatusBadge" class="status-badge status-none" style="margin-top: 8px;">尚未生成</div>
+          <div id="feedbackRunId" class="micro" style="margin-top: 6px;"></div>
+        </div>
+        <button id="feedbackCloseButton" class="feedback-dialog-close" type="button" aria-label="关闭反馈窗口">关闭</button>
+      </div>
+      <div id="feedbackOutputPreview" class="feedback-output">
+        <div class="feedback-output-section">
+          <div class="feedback-output-title">输出结果</div>
+          <div class="feedback-output-body">等待生成结果。</div>
+        </div>
+      </div>
+      <div class="field">
+        <label for="feedbackComment">反馈意见</label>
+        <textarea id="feedbackComment" placeholder="例如：素材选错了，想要人物特写而不是风景。" style="min-height: 100px;"></textarea>
+      </div>
+      <div class="controls feedback-actions">
+        <button id="feedbackAcceptButton" class="accept" type="button" disabled>通过并记住</button>
+        <button id="feedbackRejectButton" class="reject" type="button" disabled>打回</button>
+        <button id="feedbackRetryButton" class="retry" type="button" disabled>根据反馈重新生成</button>
+      </div>
+      <div id="feedbackResultPreview" class="micro" style="margin-top: 10px;"></div>
+    </div>
+  </div>
+
+  <script>
+    const state = {
+      bootstrap: null,
+      selectedAssetIds: new Set(),
+      selectedToolNames: new Set(),
+      activeAlbum: '__all__',
+      lastRunId: '',
+      lastFeedbackResolved: true,
+      droppedAssetIds: [],
+      layoutItems: [],
+      operationLog: [],
+      canvasPreset: 'xhs',
+      activeTemplateId: 'm16_image_led_cover',
+      pendingTemplateId: '',
+      activeLayoutId: '',
+      keepAspectResize: false,
+    };
+
+    const GRID_LAYOUT = { cols: 120, rows: 160 };
+
+    const CANVAS_PRESETS = {
+      xhs: { key: 'xhs', label: 'XHS 3:4', width: 1080, height: 1440, ratio: '3 / 4' },
+    };
+
+    const TEMPLATE_LIBRARY = [
+      { id: 'm16_image_led_cover', name: 'M16 全图封面', style: 'editorial', board: 'xhs', slots: [{ gx: 0, gy: 0, gw: 120, gh: 160 }] },
+      { id: 'm07_field_ledger', name: 'M07 上图下文', style: 'editorial', board: 'xhs', slots: [{ gx: 6, gy: 6, gw: 108, gh: 66 }, { gx: 6, gy: 78, gw: 108, gh: 76 }] },
+      { id: 'm14_vertical_pipeline', name: 'M14 三段流程', style: 'editorial', board: 'xhs', slots: [{ gx: 8, gy: 8, gw: 104, gh: 44 }, { gx: 8, gy: 58, gw: 104, gh: 44 }, { gx: 8, gy: 108, gw: 104, gh: 44 }] },
+      { id: 's09_kpi_tower', name: 'S09 KPI 三栏', style: 'swiss', board: 'xhs', slots: [{ gx: 6, gy: 12, gw: 34, gh: 136 }, { gx: 43, gy: 12, gw: 34, gh: 136 }, { gx: 80, gy: 12, gw: 34, gh: 136 }] },
+      { id: 's10_hbar_chart', name: 'S10 条形四段', style: 'swiss', board: 'xhs', slots: [{ gx: 8, gy: 14, gw: 104, gh: 24 }, { gx: 8, gy: 46, gw: 104, gh: 24 }, { gx: 8, gy: 78, gw: 104, gh: 24 }, { gx: 8, gy: 110, gw: 104, gh: 24 }] },
+      { id: 'live_single_focus', name: 'Live 单视频', style: 'live', board: 'xhs', slots: [{ gx: 5, gy: 10, gw: 110, gh: 138 }] },
+      { id: 'live_two_stack', name: 'Live 二宫格上下', style: 'live', board: 'xhs', slots: [{ gx: 5, gy: 10, gw: 110, gh: 64 }, { gx: 5, gy: 86, gw: 110, gh: 64 }] },
+      { id: 'live_three_stack', name: 'Live 三宫格上下', style: 'live', board: 'xhs', slots: [{ gx: 5, gy: 8, gw: 110, gh: 46 }, { gx: 5, gy: 58, gw: 110, gh: 46 }, { gx: 5, gy: 108, gw: 110, gh: 46 }] },
+      { id: 'live_four_grid', name: 'Live 四宫格', style: 'live', board: 'xhs', slots: [{ gx: 6, gy: 10, gw: 52, gh: 66 }, { gx: 62, gy: 10, gw: 52, gh: 66 }, { gx: 6, gy: 84, gw: 52, gh: 66 }, { gx: 62, gy: 84, gw: 52, gh: 66 }] },
+      { id: 'matrix_three_by_two', name: '3x2 材料拼板', style: 'swiss', board: 'xhs', slots: [{ gx: 6, gy: 16, gw: 34, gh: 34 }, { gx: 43, gy: 16, gw: 34, gh: 34 }, { gx: 80, gy: 16, gw: 34, gh: 34 }, { gx: 6, gy: 56, gw: 34, gh: 34 }, { gx: 43, gy: 56, gw: 34, gh: 34 }, { gx: 80, gy: 56, gw: 34, gh: 34 }] },
+    ];
+
+    const els = {
+      libraryRootLabel: document.getElementById('libraryRootLabel'),
+      modelLabel: document.getElementById('modelLabel'),
+      backendLabel: document.getElementById('backendLabel'),
+      assetCount: document.getElementById('assetCount'),
+      albumCount: document.getElementById('albumCount'),
+      livePhotoCount: document.getElementById('livePhotoCount'),
+      motionReadyCount: document.getElementById('motionReadyCount'),
+      libraryRootInput: document.getElementById('libraryRootInput'),
+      albumSelect: document.getElementById('albumSelect'),
+      albumList: document.getElementById('albumList'),
+      plannerBackendSelect: document.getElementById('plannerBackendSelect'),
+      plannerModelInput: document.getElementById('plannerModelInput'),
+      plannerEndpointInput: document.getElementById('plannerEndpointInput'),
+      plannerTokenInput: document.getElementById('plannerTokenInput'),
+      plannerTokenHint: document.getElementById('plannerTokenHint'),
+      plannerWorkspaceInput: document.getElementById('plannerWorkspaceInput'),
+      plannerTimeoutInput: document.getElementById('plannerTimeoutInput'),
+      plannerMaxTokensInput: document.getElementById('plannerMaxTokensInput'),
+      plannerLocalModelDirInput: document.getElementById('plannerLocalModelDirInput'),
+      plannerLocalDeviceInput: document.getElementById('plannerLocalDeviceInput'),
+      plannerLocalDtypeInput: document.getElementById('plannerLocalDtypeInput'),
+      plannerApplyButton: document.getElementById('plannerApplyButton'),
+      plannerResetButton: document.getElementById('plannerResetButton'),
+      plannerConfigPreview: document.getElementById('plannerConfigPreview'),
+      assetGrid: document.getElementById('assetGrid'),
+      galleryModal: document.getElementById('galleryModal'),
+      galleryAlbumSelect: document.getElementById('galleryAlbumSelect'),
+      gallerySelectionSummary: document.getElementById('gallerySelectionSummary'),
+      loadedAssetSummary: document.getElementById('loadedAssetSummary'),
+      operationLog: document.getElementById('operationLog'),
+      toolCatalog: document.getElementById('toolCatalog'),
+      guidedToolsPreview: document.getElementById('guidedToolsPreview'),
+      planPreview: document.getElementById('planPreview'),
+      selectedAssetPreview: document.getElementById('selectedAssetPreview'),
+      resultPreview: document.getElementById('resultPreview'),
+      stagePreview: document.getElementById('stagePreview'),
+      tracePreview: document.getElementById('tracePreview'),
+      traceRawPreview: document.getElementById('traceRawPreview'),
+      feedbackStatusBadge: document.getElementById('feedbackStatusBadge'),
+      feedbackRunId: document.getElementById('feedbackRunId'),
+      feedbackComment: document.getElementById('feedbackComment'),
+      feedbackAcceptButton: document.getElementById('feedbackAcceptButton'),
+      feedbackRejectButton: document.getElementById('feedbackRejectButton'),
+      feedbackRetryButton: document.getElementById('feedbackRetryButton'),
+      feedbackResultPreview: document.getElementById('feedbackResultPreview'),
+      feedbackOutputPreview: document.getElementById('feedbackOutputPreview'),
+      feedbackModal: document.getElementById('feedbackModal'),
+      feedbackOpenButton: document.getElementById('feedbackOpenButton'),
+      feedbackCloseButton: document.getElementById('feedbackCloseButton'),
+      refreshButton: document.getElementById('refreshButton'),
+      addSelectedToLayoutButton: document.getElementById('addSelectedToLayoutButton'),
+      clearLayoutButton: document.getElementById('clearLayoutButton'),
+      openGalleryButton: document.getElementById('openGalleryButton'),
+      openTemplateButton: document.getElementById('openTemplateButton'),
+      keepAspectResize: document.getElementById('keepAspectResize'),
+      closeGalleryButton: document.getElementById('closeGalleryButton'),
+      cancelGalleryButton: document.getElementById('cancelGalleryButton'),
+      templateModal: document.getElementById('templateModal'),
+      templateDialogHint: document.getElementById('templateDialogHint'),
+      templateGrid: document.getElementById('templateGrid'),
+      templateSelectionSummary: document.getElementById('templateSelectionSummary'),
+      closeTemplateButton: document.getElementById('closeTemplateButton'),
+      cancelTemplateButton: document.getElementById('cancelTemplateButton'),
+      applyTemplateFromModalButton: document.getElementById('applyTemplateFromModalButton'),
+      refreshGalleryButton: document.getElementById('refreshGalleryButton'),
+      selectAllAssetsButton: document.getElementById('selectAllAssetsButton'),
+      selectAllButton: document.getElementById('selectAllButton'),
+      compositionDropZone: document.getElementById('compositionDropZone'),
+      compositionLayoutLayer: document.getElementById('compositionLayoutLayer'),
+      canvasStage: document.getElementById('canvasStage'),
+      canvasPromptInput: document.getElementById('canvasPromptInput'),
+      canvasPreviewButton: document.getElementById('canvasPreviewButton'),
+      canvasResetButton: document.getElementById('canvasResetButton'),
+      interactiveCanvas: document.getElementById('interactiveCanvas'),
+      layerUpButton: document.getElementById('layerUpButton'),
+      layerDownButton: document.getElementById('layerDownButton'),
+      generateButton: document.getElementById('generateButton'),
+      clearButton: document.getElementById('clearButton'),
+    };
+
+    function clamp(value, min, max) {
+      return Math.max(min, Math.min(max, value));
+    }
+
+    function gridToPercentX(gridX) {
+      return (Number(gridX) / GRID_LAYOUT.cols) * 100;
+    }
+
+    function gridToPercentY(gridY) {
+      return (Number(gridY) / GRID_LAYOUT.rows) * 100;
+    }
+
+    function percentToGridX(percentX) {
+      return Math.round((Number(percentX) / 100) * GRID_LAYOUT.cols);
+    }
+
+    function percentToGridY(percentY) {
+      return Math.round((Number(percentY) / 100) * GRID_LAYOUT.rows);
+    }
+
+    function ensureLayoutItemGrid(item) {
+      if (Number.isFinite(item.grid_x) && Number.isFinite(item.grid_y) && Number.isFinite(item.grid_w) && Number.isFinite(item.grid_h)) {
+        item.grid_x = clamp(Math.round(item.grid_x), 0, GRID_LAYOUT.cols - 1);
+        item.grid_y = clamp(Math.round(item.grid_y), 0, GRID_LAYOUT.rows - 1);
+        item.grid_w = clamp(Math.round(item.grid_w), 1, GRID_LAYOUT.cols - item.grid_x);
+        item.grid_h = clamp(Math.round(item.grid_h), 1, GRID_LAYOUT.rows - item.grid_y);
+        return item;
+      }
+      const width = Number(item.width ?? 24);
+      const height = Number(item.height ?? 42);
+      const left = Number(item.left ?? 18);
+      const top = Number(item.top ?? 35);
+      item.grid_w = clamp(percentToGridX(width), 1, GRID_LAYOUT.cols);
+      item.grid_h = clamp(percentToGridY(height), 1, GRID_LAYOUT.rows);
+      item.grid_x = clamp(percentToGridX(left), 0, GRID_LAYOUT.cols - item.grid_w);
+      item.grid_y = clamp(percentToGridY(top), 0, GRID_LAYOUT.rows - item.grid_h);
+      item.width = gridToPercentX(item.grid_w);
+      item.height = gridToPercentY(item.grid_h);
+      item.left = gridToPercentX(item.grid_x);
+      item.top = gridToPercentY(item.grid_y);
+      return item;
+    }
+
+    function escapeHtml(value) {
+      return String(value)
+        .replaceAll('&', '&amp;')
+        .replaceAll('<', '&lt;')
+        .replaceAll('>', '&gt;')
+        .replaceAll('"', '&quot;')
+        .replaceAll("'", '&#39;');
+    }
+
+    function summarizeAsset(asset) {
+      return {
+        asset_id: asset.asset_id,
+        album_name: asset.metadata?.album_name ?? '.',
+        image_path: asset.image_path,
+        motion_path: asset.motion_path,
+        tags: asset.tags ?? [],
+        has_motion: asset.motion_path ? 'yes' : 'no',
+        is_live_photo: asset.metadata?.is_live_photo ?? 'false',
+      };
+    }
+
+    function currentToolCatalog() {
+      return (state.bootstrap?.tool_catalog ?? []).slice();
+    }
+
+    function mediaUrl(path) {
+      if (!path) {
+        return '';
+      }
+      return `/api/ui/media?path=${encodeURIComponent(path)}`;
+    }
+
+    function formatCoverMoment(asset) {
+      const signals = asset.preprocess_summary?.editability_signals ?? {};
+      const frameIndex = Number(signals.cover_frame_index);
+      if (Number.isFinite(frameIndex) && frameIndex >= 0) {
+        const timestampMs = Number(signals.cover_frame_timestamp_ms);
+        if (Number.isFinite(timestampMs) && timestampMs >= 0) {
+          const seconds = (timestampMs / 1000).toFixed(2).replace(/\.00$/, '').replace(/(\.\d)0$/, '$1');
+          return `封面帧 #${Math.round(frameIndex)} · ${seconds}s`;
+        }
+        return `封面帧 #${Math.round(frameIndex)}`;
+      }
+      const timestampMs = Number(signals.cover_frame_timestamp_ms);
+      if (!Number.isFinite(timestampMs) || timestampMs < 0) {
+        return '';
+      }
+      const ratio = Number(signals.cover_frame_position_ratio);
+      const seconds = (timestampMs / 1000).toFixed(2).replace(/\.00$/, '').replace(/(\.\d)0$/, '$1');
+      const percent = Number.isFinite(ratio) ? ` · ${(ratio * 100).toFixed(1)}%` : '';
+      return `封面时刻 ${seconds}s${percent}`;
+    }
+
+    function getSelectedAssetIds() {
+      return Array.from(state.selectedAssetIds).sort();
+    }
+
+    function selectedAssetsInCatalogOrder() {
+      const selected = state.selectedAssetIds;
+      return currentAssets().filter((asset) => selected.has(asset.asset_id));
+    }
+
+    function getLayoutAssetIds() {
+      return state.layoutItems.filter((item) => item.asset_id).map((item) => item.asset_id);
+    }
+
+    function setSelectedAssetIds(ids) {
+      state.selectedAssetIds = new Set(ids);
+      renderSelectedPreview();
+      renderAssets();
+      renderAlbums();
+    }
+
+    function setSelectedToolNames(names) {
+      state.selectedToolNames = new Set(names);
+      renderToolGuidance();
+      renderToolCatalog();
+      renderSelectedPreview();
+    }
+
+    function setActiveAlbum(albumName) {
+      state.activeAlbum = albumName;
+      renderAssets();
+      renderAlbums();
+    }
+
+    function currentAssets() {
+      return (state.bootstrap?.assets ?? []).slice();
+    }
+
+    function currentAlbums() {
+      return (state.bootstrap?.albums ?? []).slice();
+    }
+
+    function filteredAssets() {
+      if (state.activeAlbum === '__all__') {
+        return currentAssets();
+      }
+      return currentAssets().filter((asset) => (asset.metadata?.album_name ?? '.') === state.activeAlbum);
+    }
+
+    function renderSummary() {
+      const summary = state.bootstrap?.summary ?? { asset_count: 0, album_count: 0, live_photo_count: 0, motion_ready_count: 0 };
+      els.libraryRootLabel.textContent = state.bootstrap?.library_root ?? '-';
+      const runtime = state.plannerConfig?.runtime_info ?? state.bootstrap?.planner ?? {};
+      els.modelLabel.textContent = runtime.planner_model ?? state.bootstrap?.planner?.planner_model ?? '-';
+      els.backendLabel.textContent = runtime.planner_backend ?? state.bootstrap?.planner?.planner_backend ?? '-';
+      els.assetCount.textContent = summary.asset_count ?? 0;
+      els.albumCount.textContent = summary.album_count ?? 0;
+      els.livePhotoCount.textContent = summary.live_photo_count ?? 0;
+      els.motionReadyCount.textContent = summary.motion_ready_count ?? 0;
+      els.libraryRootInput.value = state.bootstrap?.library_root ?? '';
+      document.title = `${state.bootstrap?.app_name ?? 'Live Photo Agent'} · Console`;
+      renderToolGuidance();
+      renderToolCatalog();
+    }
+
+    function populatePlannerConfigForm(config) {
+      const data = config ?? {};
+      els.plannerBackendSelect.value = data.planner_backend ?? 'auto';
+      els.plannerModelInput.value = data.qwen_model ?? '';
+      els.plannerEndpointInput.value = data.qwen_endpoint ?? '';
+      els.plannerTokenInput.value = '';
+      els.plannerWorkspaceInput.value = data.qwen_workspace_id ?? '';
+      els.plannerTimeoutInput.value = data.qwen_timeout_seconds ?? '';
+      els.plannerMaxTokensInput.value = data.local_max_new_tokens ?? '';
+      els.plannerLocalModelDirInput.value = data.local_model_dir ?? '';
+      els.plannerLocalDeviceInput.value = data.local_device ?? '';
+      els.plannerLocalDtypeInput.value = data.local_dtype ?? '';
+
+      // token 框留空是常态：若已通过 LPA_QWEN_AUTH_TOKEN 或 DASHSCOPE_API_KEY
+      // 等环境变量配置，这里只提示，不回显明文，避免用户误以为没生效而重填。
+      if (data.qwen_auth_token_configured && els.plannerTokenHint) {
+        els.plannerTokenHint.textContent = '（已通过环境变量配置，无需填写；留空即沿用）';
+        els.plannerTokenHint.style.color = '#3a7d44';
+      } else if (els.plannerTokenHint) {
+        els.plannerTokenHint.textContent = '（留空则使用 LPA_QWEN_AUTH_TOKEN / DASHSCOPE_API_KEY 环境变量）';
+        els.plannerTokenHint.style.color = '';
+      }
+
+      els.plannerConfigPreview.textContent = JSON.stringify({
+        runtime_info: data.runtime_info,
+        qwen_endpoint: data.qwen_endpoint,
+        qwen_auth_token_configured: data.qwen_auth_token_configured,
+        local_model_dir: data.local_model_dir,
+      }, null, 2);
+    }
+
+    async function fetchPlannerConfig() {
+      const response = await fetch('/api/ui/planner-config');
+      if (!response.ok) {
+        throw new Error(`planner-config failed: ${response.status}`);
+      }
+      const config = await response.json();
+      state.plannerConfig = config;
+      populatePlannerConfigForm(config);
+      renderSummary();
+    }
+
+    async function applyPlannerConfig() {
+      const payload = {
+        planner_backend: els.plannerBackendSelect.value,
+        qwen_model: els.plannerModelInput.value.trim(),
+        qwen_endpoint: els.plannerEndpointInput.value.trim(),
+        qwen_workspace_id: els.plannerWorkspaceInput.value.trim(),
+        local_model_dir: els.plannerLocalModelDirInput.value.trim(),
+        local_device: els.plannerLocalDeviceInput.value.trim(),
+        local_dtype: els.plannerLocalDtypeInput.value.trim(),
+      };
+      const timeout = Number(els.plannerTimeoutInput.value);
+      const maxTokens = Number(els.plannerMaxTokensInput.value);
+      if (!Number.isNaN(timeout) && timeout > 0) {
+        payload.qwen_timeout_seconds = timeout;
+      }
+      if (!Number.isNaN(maxTokens) && maxTokens > 0) {
+        payload.local_max_new_tokens = maxTokens;
+      }
+
+      const token = els.plannerTokenInput.value.trim();
+      if (token) {
+        payload.qwen_auth_token = token;
+      }
+
+      const response = await fetch('/api/ui/planner-config', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      if (!response.ok) {
+        const text = await response.text();
+        throw new Error(text || `planner-config apply failed: ${response.status}`);
+      }
+      const config = await response.json();
+      state.plannerConfig = config;
+      populatePlannerConfigForm(config);
+      renderSummary();
+    }
+
+    async function resetPlannerConfig() {
+      const response = await fetch('/api/ui/planner-config', { method: 'DELETE' });
+      if (!response.ok) {
+        const text = await response.text();
+        throw new Error(text || `planner-config reset failed: ${response.status}`);
+      }
+      const config = await response.json();
+      state.plannerConfig = config;
+      populatePlannerConfigForm(config);
+      renderSummary();
+    }
+
+    function renderAlbums() {
+      const albums = currentAlbums();
+      els.albumSelect.innerHTML = ['<option value="__all__">全部相册</option>']
+        .concat(albums.map((album) => `<option value="${escapeHtml(album.album_name)}">${escapeHtml(album.album_name)} (${album.asset_count})</option>`))
+        .join('');
+      els.albumSelect.value = state.activeAlbum;
+      els.galleryAlbumSelect.innerHTML = els.albumSelect.innerHTML;
+      els.galleryAlbumSelect.value = state.activeAlbum;
+
+      els.albumList.innerHTML = albums.length === 0
+        ? '<div class="empty-state">当前没有扫描到资产。你可以先切换库根目录再刷新。</div>'
+        : albums.map((album) => {
+            const active = state.activeAlbum === album.album_name ? 'active' : '';
+            return `
+              <button class="album-card ${active}" data-album="${escapeHtml(album.album_name)}" type="button">
+                <div>
+                  <div class="album-name">${escapeHtml(album.album_name)}</div>
+                  <div class="album-meta">${album.asset_count} 项 · ${album.live_photo_count} 张 live photo · ${album.motion_ready_count} 个带运动段</div>
+                </div>
+                <div class="micro">${album.asset_ids.length} ids</div>
+              </button>
+            `;
+          }).join('');
+
+      els.albumList.querySelectorAll('[data-album]').forEach((node) => {
+        node.addEventListener('click', () => setActiveAlbum(node.dataset.album));
+      });
+    }
+
+    function renderAssets() {
+      const assets = filteredAssets();
+      if (assets.length === 0) {
+        els.assetGrid.innerHTML = '<div class="empty-state">没有资产可展示。</div>';
+        return;
+      }
+
+      els.assetGrid.innerHTML = assets.map((asset) => {
+        const checked = state.selectedAssetIds.has(asset.asset_id) ? 'checked' : '';
+        const thumbnail = asset.image_path ? `<img src="${mediaUrl(asset.image_path)}" alt="${escapeHtml(asset.asset_id)}">` : '<div class="asset-thumb-placeholder">没有预览</div>';
+        return `
+          <label class="asset-card">
+            <div class="asset-thumb">
+              ${thumbnail}
+              ${asset.motion_path ? '<span class="live-photo-badge" aria-label="Live Photo">Live</span>' : ''}
+              <input class="asset-select" type="checkbox" aria-label="选择资产 ${escapeHtml(asset.asset_id)}" data-asset-id="${escapeHtml(asset.asset_id)}" ${checked}>
+            </div>
+          </label>
+        `;
+      }).join('');
+
+      els.assetGrid.querySelectorAll('input[type="checkbox"][data-asset-id]').forEach((checkbox) => {
+        checkbox.addEventListener('change', () => {
+          if (checkbox.checked) {
+            state.selectedAssetIds.add(checkbox.dataset.assetId);
+          } else {
+            state.selectedAssetIds.delete(checkbox.dataset.assetId);
+          }
+          renderSelectedPreview();
+          renderAlbums();
+        });
+      });
+    }
+
+    function renderToolGuidance() {
+      const selected = Array.from(state.selectedToolNames).sort();
+      els.guidedToolsPreview.innerHTML = selected.length === 0
+        ? '<span class="chip">未选择工具 guidance</span>'
+        : selected.map((toolName) => `<span class="chip selected">${escapeHtml(toolName)}</span>`).join('');
+    }
+
+    function renderToolCatalog() {
+      const catalog = currentToolCatalog();
+      if (catalog.length === 0) {
+        els.toolCatalog.innerHTML = '<div class="empty-state">没有可展示的工具目录。</div>';
+        return;
+      }
+
+      els.toolCatalog.innerHTML = catalog.map((tool) => {
+        const selected = state.selectedToolNames.has(tool.tool) ? 'selected' : '';
+        const inputSchema = Object.entries(tool.input_schema ?? {})
+          .map(([key, value]) => `${key}: ${value}`)
+          .join('\n');
+        const outputSchema = Object.entries(tool.output_schema ?? {})
+          .map(([key, value]) => `${key}: ${value}`)
+          .join('\n');
+        return `
+          <button class="tool-card ${selected}" type="button" data-tool-name="${escapeHtml(tool.tool)}">
+            <div class="tool-card-header">
+              <div>
+                <div class="tool-name">${escapeHtml(tool.tool)}</div>
+                <div class="micro">${escapeHtml(tool.level)} · ${escapeHtml(tool.security_scope ?? 'unknown')}</div>
+              </div>
+              <div class="tool-pill">${tool.idempotent ? 'idempotent' : 'stateful'}</div>
+            </div>
+            <div class="tool-purpose">${escapeHtml(tool.purpose ?? '')}</div>
+            <div class="tool-details">
+              <span class="tool-pill">preconditions ${escapeHtml((tool.preconditions ?? []).length)}</span>
+              <span class="tool-pill">outputs ${escapeHtml((tool.output_fields ?? []).length)}</span>
+              <span class="tool-pill">failure ${escapeHtml((tool.failure_modes ?? []).length)}</span>
+            </div>
+            <div class="tool-schema"><strong>输入</strong>\n${escapeHtml(inputSchema || '—')}</div>
+            <div class="tool-schema"><strong>输出</strong>\n${escapeHtml(outputSchema || '—')}</div>
+          </button>
+        `;
+      }).join('');
+
+      els.toolCatalog.querySelectorAll('[data-tool-name]').forEach((node) => {
+        node.addEventListener('click', () => {
+          const toolName = node.dataset.toolName;
+          const next = new Set(state.selectedToolNames);
+          if (next.has(toolName)) {
+            next.delete(toolName);
+          } else {
+            next.add(toolName);
+          }
+          setSelectedToolNames(Array.from(next));
+          // 勾选抠像工具时，把当前激活素材声明为前景层（叠加在布局之上），
+          // 这样后端能区分「铺满画布的重叠」是预期的前景抠像，而非位置错误。
+          if (toolName === 'subject_segmentation' && next.has(toolName) && state.activeLayoutId) {
+            const active = state.layoutItems.find((item) => item.id === state.activeLayoutId);
+            if (active) {
+              const maxZ = state.layoutItems.reduce((m, it) => Math.max(m, Number(it.z_index ?? 0)), 0);
+              active.z_index = maxZ + 1;
+              active.foreground = true;
+              active.is_overlay = true;
+            }
+          }
+        });
+      });
+    }
+
+    function renderSelectedPreview() {
+      const selectedCount = getLayoutAssetIds().length;
+      const tools = Array.from(state.selectedToolNames).sort();
+      const preset = CANVAS_PRESETS[state.canvasPreset] ?? CANVAS_PRESETS.xhs;
+      const template = TEMPLATE_LIBRARY.find((item) => item.id === state.activeTemplateId);
+      const templateLabel = template ? template.name : '自由布局';
+      els.selectedAssetPreview.textContent = `布局素材 ${selectedCount} 项 · 画布 ${preset.width}x${preset.height} · 网格 ${GRID_LAYOUT.cols}x${GRID_LAYOUT.rows} · 模板 ${templateLabel} · ${tools.length ? `工具 guidance：${tools.join('、')}` : '未指定工具 guidance'}`;
+      els.gallerySelectionSummary.textContent = `已选择 ${getSelectedAssetIds().length} 张`;
+      els.loadedAssetSummary.textContent = state.layoutItems.length > 0
+        ? `已载入 ${state.layoutItems.length} 项素材`
+        : '尚未载入图片';
+      els.operationLog.innerHTML = state.operationLog.length === 0
+        ? '还没有画布编辑记录。'
+        : state.operationLog.map((operation, index) => `
+          <div class="operation-item">
+            <span><strong>${escapeHtml(operation.intent)}</strong> · ${escapeHtml(operation.tool)} · ${escapeHtml(operation.status)}</span>
+            ${operation.layoutId ? `<button class="operation-remove" type="button" data-remove-operation="${index}">移除</button>` : ''}
+          </div>`).join('');
+      els.operationLog.querySelectorAll('[data-remove-operation]').forEach((node) => {
+        node.addEventListener('click', () => {
+          const operation = state.operationLog[Number(node.dataset.removeOperation)];
+          if (operation?.layoutId) {
+            state.layoutItems = state.layoutItems.filter((item) => item.id !== operation.layoutId);
+            state.operationLog.splice(Number(node.dataset.removeOperation), 1);
+            state.droppedAssetIds = state.layoutItems.filter((item) => item.asset_id).map((item) => item.asset_id);
+            renderCompositionDropZone();
+            renderSelectedPreview();
+          }
+        });
+      });
+    }
+
+    const interactiveCanvasState = {
+      image: null,
+      points: [],
+      drawing: false,
+      sourceLayoutId: '',
+      suspendedLayoutId: '',
+      viewport: { x: 0, y: 0, width: 1, height: 1 },
+    };
+
+    function currentDroppedAssets() {
+      return state.layoutItems.filter((item) => item.asset_id).map((item) => currentAssets().find((asset) => asset.asset_id === item.asset_id)).filter(Boolean);
+    }
+
+    function resolveInteractiveViewport(layoutItem) {
+      const canvasWidth = Math.max(els.interactiveCanvas.width, 1);
+      const canvasHeight = Math.max(els.interactiveCanvas.height, 1);
+      if (!layoutItem) {
+        return { x: 0, y: 0, width: canvasWidth, height: canvasHeight };
+      }
+      ensureLayoutItemGrid(layoutItem);
+      const widthRatio = clamp(Number(layoutItem.grid_w) / GRID_LAYOUT.cols, 0.03, 1);
+      const heightRatio = clamp(Number(layoutItem.grid_h) / GRID_LAYOUT.rows, 0.03, 1);
+      const viewWidth = clamp(Math.round(canvasWidth * widthRatio), 24, canvasWidth);
+      const viewHeight = clamp(Math.round(canvasHeight * heightRatio), 24, canvasHeight);
+      return {
+        x: Math.round((canvasWidth - viewWidth) / 2),
+        y: Math.round((canvasHeight - viewHeight) / 2),
+        width: viewWidth,
+        height: viewHeight,
+      };
+    }
+
+    function pointInViewport(point, viewport) {
+      if (!point || !viewport) return false;
+      return point.x >= viewport.x
+        && point.x <= viewport.x + viewport.width
+        && point.y >= viewport.y
+        && point.y <= viewport.y + viewport.height;
+    }
+
+    function clampPointToViewport(point, viewport) {
+      if (!viewport) return point;
+      return {
+        x: clamp(point.x, viewport.x, viewport.x + viewport.width),
+        y: clamp(point.y, viewport.y, viewport.y + viewport.height),
+      };
+    }
+
+    function normalizeRectFromPoints(points, viewport) {
+      if (!Array.isArray(points) || points.length < 2 || !viewport || viewport.width <= 0 || viewport.height <= 0) {
+        return null;
+      }
+      const start = clampPointToViewport(points[0], viewport);
+      const end = clampPointToViewport(points[points.length - 1], viewport);
+      const left = clamp(Math.min(start.x, end.x) - viewport.x, 0, viewport.width);
+      const top = clamp(Math.min(start.y, end.y) - viewport.y, 0, viewport.height);
+      const right = clamp(Math.max(start.x, end.x) - viewport.x, 0, viewport.width);
+      const bottom = clamp(Math.max(start.y, end.y) - viewport.y, 0, viewport.height);
+      return {
+        x: left / viewport.width,
+        y: top / viewport.height,
+        w: (right - left) / viewport.width,
+        h: (bottom - top) / viewport.height,
+      };
+    }
+
+    function pointsFromNormalizedRect(rect, viewport) {
+      if (!rect || typeof rect !== 'object' || !viewport || viewport.width <= 0 || viewport.height <= 0) {
+        return [];
+      }
+      const x = Number(rect.x);
+      const y = Number(rect.y);
+      const w = Number(rect.w);
+      const h = Number(rect.h);
+      if (![x, y, w, h].every(Number.isFinite)) {
+        return [];
+      }
+      return [
+        { x: viewport.x + x * viewport.width, y: viewport.y + y * viewport.height },
+        { x: viewport.x + (x + w) * viewport.width, y: viewport.y + (y + h) * viewport.height },
+      ];
+    }
+
+    function clearInteractiveCanvasAll() {
+      const context = els.interactiveCanvas.getContext('2d');
+      context.clearRect(0, 0, els.interactiveCanvas.width, els.interactiveCanvas.height);
+      context.fillStyle = 'rgba(255,255,255,0.06)';
+      context.fillRect(0, 0, els.interactiveCanvas.width, els.interactiveCanvas.height);
+      interactiveCanvasState.image = null;
+      interactiveCanvasState.points = [];
+      interactiveCanvasState.sourceLayoutId = '';
+      interactiveCanvasState.viewport = {
+        x: 0,
+        y: 0,
+        width: Math.max(els.interactiveCanvas.width, 1),
+        height: Math.max(els.interactiveCanvas.height, 1),
+      };
+    }
+
+    function loadCanvasForLayoutItem(layoutItem) {
+      if (!layoutItem || !layoutItem.asset_id) {
+        return;
+      }
+      interactiveCanvasState.suspendedLayoutId = '';
+      const asset = currentAssets().find((candidate) => candidate.asset_id === layoutItem.asset_id);
+      if (!asset?.image_path) {
+        clearInteractiveCanvasAll();
+        return;
+      }
+      interactiveCanvasState.sourceLayoutId = layoutItem.id;
+      const image = new Image();
+      image.onload = () => {
+        interactiveCanvasState.image = image;
+        interactiveCanvasState.viewport = resolveInteractiveViewport(layoutItem);
+        interactiveCanvasState.points = pointsFromNormalizedRect(layoutItem.edit_rect, interactiveCanvasState.viewport);
+        if (typeof layoutItem.edit_prompt === 'string') {
+          els.canvasPromptInput.value = layoutItem.edit_prompt;
+        }
+        drawInteractivePoints();
+      };
+      image.src = mediaUrl(asset.image_path);
+    }
+
+    function loadCanvasForActiveLayout() {
+      if (!state.activeLayoutId) {
+        return;
+      }
+      const activeLayout = state.layoutItems.find((item) => item.id === state.activeLayoutId);
+      if (!activeLayout) {
+        return;
+      }
+      if (!activeLayout.asset_id) {
+        // Canvas-edit overlays do not map to a source asset; keep the current
+        // base preview instead of clearing it.
+        return;
+      }
+      if (interactiveCanvasState.suspendedLayoutId && interactiveCanvasState.suspendedLayoutId === activeLayout.id) {
+        return;
+      }
+      loadCanvasForLayoutItem(activeLayout);
+    }
+
+    function loadCanvasImageFromAsset(asset) {
+      if (!asset?.image_path) {
+        clearInteractiveCanvasAll();
+        return;
+      }
+      const image = new Image();
+      image.onload = () => { interactiveCanvasState.image = image; interactiveCanvasState.points = []; drawInteractivePoints(); };
+      image.src = mediaUrl(asset.image_path);
+    }
+
+    function renderCompositionDropZone() {
+      const helper = state.layoutItems.length === 0 ? '<div class="composition-layout-helper">先载入图片，或将画布编辑保存为布局素材。</div>' : '';
+      const preset = CANVAS_PRESETS[state.canvasPreset] ?? CANVAS_PRESETS.xhs;
+      els.compositionDropZone.style.setProperty('--canvas-ratio', preset.ratio);
+      els.canvasStage.style.setProperty('--canvas-ratio', preset.ratio);
+      els.interactiveCanvas.style.setProperty('--canvas-ratio', preset.ratio);
+      const items = state.layoutItems.map((item) => ensureLayoutItemGrid(item));
+      const sortedItems = items.slice().sort((a, b) => Number(a.z_index ?? 0) - Number(b.z_index ?? 0));
+      if (!state.activeLayoutId && sortedItems.length > 0) {
+        state.activeLayoutId = sortedItems[0].id;
+      }
+      const gridOverlay = '<div class="composition-grid-overlay"></div>';
+      els.compositionLayoutLayer.innerHTML = `${gridOverlay}${sortedItems.map((item) => {
+        const isActive = item.id === state.activeLayoutId;
+        const edited = item.edit_rect || item.edit_prompt;
+        return `
+        <div class="composition-layout-item ${isActive ? 'active' : ''}" data-layout-id="${escapeHtml(item.id)}" style="left: ${gridToPercentX(item.grid_x)}%; top: ${gridToPercentY(item.grid_y)}%; width: ${gridToPercentX(item.grid_w)}%; height: ${gridToPercentY(item.grid_h)}%; z-index: ${item.z_index ?? 1}">
+          <img src="${item.image_src || mediaUrl(item.image_path)}" alt="${escapeHtml(item.label)}" draggable="false">
+          ${edited ? '<span class="composition-edit-badge">已编辑</span>' : ''}
+          <div class="composition-layout-label">${escapeHtml(item.label)}${edited ? ' · 已编辑' : ''} · z${item.z_index ?? 1}</div>
+          <span class="resize-handle tl" data-resize-dir="tl"></span>
+          <span class="resize-handle tr" data-resize-dir="tr"></span>
+          <span class="resize-handle bl" data-resize-dir="bl"></span>
+          <span class="resize-handle br" data-resize-dir="br"></span>
+          <span class="resize-handle t" data-resize-dir="t"></span>
+          <span class="resize-handle b" data-resize-dir="b"></span>
+          <span class="resize-handle l" data-resize-dir="l"></span>
+          <span class="resize-handle r" data-resize-dir="r"></span>
+        </div>`;
+      }).join('')}${helper}`;
+      els.compositionLayoutLayer.querySelectorAll('.composition-layout-item').forEach((item) => {
+        const itemRef = state.layoutItems.find((candidate) => candidate.id === item.dataset.layoutId);
+        bindLayoutDrag(item, itemRef);
+        item.querySelectorAll('.resize-handle').forEach((handle) => {
+          bindLayoutResize(handle, item, itemRef, String(handle.dataset.resizeDir || ''));
+        });
+        item.addEventListener('click', () => {
+          els.compositionLayoutLayer.querySelectorAll('.composition-layout-item').forEach((node) => node.classList.remove('active'));
+          item.classList.add('active');
+          state.activeLayoutId = itemRef?.id || '';
+          loadCanvasForLayoutItem(itemRef);
+        });
+      });
+      loadCanvasForActiveLayout();
+    }
+
+    function renderTemplateControls() {
+      const selectedCount = getSelectedAssetIds().length;
+      const candidates = TEMPLATE_LIBRARY.filter((template) => template.slots.length === selectedCount);
+      const templateRows = candidates.length > 0 ? candidates : TEMPLATE_LIBRARY;
+      const strict = candidates.length > 0;
+      state.pendingTemplateId = templateRows[0]?.id || '';
+
+      els.templateDialogHint.textContent = strict
+        ? `已选素材 ${selectedCount} 项，仅展示 ${selectedCount} 格模板。`
+        : `已选素材 ${selectedCount} 项，暂无完全匹配模板，展示全部模板供你参考。`;
+
+      els.templateGrid.innerHTML = templateRows.map((template) => {
+        const active = template.id === state.activeTemplateId ? 'active' : '';
+        const thumbSlots = template.slots.map((slot) => `
+          <div class="template-thumb-slot" style="left:${gridToPercentX(slot.gx)}%;top:${gridToPercentY(slot.gy)}%;width:${gridToPercentX(slot.gw)}%;height:${gridToPercentY(slot.gh)}%"></div>
+        `).join('');
+        return `
+          <button class="template-card ${active}" data-template-id="${escapeHtml(template.id)}" type="button">
+            <div class="template-card-name">${escapeHtml(template.name)}</div>
+            <div class="template-card-meta">${escapeHtml(template.style)} · ${escapeHtml(template.board)} · ${template.slots.length} 格</div>
+            <div class="template-thumb">${thumbSlots}</div>
+          </button>
+        `;
+      }).join('');
+
+      els.templateSelectionSummary.textContent = state.pendingTemplateId
+        ? `待应用模板：${TEMPLATE_LIBRARY.find((item) => item.id === state.pendingTemplateId)?.name || '-'}`
+        : '尚未选择模板';
+
+      els.templateGrid.querySelectorAll('[data-template-id]').forEach((node) => {
+        node.addEventListener('click', () => {
+          const templateId = node.dataset.templateId;
+          const template = TEMPLATE_LIBRARY.find((item) => item.id === templateId);
+          if (!template) return;
+          state.pendingTemplateId = template.id;
+          state.activeTemplateId = template.id;
+          renderTemplateControls();
+        });
+      });
+    }
+
+    function resizeInteractiveCanvasToPreset() {
+      const preset = CANVAS_PRESETS[state.canvasPreset] ?? CANVAS_PRESETS.xhs;
+      const zoneRect = els.compositionDropZone.getBoundingClientRect();
+      let width = Math.round(zoneRect.width);
+      let height = Math.round(zoneRect.height);
+      if (width <= 0 || height <= 0) {
+        const maxWidth = 640;
+        const scale = Math.min(1, maxWidth / preset.width);
+        width = Math.max(280, Math.round(preset.width * scale));
+        height = Math.max(220, Math.round(preset.height * scale));
+      }
+      els.interactiveCanvas.width = width;
+      els.interactiveCanvas.height = height;
+      els.interactiveCanvas.style.width = `${width}px`;
+      els.interactiveCanvas.style.height = `${height}px`;
+      if (state.activeLayoutId) {
+        loadCanvasForActiveLayout();
+      } else {
+        interactiveCanvasState.viewport = {
+          x: 0,
+          y: 0,
+          width,
+          height,
+        };
+        drawInteractivePoints();
+      }
+    }
+
+    function applyActiveTemplateToLayout(templateId) {
+      const targetTemplateId = templateId || state.activeTemplateId;
+      const template = TEMPLATE_LIBRARY.find((item) => item.id === targetTemplateId);
+      if (!template) {
+        els.resultPreview.textContent = '模板不存在，请重新选择。';
+        return;
+      }
+      state.canvasPreset = 'xhs';
+
+      const selectedAssets = selectedAssetsInCatalogOrder();
+      if (selectedAssets.length !== template.slots.length) {
+        els.resultPreview.textContent = `当前选中素材 ${selectedAssets.length} 项，模板需要 ${template.slots.length} 项。请先调整素材数量。`;
+        return;
+      }
+
+      const sourceAssets = currentAssets();
+      state.layoutItems = template.slots.map((slot, index) => {
+        const assetId = selectedAssets[index]?.asset_id || '';
+        const asset = sourceAssets.find((candidate) => candidate.asset_id === assetId);
+        return {
+          id: `slot:${template.id}:${index + 1}`,
+          kind: asset ? 'source_asset' : 'template_slot',
+          template_id: template.id,
+          slot_index: index + 1,
+          asset_id: assetId,
+          image_path: asset?.image_path || '',
+          label: asset ? asset.asset_id : `Slot ${index + 1}`,
+          grid_x: slot.gx,
+          grid_y: slot.gy,
+          grid_w: slot.gw,
+          grid_h: slot.gh,
+          left: gridToPercentX(slot.gx),
+          top: gridToPercentY(slot.gy),
+          width: gridToPercentX(slot.gw),
+          height: gridToPercentY(slot.gh),
+          z_index: index + 1,
+        };
+      });
+      state.activeLayoutId = state.layoutItems[0]?.id || '';
+      state.operationLog.push({
+        intent: `套用模板 ${template.name}`,
+        tool: 'template_layout_map',
+        status: `已映射 ${template.slots.length} 格 · ${CANVAS_PRESETS[state.canvasPreset].width}x${CANVAS_PRESETS[state.canvasPreset].height}`,
+      });
+      state.droppedAssetIds = state.layoutItems.filter((item) => item.asset_id).map((item) => item.asset_id);
+      renderCompositionDropZone();
+      renderSelectedPreview();
+      renderTemplateControls();
+      resizeInteractiveCanvasToPreset();
+      els.templateModal.classList.remove('open');
+    }
+
+    function moveActiveLayer(toFront) {
+      if (!state.activeLayoutId) {
+        els.resultPreview.textContent = '请先在布局中点击一个素材，再调整叠层。';
+        return;
+      }
+      const current = state.layoutItems.find((item) => item.id === state.activeLayoutId);
+      if (!current) return;
+      const zValues = state.layoutItems.map((item) => Number(item.z_index ?? 0));
+      if (zValues.length === 0) return;
+      const minZ = Math.min(...zValues);
+      const maxZ = Math.max(...zValues);
+      current.z_index = toFront ? maxZ + 1 : minZ - 1;
+      // 置顶 = 显式声明为前景层（用于抠像/叠加）。置底则取消前景标记。
+      current.foreground = toFront;
+      if (!toFront) current.is_overlay = false;
+      const sorted = state.layoutItems.slice().sort((a, b) => Number(a.z_index ?? 0) - Number(b.z_index ?? 0));
+      sorted.forEach((item, index) => {
+        item.z_index = index + 1;
+      });
+      state.layoutItems = sorted;
+      state.operationLog.push({
+        intent: `${toFront ? '置顶' : '置底'} ${current.label}`,
+        tool: 'layer_order_edit',
+        status: `z-index 已更新（顶层覆盖底层）`,
+      });
+      renderCompositionDropZone();
+      renderSelectedPreview();
+    }
+
+    function bindLayoutDrag(node, layoutItem) {
+      if (!layoutItem) return;
+      const drag = { active: false, moved: false, pointerId: null, offsetX: 0, offsetY: 0 };
+      node.addEventListener('pointerdown', (event) => {
+        const target = event.target;
+        if (target instanceof HTMLElement && target.closest('.resize-handle')) {
+          return;
+        }
+        drag.active = true;
+        drag.moved = false;
+        drag.pointerId = event.pointerId;
+        state.activeLayoutId = layoutItem.id;
+        loadCanvasForLayoutItem(layoutItem);
+        const rect = node.getBoundingClientRect();
+        drag.offsetX = event.clientX - rect.left;
+        drag.offsetY = event.clientY - rect.top;
+        node.classList.add('dragging');
+        node.setPointerCapture(event.pointerId);
+      });
+      node.addEventListener('pointermove', (event) => {
+        if (!drag.active) return;
+        const zone = els.compositionDropZone.getBoundingClientRect();
+        ensureLayoutItemGrid(layoutItem);
+        const nextPxX = event.clientX - zone.left - drag.offsetX;
+        const nextPxY = event.clientY - zone.top - drag.offsetY;
+        const nextLeft = clamp((nextPxX / zone.width) * 100, 0, 100);
+        const nextTop = clamp((nextPxY / zone.height) * 100, 0, 100);
+        const currentLeft = Number.parseFloat(node.style.left) || nextLeft;
+        const currentTop = Number.parseFloat(node.style.top) || nextTop;
+        if (Math.abs(nextLeft - currentLeft) > 0.2 || Math.abs(nextTop - currentTop) > 0.2) drag.moved = true;
+        const nextGridX = clamp(percentToGridX(nextLeft), 0, GRID_LAYOUT.cols - layoutItem.grid_w);
+        const nextGridY = clamp(percentToGridY(nextTop), 0, GRID_LAYOUT.rows - layoutItem.grid_h);
+        layoutItem.grid_x = nextGridX;
+        layoutItem.grid_y = nextGridY;
+        layoutItem.left = gridToPercentX(nextGridX);
+        layoutItem.top = gridToPercentY(nextGridY);
+        node.style.left = `${layoutItem.left}%`;
+        node.style.top = `${layoutItem.top}%`;
+      });
+      node.addEventListener('pointerup', (event) => {
+        drag.active = false;
+        node.classList.remove('dragging');
+        if (node.hasPointerCapture(event.pointerId)) node.releasePointerCapture(event.pointerId);
+      });
+      node.addEventListener('pointercancel', () => {
+        drag.active = false;
+        node.classList.remove('dragging');
+      });
+    }
+
+    function bindLayoutResize(handle, node, layoutItem, dir) {
+      if (!layoutItem || !dir) return;
+      const resize = {
+        active: false,
+        pointerId: null,
+        startX: 0,
+        startY: 0,
+        startGridX: 0,
+        startGridY: 0,
+        startGridW: 0,
+        startGridH: 0,
+      };
+      handle.addEventListener('pointerdown', (event) => {
+        event.stopPropagation();
+        ensureLayoutItemGrid(layoutItem);
+        resize.active = true;
+        resize.pointerId = event.pointerId;
+        resize.startX = event.clientX;
+        resize.startY = event.clientY;
+        resize.startGridX = layoutItem.grid_x;
+        resize.startGridY = layoutItem.grid_y;
+        resize.startGridW = layoutItem.grid_w;
+        resize.startGridH = layoutItem.grid_h;
+        state.activeLayoutId = layoutItem.id;
+        node.classList.add('resizing');
+        handle.setPointerCapture(event.pointerId);
+      });
+
+      handle.addEventListener('pointermove', (event) => {
+        if (!resize.active) return;
+        const zone = els.compositionDropZone.getBoundingClientRect();
+        const dxGrid = Math.round(((event.clientX - resize.startX) / zone.width) * GRID_LAYOUT.cols);
+        const dyGrid = Math.round(((event.clientY - resize.startY) / zone.height) * GRID_LAYOUT.rows);
+        const minW = 4;
+        const minH = 4;
+
+        let nextX = resize.startGridX;
+        let nextY = resize.startGridY;
+        let nextW = resize.startGridW;
+        let nextH = resize.startGridH;
+
+        if (dir.includes('l')) {
+          nextX = resize.startGridX + dxGrid;
+          nextW = resize.startGridW - dxGrid;
+        }
+        if (dir.includes('r')) {
+          nextW = resize.startGridW + dxGrid;
+        }
+        if (dir.includes('t')) {
+          nextY = resize.startGridY + dyGrid;
+          nextH = resize.startGridH - dyGrid;
+        }
+        if (dir.includes('b')) {
+          nextH = resize.startGridH + dyGrid;
+        }
+
+        // Optional aspect lock for corner resizing.
+        if (state.keepAspectResize && dir.length === 2) {
+          const aspect = resize.startGridW / Math.max(resize.startGridH, 1);
+          const deltaW = nextW - resize.startGridW;
+          const deltaH = nextH - resize.startGridH;
+          let lockW = nextW;
+          let lockH = nextH;
+          if (Math.abs(deltaW) >= Math.abs(deltaH)) {
+            lockW = Math.max(minW, nextW);
+            lockH = Math.max(minH, Math.round(lockW / aspect));
+          } else {
+            lockH = Math.max(minH, nextH);
+            lockW = Math.max(minW, Math.round(lockH * aspect));
+          }
+          nextW = lockW;
+          nextH = lockH;
+          if (dir.includes('l')) {
+            nextX = resize.startGridX + (resize.startGridW - nextW);
+          }
+          if (dir.includes('t')) {
+            nextY = resize.startGridY + (resize.startGridH - nextH);
+          }
+        }
+
+        nextW = Math.max(minW, nextW);
+        nextH = Math.max(minH, nextH);
+        nextX = clamp(nextX, 0, GRID_LAYOUT.cols - nextW);
+        nextY = clamp(nextY, 0, GRID_LAYOUT.rows - nextH);
+
+        if (nextX + nextW > GRID_LAYOUT.cols) {
+          nextW = GRID_LAYOUT.cols - nextX;
+        }
+        if (nextY + nextH > GRID_LAYOUT.rows) {
+          nextH = GRID_LAYOUT.rows - nextY;
+        }
+
+        layoutItem.grid_x = nextX;
+        layoutItem.grid_y = nextY;
+        layoutItem.grid_w = Math.max(minW, nextW);
+        layoutItem.grid_h = Math.max(minH, nextH);
+        layoutItem.left = gridToPercentX(layoutItem.grid_x);
+        layoutItem.top = gridToPercentY(layoutItem.grid_y);
+        layoutItem.width = gridToPercentX(layoutItem.grid_w);
+        layoutItem.height = gridToPercentY(layoutItem.grid_h);
+
+        node.style.left = `${layoutItem.left}%`;
+        node.style.top = `${layoutItem.top}%`;
+        node.style.width = `${layoutItem.width}%`;
+        node.style.height = `${layoutItem.height}%`;
+      });
+
+      handle.addEventListener('pointerup', (event) => {
+        if (!resize.active) return;
+        resize.active = false;
+        node.classList.remove('resizing');
+        if (handle.hasPointerCapture(event.pointerId)) {
+          handle.releasePointerCapture(event.pointerId);
+        }
+      });
+
+      handle.addEventListener('pointercancel', () => {
+        resize.active = false;
+        node.classList.remove('resizing');
+      });
+    }
+
+    function useSelectedAssetsInLayout() {
+      const existingIds = new Set(state.layoutItems.filter((item) => item.asset_id).map((item) => item.asset_id));
+      getSelectedAssetIds().forEach((assetId) => {
+        if (existingIds.has(assetId)) return;
+        const asset = currentAssets().find((candidate) => candidate.asset_id === assetId);
+        if (asset) {
+          state.layoutItems.push({
+            id: `asset:${assetId}`,
+            asset_id: assetId,
+            image_path: asset.image_path,
+            label: asset.asset_id,
+            grid_x: 12 + (state.layoutItems.length % 3) * 32,
+            grid_y: 12 + Math.floor(state.layoutItems.length / 3) * 44,
+            grid_w: 28,
+            grid_h: 44,
+            width: gridToPercentX(28),
+            height: gridToPercentY(44),
+            z_index: state.layoutItems.length + 1,
+          });
+        }
+      });
+      state.activeTemplateId = '';
+      state.pendingTemplateId = '';
+      state.activeLayoutId = state.layoutItems[0]?.id || '';
+      state.droppedAssetIds = state.layoutItems.filter((item) => item.asset_id).map((item) => item.asset_id);
+      renderCompositionDropZone();
+      renderSelectedPreview();
+      els.galleryModal.classList.remove('open');
+    }
+
+    function resetInteractiveCanvas() {
+      const activeLayout = state.layoutItems.find((item) => item.id === state.activeLayoutId);
+      interactiveCanvasState.suspendedLayoutId = activeLayout?.id || '';
+      if (activeLayout) {
+        delete activeLayout.edit_rect;
+        delete activeLayout.edit_prompt;
+      }
+      els.canvasPromptInput.value = '';
+      clearInteractiveCanvasAll();
+      renderCompositionDropZone();
+      renderSelectedPreview();
+    }
+
+    function saveCanvasEditToLayout() {
+      const prompt = els.canvasPromptInput.value.trim();
+      if (!interactiveCanvasState.image) {
+        els.resultPreview.textContent = '请先从布局中选择一张图片，再进行画布编辑。';
+        return;
+      }
+      if (interactiveCanvasState.points.length < 2) {
+        els.resultPreview.textContent = '请先在画布上完成矩形选区。';
+        return;
+      }
+      const activeLayout = state.layoutItems.find((item) => item.id === state.activeLayoutId);
+      if (!activeLayout || !activeLayout.asset_id) {
+        els.resultPreview.textContent = '请先在布局中选择一个原始素材块，再保存编辑。';
+        return;
+      }
+      const normalizedRect = normalizeRectFromPoints(interactiveCanvasState.points, interactiveCanvasState.viewport);
+      if (!normalizedRect) {
+        els.resultPreview.textContent = '矩形选区无效，请重试。';
+        return;
+      }
+      const intent = prompt || '对当前选区执行矩形编辑';
+      activeLayout.edit_rect = normalizedRect;
+      activeLayout.edit_prompt = prompt;
+      state.operationLog.push({
+        intent,
+        tool: 'interactive_canvas_edit',
+        status: `已保存到素材 ${activeLayout.label}`,
+        layoutId: activeLayout.id,
+      });
+      renderCompositionDropZone();
+      renderSelectedPreview();
+      els.resultPreview.textContent = '该素材的矩形选区与编辑提示已保存。你可以清空画布后切换其他素材继续编辑。';
+    }
+
+    function drawImageCover(context, image, viewport) {
+      if (!context || !image || !viewport || viewport.width <= 0 || viewport.height <= 0) {
+        return;
+      }
+      const sourceWidth = Math.max(Number(image.naturalWidth || image.width || 0), 1);
+      const sourceHeight = Math.max(Number(image.naturalHeight || image.height || 0), 1);
+      const sourceAspect = sourceWidth / sourceHeight;
+      const targetAspect = viewport.width / viewport.height;
+
+      let cropWidth = sourceWidth;
+      let cropHeight = sourceHeight;
+      if (sourceAspect > targetAspect) {
+        cropWidth = Math.round(sourceHeight * targetAspect);
+      } else if (sourceAspect < targetAspect) {
+        cropHeight = Math.round(sourceWidth / targetAspect);
+      }
+      const sx = Math.max(0, Math.round((sourceWidth - cropWidth) / 2));
+      const sy = Math.max(0, Math.round((sourceHeight - cropHeight) / 2));
+
+      context.drawImage(
+        image,
+        sx,
+        sy,
+        cropWidth,
+        cropHeight,
+        viewport.x,
+        viewport.y,
+        viewport.width,
+        viewport.height,
+      );
+    }
+
+    function drawInteractivePoints() {
+      const context = els.interactiveCanvas.getContext('2d');
+      const canvasWidth = els.interactiveCanvas.width;
+      const canvasHeight = els.interactiveCanvas.height;
+      const viewport = interactiveCanvasState.viewport && interactiveCanvasState.viewport.width > 0 && interactiveCanvasState.viewport.height > 0
+        ? interactiveCanvasState.viewport
+        : { x: 0, y: 0, width: canvasWidth, height: canvasHeight };
+      context.clearRect(0, 0, els.interactiveCanvas.width, els.interactiveCanvas.height);
+      context.fillStyle = 'rgba(255,255,255,0.06)';
+      context.fillRect(0, 0, canvasWidth, canvasHeight);
+      if (interactiveCanvasState.image) {
+        drawImageCover(context, interactiveCanvasState.image, viewport);
+      }
+      if (viewport.width < canvasWidth || viewport.height < canvasHeight) {
+        context.strokeStyle = 'rgba(125, 211, 252, 0.85)';
+        context.lineWidth = 2;
+        context.setLineDash([8, 6]);
+        context.strokeRect(viewport.x, viewport.y, viewport.width, viewport.height);
+        context.setLineDash([]);
+      }
+      if (interactiveCanvasState.points.length < 2) return;
+      context.strokeStyle = 'rgba(255,255,255,0.95)';
+      context.lineWidth = 3;
+      context.beginPath();
+      context.moveTo(interactiveCanvasState.points[0].x, interactiveCanvasState.points[0].y);
+      const start = interactiveCanvasState.points[0];
+      const end = interactiveCanvasState.points[interactiveCanvasState.points.length - 1];
+      context.strokeRect(start.x, start.y, end.x - start.x, end.y - start.y);
+    }
+
+    function bindInteractiveCanvas() {
+      const canvas = els.interactiveCanvas;
+      canvas.addEventListener('pointerdown', (event) => {
+        const rect = canvas.getBoundingClientRect();
+        const rawPoint = {
+          x: ((event.clientX - rect.left) / rect.width) * canvas.width,
+          y: ((event.clientY - rect.top) / rect.height) * canvas.height,
+        };
+        const viewport = interactiveCanvasState.viewport;
+        if (!pointInViewport(rawPoint, viewport)) {
+          return;
+        }
+        const startPoint = clampPointToViewport(rawPoint, viewport);
+        interactiveCanvasState.drawing = true;
+        canvas.setPointerCapture(event.pointerId);
+        interactiveCanvasState.points = [startPoint];
+      });
+      canvas.addEventListener('pointermove', (event) => {
+        if (!interactiveCanvasState.drawing) return;
+        const rect = canvas.getBoundingClientRect();
+        const rawPoint = {
+          x: ((event.clientX - rect.left) / rect.width) * canvas.width,
+          y: ((event.clientY - rect.top) / rect.height) * canvas.height,
+        };
+        const point = clampPointToViewport(rawPoint, interactiveCanvasState.viewport);
+        interactiveCanvasState.points = [interactiveCanvasState.points[0], point];
+        drawInteractivePoints();
+      });
+      canvas.addEventListener('pointerup', (event) => {
+        interactiveCanvasState.drawing = false;
+        if (canvas.hasPointerCapture(event.pointerId)) canvas.releasePointerCapture(event.pointerId);
+      });
+    }
+
+    function renderResult(response) {
+      const clarification = (response.plan?.clarification_questions ?? []).length
+        ? response.plan.clarification_questions.map((item) => `<li>${escapeHtml(item)}</li>`).join('')
+        : '<div class="summary-body">无</div>';
+      const toolCalls = (response.plan?.tool_calls ?? []).length
+        ? response.plan.tool_calls.map((call) => `<div class="summary-body"><strong>${escapeHtml(call.tool)}</strong> · ${escapeHtml(call.reason)}</div>`).join('')
+        : '<div class="summary-body">无</div>';
+
+      const tools = (response.plan?.tool_calls ?? []).map((call) => call.tool).filter(Boolean);
+      const timings = response.context?.timings ?? response.context?.graph_observability?.timings ?? {};
+      const executionTiming = timings.execution ?? {};
+      const topToolTimings = Array.isArray(executionTiming.tool_timings)
+        ? executionTiming.tool_timings
+            .slice()
+            .sort((a, b) => Number(b?.duration_ms || 0) - Number(a?.duration_ms || 0))
+            .slice(0, 5)
+            .map((item) => `${item.tool}: ${item.duration_ms}ms${item.success === false ? ' (fail)' : ''}`)
+        : [];
+      const timingSummary = [
+        Number.isFinite(timings.total_duration_ms) ? `总耗时 ${timings.total_duration_ms}ms` : '',
+        Number.isFinite(timings.preprocess_duration_ms) ? `预处理 ${timings.preprocess_duration_ms}ms` : '',
+        Number.isFinite(timings.memory_suggest_duration_ms) ? `记忆检索 ${timings.memory_suggest_duration_ms}ms` : '',
+        Number.isFinite(timings.graph_run_duration_ms) ? `图执行 ${timings.graph_run_duration_ms}ms` : '',
+      ].filter(Boolean).join(' · ');
+      els.planPreview.innerHTML = `<div>${escapeHtml(response.plan?.intent ?? '未能识别整体需求')}</div><div class="tool-summary">${tools.length ? `将使用：${tools.map(escapeHtml).join('、')}` : '暂无工具安排'}</div>`;
+
+      els.resultPreview.innerHTML = [
+        `<div class="summary-section"><div class="summary-title">输出结果</div><div class="summary-body">${escapeHtml(response.final_response ?? '-')}</div></div>`,
+        `<div class="summary-section"><div class="summary-title">工具输出</div><div class="summary-body">${escapeHtml((response.tool_results ?? []).map((item) => `${item.tool}: ${item.success ? 'ok' : 'fail'}`).join(' · ') || '无')}</div></div>`,
+        `<div class="summary-section"><div class="summary-title">阶段耗时</div><div class="summary-body">${escapeHtml(timingSummary || '无')}</div></div>`,
+        `<div class="summary-section"><div class="summary-title">慢工具 Top5</div><div class="summary-body">${escapeHtml(topToolTimings.join(' · ') || '无')}</div></div>`,
+      ].join('');
+
+      renderStageTimeline(response);
+      renderTraceLog(response);
+      resetFeedbackPanel(response);
+
+      els.traceRawPreview.textContent = JSON.stringify({
+        pipeline_trace: response.pipeline_trace,
+        context: {
+          preprocess: response.context?.preprocess,
+          graph_observability: response.context?.graph_observability,
+          summary: response.context?.summary,
+        },
+      }, null, 2);
+    }
+
+    function renderStageTimeline(response) {
+      const stages = response.pipeline_trace ?? [];
+      if (stages.length === 0) {
+        els.stagePreview.innerHTML = '<div class="empty-state">暂无流程阶段记录。</div>';
+        return;
+      }
+      els.stagePreview.innerHTML = stages.map((item) => `
+        <div class="timeline-step done">
+          <div class="timeline-stage">${escapeHtml(item.stage)}</div>
+          <div class="timeline-detail">${escapeHtml(item.detail)}</div>
+        </div>
+      `).join('');
+    }
+
+    function renderTraceLog(response) {
+      const observability = response.context?.graph_observability ?? {};
+      const events = Array.isArray(observability.trace) ? observability.trace : [];
+      if (events.length === 0) {
+        els.tracePreview.innerHTML = '<div class="empty-state">暂无细粒度节点轨迹（可能是 planner 不可用或走了 fallback）。</div>';
+        return;
+      }
+      els.tracePreview.innerHTML = events.map((event) => {
+        const details = event.details ? JSON.stringify(event.details) : '';
+        return `
+          <div class="trace-item">
+            <span class="trace-ts">${escapeHtml(event.ts ?? '')}</span> ·
+            <span class="trace-node">${escapeHtml(event.node ?? '')}</span> ·
+            <span class="trace-event">${escapeHtml(event.event ?? '')}</span>
+            ${details ? `<div class="micro">${escapeHtml(details)}</div>` : ''}
+          </div>
+        `;
+      }).join('');
+    }
+
+    function resetFeedbackPanel(response) {
+      const observability = response.context?.graph_observability ?? {};
+      const runId = String(observability.run_id ?? '');
+      const hasToolResults = (response.tool_results ?? []).length > 0;
+      const needClarification = Boolean(response.plan?.need_clarification);
+      const requiresFeedback = hasToolResults && !needClarification;
+
+      state.lastRunId = runId;
+      state.lastFeedbackResolved = !requiresFeedback;
+      els.feedbackOpenButton.classList.toggle('visible', requiresFeedback);
+
+      els.feedbackRunId.textContent = runId ? `run_id: ${runId}` : '（本次无 run_id，可能规划失败）';
+      const finalResponse = response.final_response ?? '无文本输出';
+      const toolSummary = (response.tool_results ?? []).map((item) => `${item.tool}: ${item.success ? '执行成功' : '执行失败'}`).join(' · ') || '无工具执行结果';
+      const layoutSummary = (response.context?.layout_context ?? response.context?.summary?.layout_context)
+        ? JSON.stringify(response.context?.layout_context ?? response.context?.summary?.layout_context)
+        : '布局中间信息已随本次请求提交';
+      els.feedbackOutputPreview.innerHTML = `
+        <div class="feedback-output-section">
+          <div class="feedback-output-title">输出结果</div>
+          <div class="feedback-output-body">${escapeHtml(finalResponse)}</div>
+        </div>
+        <div class="feedback-output-section">
+          <div class="feedback-output-title">工具执行</div>
+          <div class="feedback-output-body">${escapeHtml(toolSummary)}</div>
+        </div>
+        <div class="feedback-output-section">
+          <div class="feedback-output-title">布局处理</div>
+          <div class="feedback-output-body">${escapeHtml(layoutSummary)}</div>
+        </div>`;
+      els.feedbackComment.value = '';
+      els.feedbackResultPreview.textContent = '';
+      els.feedbackRetryButton.disabled = true;
+
+      if (!requiresFeedback) {
+        els.feedbackStatusBadge.textContent = needClarification ? '需要澄清，无需确认' : '无可执行产出，无需确认';
+        els.feedbackStatusBadge.className = 'status-badge status-none';
+        els.feedbackAcceptButton.disabled = true;
+        els.feedbackRejectButton.disabled = true;
+        return;
+      }
+
+      els.feedbackStatusBadge.textContent = '待确认（未计入策略/资产记忆）';
+      els.feedbackStatusBadge.className = 'status-badge status-pending';
+      els.feedbackAcceptButton.disabled = false;
+      els.feedbackRejectButton.disabled = false;
+      els.feedbackModal.classList.add('open');
+    }
+
+    async function submitFeedback(accepted) {
+      if (!state.lastRunId) {
+        els.feedbackResultPreview.textContent = '没有可确认的 run_id，请先生成一次结果。';
+        return;
+      }
+      const payload = {
+        run_id: state.lastRunId,
+        accepted,
+        comment: els.feedbackComment.value.trim(),
+        asset_ids: getSelectedAssetIds(),
+      };
+      els.feedbackAcceptButton.disabled = true;
+      els.feedbackRejectButton.disabled = true;
+      try {
+        const response = await fetch('/api/memory/feedback', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
+        if (!response.ok) {
+          const text = await response.text();
+          throw new Error(text || `feedback failed: ${response.status}`);
+        }
+        const data = await response.json();
+        state.lastFeedbackResolved = true;
+        if (accepted) {
+          els.feedbackStatusBadge.textContent = '已通过 · 已计入策略/资产记忆';
+          els.feedbackStatusBadge.className = 'status-badge status-accepted';
+          els.feedbackRetryButton.disabled = true;
+          els.feedbackOpenButton.classList.remove('visible');
+        } else {
+          els.feedbackStatusBadge.textContent = '已打回 · 不计入资产记忆';
+          els.feedbackStatusBadge.className = 'status-badge status-rejected';
+          els.feedbackRetryButton.disabled = false;
+        }
+        els.feedbackResultPreview.textContent = JSON.stringify(data);
+      } catch (error) {
+        els.feedbackAcceptButton.disabled = false;
+        els.feedbackRejectButton.disabled = false;
+        els.feedbackResultPreview.textContent = String(error);
+      }
+    }
+
+    async function retryWithFeedback() {
+      const comment = els.feedbackComment.value.trim();
+      if (!comment) {
+        els.feedbackResultPreview.textContent = '请先填写打回原因，再重新生成。';
+        return;
+      }
+      await runGeneration({ retryFeedback: comment, retryOfRunId: state.lastRunId });
+    }
+
+
+    async function refreshBootstrap() {
+      const libraryRoot = els.libraryRootInput.value.trim();
+      const url = libraryRoot ? `/api/ui/bootstrap?library_root=${encodeURIComponent(libraryRoot)}` : '/api/ui/bootstrap';
+      const response = await fetch(url);
+      if (!response.ok) {
+        throw new Error(`bootstrap failed: ${response.status}`);
+      }
+      state.bootstrap = await response.json();
+      state.activeAlbum = '__all__';
+      const availableIds = new Set(state.bootstrap.assets.map((asset) => asset.asset_id));
+      state.selectedAssetIds = new Set();
+      state.layoutItems = state.layoutItems.filter((item) => !item.asset_id || availableIds.has(item.asset_id));
+      state.droppedAssetIds = state.layoutItems.filter((item) => item.asset_id).map((item) => item.asset_id);
+      renderSummary();
+      renderAlbums();
+      renderAssets();
+      renderCompositionDropZone();
+      if (state.droppedAssetIds.length === 0) {
+        clearInteractiveCanvasAll();
+      }
+      renderSelectedPreview();
+      renderToolCatalog();
+      await fetchPlannerConfig();
+    }
+
+    async function runGeneration(retryOptions = {}) {
+      const preset = CANVAS_PRESETS[state.canvasPreset] ?? CANVAS_PRESETS.xhs;
+      const payload = {
+        user_id: 'web-demo',
+        text: buildGenerationIntent(),
+        library_root: els.libraryRootInput.value.trim() || state.bootstrap?.library_root,
+        selected_asset_ids: getLayoutAssetIds(),
+        guided_tool_names: Array.from(state.selectedToolNames).sort(),
+        layout_context: state.layoutItems.map((item, index) => {
+          const normalized = ensureLayoutItemGrid(item);
+          return ({
+          order: index + 1,
+          id: item.id,
+          kind: item.kind || 'source_asset',
+          label: item.label,
+          asset_id: item.asset_id || '',
+          left: normalized.left,
+          top: normalized.top,
+          width: normalized.width,
+          height: normalized.height,
+          grid_x: normalized.grid_x,
+          grid_y: normalized.grid_y,
+          grid_w: normalized.grid_w,
+          grid_h: normalized.grid_h,
+          z_index: item.z_index ?? index + 1,
+          foreground: item.foreground ?? false,
+          is_overlay: item.is_overlay ?? false,
+          template_id: item.template_id || state.activeTemplateId || '',
+          canvas_preset: state.canvasPreset,
+          canvas_width: preset.width,
+          canvas_height: preset.height,
+          grid_cols: GRID_LAYOUT.cols,
+          grid_rows: GRID_LAYOUT.rows,
+          prompt: item.prompt || '',
+          edit_prompt: item.edit_prompt || '',
+          edit_rect: item.edit_rect || null,
+          selection_mode: item.selection_mode || '',
+        });
+        }),
+        operation_log: state.operationLog,
+        input_image_paths: [],
+        input_video_paths: [],
+      };
+      if (retryOptions.retryFeedback) {
+        payload.retry_feedback = retryOptions.retryFeedback;
+        payload.retry_of_run_id = retryOptions.retryOfRunId ?? '';
+      }
+
+      els.generateButton.disabled = true;
+      els.generateButton.textContent = retryOptions.retryFeedback ? '根据反馈重新生成中...' : '生成中...';
+      try {
+        const response = await fetch('/agent/execute', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
+        if (!response.ok) {
+          const body = await response.text();
+          throw new Error(body || `execute failed: ${response.status}`);
+        }
+        const data = await response.json();
+        renderResult(data);
+      } catch (error) {
+        els.resultPreview.textContent = String(error);
+      } finally {
+        els.generateButton.disabled = false;
+        els.generateButton.textContent = '开始生成';
+      }
+    }
+
+    function buildGenerationIntent() {
+      const edits = state.operationLog.map((operation) => operation.intent).join('；');
+      const assetCount = state.layoutItems.filter((item) => item.asset_id).length;
+      const editCount = state.layoutItems.filter((item) => item.edit_rect || item.edit_prompt).length;
+      const preset = CANVAS_PRESETS[state.canvasPreset] ?? CANVAS_PRESETS.xhs;
+      const template = TEMPLATE_LIBRARY.find((item) => item.id === state.activeTemplateId);
+      const templateClause = template
+        ? `本次使用模板 ${template.name}（${template.slots.length} 格）。`
+        : '本次为自由拖拽布局。';
+      return `请根据当前布局生成最终 Live Photo：固定画布为 ${preset.width}x${preset.height}（${preset.label}），布局按 ${GRID_LAYOUT.cols}x${GRID_LAYOUT.rows} 网格解析，调用 concat_clips 对布局中的 ${assetCount} 张原始图片做空间拼接，严格使用每个布局项的 grid_x/grid_y/grid_w/grid_h 与 z_index，顶层 z-index 覆盖底层，不要仅按素材加入顺序排列。${templateClause}${editCount ? `并把 ${editCount} 个画布编辑产物叠加到拼接结果上。` : ''}${edits ? `处理中间步骤：${edits}。` : ''}当前测试只验证原始素材空间拼接，不需要分割。请保留完整的意图识别、工具使用和中间处理记录。`;
+    }
+
+    els.refreshButton.addEventListener('click', () => refreshBootstrap().catch((error) => { els.resultPreview.textContent = String(error); }));
+    els.addSelectedToLayoutButton.addEventListener('click', useSelectedAssetsInLayout);
+    els.clearLayoutButton.addEventListener('click', () => { state.droppedAssetIds = []; state.layoutItems = []; state.operationLog = []; state.activeLayoutId = ''; renderCompositionDropZone(); resetInteractiveCanvas(); renderSelectedPreview(); });
+    els.openGalleryButton.addEventListener('click', () => {
+      renderAssets();
+      els.galleryModal.classList.add('open');
+    });
+    els.closeGalleryButton.addEventListener('click', () => els.galleryModal.classList.remove('open'));
+    els.cancelGalleryButton.addEventListener('click', () => els.galleryModal.classList.remove('open'));
+    els.galleryModal.addEventListener('click', (event) => {
+      if (event.target === els.galleryModal) els.galleryModal.classList.remove('open');
+    });
+    els.refreshGalleryButton.addEventListener('click', () => refreshBootstrap().catch((error) => { els.gallerySelectionSummary.textContent = String(error); }));
+    els.openTemplateButton.addEventListener('click', () => {
+      const selectedCount = getSelectedAssetIds().length;
+      if (selectedCount === 0) {
+        els.resultPreview.textContent = '请先在图片弹窗中勾选素材，再选择模板。';
+        return;
+      }
+      renderTemplateControls();
+      els.templateModal.classList.add('open');
+    });
+    els.closeTemplateButton.addEventListener('click', () => els.templateModal.classList.remove('open'));
+    els.cancelTemplateButton.addEventListener('click', () => els.templateModal.classList.remove('open'));
+    els.applyTemplateFromModalButton.addEventListener('click', () => applyActiveTemplateToLayout(state.pendingTemplateId || state.activeTemplateId));
+    els.templateModal.addEventListener('click', (event) => {
+      if (event.target === els.templateModal) els.templateModal.classList.remove('open');
+    });
+    els.canvasResetButton.addEventListener('click', resetInteractiveCanvas);
+    els.canvasPreviewButton.addEventListener('click', saveCanvasEditToLayout);
+    els.layerUpButton.addEventListener('click', () => moveActiveLayer(true));
+    els.layerDownButton.addEventListener('click', () => moveActiveLayer(false));
+    els.keepAspectResize.addEventListener('change', () => {
+      state.keepAspectResize = Boolean(els.keepAspectResize.checked);
+    });
+    els.selectAllAssetsButton.addEventListener('click', () => {
+      const assets = filteredAssets();
+      setSelectedAssetIds(assets.map((asset) => asset.asset_id));
+    });
+    els.selectAllButton.addEventListener('click', () => {
+      const assets = filteredAssets();
+      setSelectedAssetIds(assets.map((asset) => asset.asset_id));
+    });
+    els.albumSelect.addEventListener('change', () => setActiveAlbum(els.albumSelect.value));
+    els.galleryAlbumSelect.addEventListener('change', () => setActiveAlbum(els.galleryAlbumSelect.value));
+    els.generateButton.addEventListener('click', () => runGeneration());
+    els.clearButton.addEventListener('click', () => {
+      els.planPreview.textContent = '等待生成。';
+      els.resultPreview.textContent = '等待生成。';
+      els.stagePreview.textContent = '等待生成。';
+      els.tracePreview.textContent = '等待生成。';
+      els.traceRawPreview.textContent = '-';
+      state.lastRunId = '';
+      state.lastFeedbackResolved = true;
+      els.feedbackStatusBadge.textContent = '尚未生成';
+      els.feedbackStatusBadge.className = 'status-badge status-none';
+      els.feedbackRunId.textContent = '';
+      els.feedbackComment.value = '';
+      els.feedbackResultPreview.textContent = '';
+      els.feedbackAcceptButton.disabled = true;
+      els.feedbackRejectButton.disabled = true;
+      els.feedbackRetryButton.disabled = true;
+    });
+    els.plannerApplyButton.addEventListener('click', () => applyPlannerConfig().catch((error) => { els.resultPreview.textContent = String(error); }));
+    els.plannerResetButton.addEventListener('click', () => resetPlannerConfig().catch((error) => { els.resultPreview.textContent = String(error); }));
+    els.feedbackAcceptButton.addEventListener('click', () => submitFeedback(true));
+    els.feedbackRejectButton.addEventListener('click', () => submitFeedback(false));
+    els.feedbackRetryButton.addEventListener('click', () => retryWithFeedback().catch((error) => { els.feedbackResultPreview.textContent = String(error); }));
+    els.feedbackOpenButton.addEventListener('click', () => els.feedbackModal.classList.add('open'));
+    els.feedbackCloseButton.addEventListener('click', () => els.feedbackModal.classList.remove('open'));
+    els.feedbackModal.addEventListener('click', (event) => { if (event.target === els.feedbackModal) els.feedbackModal.classList.remove('open'); });
+
+    renderCompositionDropZone();
+    resizeInteractiveCanvasToPreset();
+    resetInteractiveCanvas();
+    bindInteractiveCanvas();
+    if (typeof ResizeObserver === 'function') {
+      const canvasSyncObserver = new ResizeObserver(() => {
+        resizeInteractiveCanvasToPreset();
+      });
+      canvasSyncObserver.observe(els.compositionDropZone);
+    }
+    window.addEventListener('resize', () => {
+      resizeInteractiveCanvasToPreset();
+    });
+    refreshBootstrap().catch((error) => {
+      els.resultPreview.textContent = String(error);
+      els.assetGrid.innerHTML = '<div class="empty-state">页面初始化失败，请检查后端是否启动。</div>';
+    });
+
+    renderToolGuidance();
+    renderToolCatalog();
+  </script>
+</body>
+</html>

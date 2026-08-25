@@ -1,0 +1,759 @@
+# vivo 视频编辑 / 特效 SDK 运行时 API 签名 dump
+#
+# 设备: vivo PD2547 (Android 16 / API 36), 型号代号 V2547A
+# SDK : videoeditorsdk-v4.9.0.3-SNAPSHOT / mediaeffectsdk-gallery-1.3.2.2
+#
+# 生成方式: 真机运行 com.vivo.lpa/.MainActivity 探针, 通过反射枚举 public
+#           构造器/字段/方法, 并对 listener 类一并 dump 其嵌套接口。
+#           复现: android/tools/install_and_probe.sh <device-serial>
+#
+# 为什么必须靠运行时反射: 这两个 AAR 无 sources/javadoc, 且环境无 JDK javap
+#           可直接对 AAR 解包分析, 官方亦未提供 API 文档。此文件是后续所有
+#           调用代码的唯一签名依据, 修改 SDK 版本后需重新生成。
+
+--------- beginning of main
+=== LPA SDK PROBE BEGIN ===
+
+[1] 设备信息
+  model    = V2547A
+  device   = PD2547
+  board    = canoe
+  soc      = SM8850
+  android  = 16 (API 36)
+  abis     = arm64-v8a
+
+[2] 关键类加载
+  OK   com.vivo.videoeditorsdk.editor.api.VMEditor
+  OK   com.vivo.videoeditorsdk.editor.api.IVMEditor
+  OK   com.vivo.videoeditorsdk.editor.api.VMPlayer
+  OK   com.vivo.videoeditorsdk.editor.api.VMEffectEditor
+  OK   com.vivo.videoeditorsdk.editor.api.VMAudioEditor
+  OK   com.vivo.videoeditorsdk.editor.api.VMVideoFramePicker
+  OK   com.vivo.videoeditorsdk.editor.api.VMThumbnailsGenerator
+  OK   com.vivo.videoeditorsdk.editor.api.VMVideoConverter
+  OK   com.vivo.videoeditorsdk.editor.api.VMMusicExtractor
+  OK   com.vivo.videoeditorsdk.editor.api.entity.input.VMClip
+  OK   com.vivo.videoeditorsdk.editor.api.entity.input.VMFilterData
+  OK   com.vivo.videoeditorsdk.editor.api.entity.input.TextStickerExData
+  OK   com.vivo.videoeditorsdk.editor.api.entity.input.ClipAudioParams
+  OK   com.vivo.videoeditorsdk.editor.api.entity.output.VMExportEncodeConfig
+  OK   com.vivo.videoeditorsdk.editor.api.entity.listener.VMExportListener
+  OK   com.vivo.videoeditorsdk.videoeditor.VideoExportEngine
+  OK   com.vivo.videoeditorsdk.videoeditor.VideoEditorConfig
+  OK   com.vivo.videoeditorsdk.videoeditor.VELoader
+  OK   com.vivo.videoeditorsdk.base.SpeedZoneCurve
+  OK   com.vivo.videoeditorsdk.render.MatteRender
+  OK   com.vivo.videoeditorsdk.media.ExportParam
+  OK   com.vivo.mediaeffectsdk.motioneffect.camera.VMLivePhotoEffectEngine
+  OK   com.vivo.mediaeffectsdk.motioneffect.core.render.gpufilters.livephoto.GPUMattingFilter
+  OK   com.vivo.mediaeffectsdk.motioneffect.core.render.gpufilters.livephoto.GPULineMattingFilter2
+  OK   com.vivo.mediaeffectsdk.motioneffect.core.render.gpufilters.livephoto.GPUImageOverlayFilter
+  OK   com.vivo.mediaeffectsdk.motioneffect.core.render.gpufilters.livephoto.GPUStickerMattingFilter
+  OK   com.vivo.mediaeffectsdk.motioneffect.core.render.gpufilters.livephoto.BodyStrokeParams
+  小结: 27/27 可加载
+
+[3] native 库加载
+  OK   libVideoEditorSDK_jni.so
+  OK   libVideoEditorSDK_Dependency.so
+  OK   libGLHardwardRender_Jni.so
+  OK   libvivo_media_jni.so
+  OK   libvcp_local.so
+  OK   libvsfpa.so
+  OK   libmediaeffectsdk.so
+  OK   libmedia_effect.so
+  OK   libImageProcess.so
+  OK   libmesEglImageRender.so
+  OK   libmesDebug.so
+  小结: 11/11 可加载
+
+[4] 公开 API 签名 dump
+
+  --- com.vivo.videoeditorsdk.editor.api.VMEditor ---
+    <init>()
+    void activeTextStickerView(VMTextStickerData, boolean)
+    boolean addBGM(VMClip)
+    VMTextStickerData[] addBeginTextSticker(VMScheme, boolean, boolean)
+    VMTextStickerData[] addEndTextSticker(VMScheme, boolean, boolean)
+    VMTextStickerData[] addOverlapTextSticker(VMScheme, boolean)
+    void addStickerEffect(VMStickerData)
+    void addStickerEffect(VMStickerData, boolean)
+    void addStickerEffect(VMStickerData, boolean, boolean)
+    boolean addVoice(VMClip)
+    void clearTimeLineMotionEffect()
+    void enableTextStickerAll()
+    String enterTextStickerEditState(boolean)
+    HslParam getAdjustHslParam(int)
+    float getAdjustParamValue(int, AdjustEffectType)
+    ClipAdjustEffectParams getAdjustParams(int)
+    long getAudioDuration(String)
+    VMClip getBGMInfo(String)
+    ClipEffectInfo getClipEffectInfo(int)
+    float getExportVideoSize(int, boolean)
+    float getExportVideoSize(String, boolean)
+    float getFilterLevel(int)
+    String getMotionEffectSchemeTransType()
+    String getSchemeTransType()
+    ArrayList getSupportExportFormatList(String)
+    VMClip getVoiceInfo(String)
+    int init(Context, VMResource, VMEditorView)
+    void initTextStickerManager(ViewGroup, StickerContentViewGroup, VMCustomStickerEditViewListener, VMEditStickerListener)
+    boolean isAdjustParamChanged(int)
+    boolean isBGMExists(String)
+    boolean isSupportOriginImageQuality()
+    boolean isVoiceExists(String)
+    void recoverEffectScheme()
+    void recoverTimeLineMotionEffect()
+    void release()
+    void removeBGM(VMClip)
+    int removeBeginEffect()
+    void removeEffectScheme()
+    int removeEndEffect()
+    void removeFilter(int)
+    void removeFilterAll()
+    void removeTextStickerEffect(VMTextStickerData)
+    int removeTransition(int)
+    void removeVoice(VMClip)
+    ClipAdjustEffectParams resetAdjustParam(int)
+    ClipAdjustEffectParams resetAdjustParamsAll()
+    void setAdjustHslParam(int, HslParam)
+    void setAdjustParam(int, ClipAdjustEffectParams)
+    void setAdjustParamAll(ClipAdjustEffectParams)
+    void setAdjustParamAll(List)
+    void setAdjustParamValue(int, AdjustEffectType, float)
+    void setAspectRatio(float)
+    void setBGMVolume(float)
+    void setCurSizeRatio(String)
+    void setExportListener(VMExportListener)
+    void setFilter(int, VMFilterData)
+    void setFilterAll(VMFilterData)
+    void setFilterAll(List)
+    void setFilterLevel(int, VMFilterData)
+    void setFirstOverlapEffectReplaceBitmaps(Bitmap[])
+    void setTextStickerTouchable(boolean)
+    void setVMEffectNum(int)
+    int startExport(String, VMExportEncodeConfig)
+    void stopExport()
+    void updateBGM(VMClip)
+    void updateBGMAndMotionEffectScheme(VMClip, VMScheme)
+    void updateBGMAndScheme(VMClip, VMScheme)
+    void updateBGMInfo(VMClip)
+    int updateBeginEffect(VMScheme)
+    int updateEndEffect(VMScheme)
+    void updateMotionEffectScheme(VMScheme)
+    int updateProjectClip(List)
+    void updateScheme(VMScheme)
+    void updateStickerEffectTimeMs(VMStickerData)
+    void updateStickerViewpoint(VMStickerData)
+    void updateTextStickerEffectText(VMTextStickerData)
+    void updateTimeLineMotionEffect()
+    int updateTransitionDurationMs(int, int)
+    int updateTransitionEffect(int, VMScheme)
+    void updateVoiceInfo(VMClip)
+
+  --- com.vivo.videoeditorsdk.editor.api.entity.input.VMClip ---
+    <init>()
+    field Creator CREATOR
+    int describeContents()
+    boolean equals(Object)
+    ClipAudioParams getAudioParams()
+    ClipBackground getBackground()
+    VMBeginEffectData getBeginEffectData()
+    Clip getClip()
+    ClipAdjustEffectParams getClipAdjustEffectParams()
+    ClipCompositionParams getCompositionParams()
+    long getDurationMs()
+    VMEndEffectData getEndEffectData()
+    VMFilterData getFilterData()
+    String getPath()
+    ProxyClipParams getProxyClipParams()
+    int getRotation()
+    float getSpeed()
+    long getStartTimeMs()
+    VMTemplateOverlapEffectData getTemplateOverlapEffectData()
+    List getTextEffectDataList()
+    ClipTransformParams getTransformParams()
+    VMTransitionData getTransitionData()
+    Type getType()
+    String getUuid()
+    float getVolume()
+    int hashCode()
+    boolean isAudioSonic()
+    boolean isBrokenVideo()
+    boolean isMirror()
+    void setAudioParams(ClipAudioParams)
+    void setAudioSonic(boolean)
+    void setBackground(ClipBackground)
+    void setBeginEffectData(VMBeginEffectData)
+    void setBrokenVideo(boolean)
+    void setClip(Clip)
+    void setClipAdjustEffectParams(ClipAdjustEffectParams)
+    void setCompositionParams(ClipCompositionParams)
+    void setDurationMs(long)
+    void setEndEffectData(VMEndEffectData)
+    void setFilterData(VMFilterData)
+    void setMirror(boolean)
+    void setPath(String)
+    void setProxyClipParams(ProxyClipParams)
+    void setRotation(int)
+    void setSpeed(float)
+    void setStartTimeMs(long)
+    void setTemplateOverlapEffectData(VMTemplateOverlapEffectData)
+    void setTextEffectDataList(List)
+    void setTransformParams(ClipTransformParams)
+    void setTransitionData(VMTransitionData)
+    void setType(Type)
+    void setUuid(String)
+    void setVolume(float)
+    String toString()
+    void writeToParcel(Parcel, int)
+
+  ---   ↳ nested Type ---
+    field Type BGM
+    field Type PIC
+    field Type VIDEO
+    field Type VOICE
+    int compareTo(Object)
+    static Type valueOf(String)
+    static Type[] values()
+
+  --- com.vivo.videoeditorsdk.editor.api.entity.output.VMExportEncodeConfig ---
+    <init>(String, int, int, int, int)
+    <init>(String, int, int, int, int, int)
+    static VMExportEncodeConfig createDefaultConfig()
+    int getVideoBitRate()
+    String getVideoEncodeMime()
+    int getVideoFps()
+    int getVideoHeight()
+    int getVideoRotation()
+    int getVideoWidth()
+    void setVideoBitRate(int)
+    void setVideoEncodeMime(String)
+    void setVideoFps(int)
+    void setVideoHeight(int)
+    void setVideoRotation(int)
+    void setVideoWidth(int)
+    String toString()
+
+  --- com.vivo.videoeditorsdk.editor.api.VMVideoFramePicker ---
+    <init>()
+    static Bitmap getVideoFrameByTime(String, float, int, int)
+
+  --- com.vivo.videoeditorsdk.videoeditor.VideoEditorConfig ---
+    <init>()
+    field String ANDROIDASSETSFILEPREFIX
+    field String ASSTESFILEPREFIX
+    field int AspectRatio_16v9
+    field int AspectRatio_1v1
+    field int AspectRatio_1v2
+    field int AspectRatio_21v9
+    field int AspectRatio_2v1
+    field int AspectRatio_3v4
+    field int AspectRatio_4v3
+    field int AspectRatio_9v16
+    field int AspectRatio_9v21
+    field int AspectRatio_UserDefine
+    field String LUT_HDR10_TO_HLG
+    field String LUT_HLG_PREVIEW
+    field String LUT_LOG_EXT
+    field String LUT_LOG_TO_HDR
+    field String LUT_LOG_TO_SDR
+    field String LUT_P3_TO_HLG_BT2020
+    field String LUT_SDR_TO_HDR
+    field long MAX_SUPPORT_MACROBLOCKS
+    field String SDKBuildInfo
+    field String SDKVersion
+    field int nAudioSampleRate
+    field int nVideoFrameRate
+    static boolean dumpMovieEffectFirstInput()
+    static boolean dumpMovieEffectFirstOutput()
+    static boolean dumpMovieEffectInput()
+    static boolean dumpMovieEffectOutput()
+    static void enableBrokenDecoderOnly(boolean)
+    static boolean enableDataBlockDebug()
+    static boolean enableDebugLog()
+    static void enableImprecisePreview(boolean)
+    static boolean enableMovieEffectQueueRepeat()
+    static void enableMoviePortrait(boolean)
+    static boolean enableNvConvert()
+    static boolean enableReprocessTagDump()
+    static String getAIMixLicensePath()
+    static String getAIMixSedModelPath()
+    static String getAIMixSesModelPath()
+    static String getAIMixSignaturePath()
+    static String getAspectMode()
+    static float getAspectRatio()
+    static float getAspectRatioInScreenMode()
+    static String getAssetThemePath()
+    static int getAudioEncodeBitrate()
+    static int getAudioSampleRate()
+    static Context getContext()
+    static Application getCurApplication()
+    static int getDebugMovieEffectBqSize()
+    static int getDebugMovieEffectOutPortCacheSize()
+    static int getDebugQcomV3LoopInterval()
+    static String getDeviceName()
+    static int getEffectLibVersion()
+    static boolean getEnableHDR()
+    static FaceDetector getFaceDetector()
+    static int getFirstAPILevel()
+    static boolean getIsOnlyParseCurrentAspect()
+    static String getLutPath(String)
+    static boolean getMovieEffectDisableDownscale()
+    static boolean getMovieEffectDisableLensFlare()
+    static boolean getMovieEffectDisableOperatingRate()
+    static boolean getMovieEffectDumpV3Input()
+    static String getPlatformName()
+    static Resources getResource()
+    static int getV3ExportFps()
+    static int getVideoFrameRate()
+    static float getViewPortRatio()
+    static int getmAspectRatioMode()
+    static void init(Context, String)
+    static boolean isEnableBrokenDecoderOnly()
+    static boolean isEnableFaceDetect()
+    static boolean isEnableImprecisePreview()
+    static boolean isEnableMoviePortrait()
+    static boolean isEnableVCode()
+    static boolean isLowLevelPlatform()
+    static boolean isUseForOversea()
+    static void setAIMixLicensePath(String)
+    static void setAIMixSedModelPath(String)
+    static void setAIMixSesModelPath(String)
+    static void setAIMixSignaturePath(String)
+    static void setAspectMode(int)
+    static void setAssetInstallRootPath(String)
+    static void setAssetStoreRootPath(String)
+    static void setAssetThemePath(String)
+    static void setEnableFaceDetect(boolean)
+    static void setEnableHDR(boolean)
+    static void setEnableVCode(boolean)
+    static void setFaceDetector(FaceDetector)
+    static void setIsOnlyParseCurrentAspect(boolean)
+    static void setLutPath(String, String)
+    static void setUseForOversea(boolean)
+    static boolean setVideoFrameRate(int)
+    static void setViewPortRatio(float)
+
+  --- com.vivo.mediaeffectsdk.motioneffect.camera.VMLivePhotoEffectEngine ---
+    <init>(Context, Surface, int, int, CameraLookupTableBean, RectF, boolean, boolean, boolean)
+    <init>(Context, Surface, int, int, CameraLookupTableBean, boolean)
+    <init>(Context, Surface, int, int, CameraLookupTableBean, boolean, boolean)
+    <init>(Context, Surface, int, int, List, RectF, boolean, boolean, boolean)
+    <init>(Context, Surface, int, int, List, boolean)
+    <init>(Context, Surface, int, int, List, boolean, boolean)
+    <init>(Surface, int, int)
+    field int STATE_IDLE
+    field int STATE_INITED
+    field int STATE_STARTED
+    field int STATE_STOPED
+    void release()
+    int sendYUVFrame(YUVFrame)
+    int sendYUVFrameByHardwareBuffer(YUVFrame)
+    void setAdditionalBitmaps(Bitmap[])
+    void setBodyStrokeEngine(VMBodyStrokeEngine)
+    void setCameraMotionEffectEngine(VMCameraMotionEffectEngine)
+    void setListener(Listener)
+    void setMirror(boolean)
+    void setSkinMaskBuffer(long, ByteBuffer)
+    int start()
+    int stop()
+
+  --- com.vivo.videoeditorsdk.editor.api.VMVideoConverter ---
+    <init>(VMConverterConfig)
+    field int ERROR_MEDIA_STATE_NEED_CONVERTER
+    field int ERROR_MEDIA_STATE_NOT_SUPPORTED
+    field int RESULT_OK
+    field int RESULT_OK_RECOMMEND_TRANSCODING
+    static int getMediaFileState(String)
+    static int getMediaFileState(String, boolean)
+    int startVideoConvert(String, String, VMConverterListener)
+    void stopVideoConvert()
+
+  --- com.vivo.videoeditorsdk.editor.api.entity.output.VMConverterConfig ---
+    <init>(String, int, int, int)
+    static VMConverterConfig createCustomConfig(int, int)
+    static VMConverterConfig createDefaultConfig()
+
+  --- com.vivo.videoeditorsdk.editor.api.entity.listener.VMConverterListener ---
+    void onCompletion()
+    void onError(int)
+    void onProgressChanged(int, int)
+
+  --- com.vivo.videoeditorsdk.editor.api.view.VMEditorView ---
+    <init>(Context)
+    <init>(Context, AttributeSet)
+
+  --- com.vivo.videoeditorsdk.editor.api.entity.input.VMResource ---
+    <init>()
+    field Creator CREATOR
+    int describeContents()
+    void enableBrokenProcess(boolean)
+    AspectRatio getAspectRatio()
+    String getCurSizeRatio()
+    StickerContentViewGroup getCustomStickerContentViewGroup()
+    VMCustomStickerEditViewListener getCustomStickerEditViewListener()
+    ViewGroup getEditStickerContainer()
+    VMEditStickerListener getEditStickerListener()
+    float getProjectAspectRatio()
+    Scene getScene()
+    List getVMClips()
+    VMTemplateData getVMTemplateData()
+    VideoOrientation getVideoOrientation()
+    boolean isEnableBrokenProcess()
+    void readFromParcel(Parcel)
+    void setAspectRatio(AspectRatio)
+    void setCurSizeRatio(String)
+    void setCustomStickerContentViewGroup(StickerContentViewGroup)
+    void setCustomStickerEditViewListener(VMCustomStickerEditViewListener)
+    void setEditStickerContainer(ViewGroup)
+    void setEditStickerListener(VMEditStickerListener)
+    void setProjectAspectRatio(float)
+    void setScene(Scene)
+    void setVMClips(List)
+    void setVMTemplateData(VMTemplateData)
+    void setVideoOrientation(VideoOrientation)
+    String toString()
+    void writeToParcel(Parcel, int)
+
+  --- com.vivo.videoeditorsdk.videoeditor.VideoExportEngine ---
+    <init>()
+    VideoExportConfig getVideoExportConfig()
+    void setVideoExportConfig(VideoExportConfig)
+    int start(String, String, ExportListener)
+    void stop()
+
+  ---   ↳ nested ExportListener ---
+    void onCompletion(VideoConverter)
+    void onError(int)
+    void onProgressChanged(int, int, long)
+
+  ---   ↳ nested VideoExportConfig ---
+    Builder buildUpon()
+    BeautyParameters getAdjustParams()
+    AIAudioParams getAiAudioParams()
+    CompositionQuad getCompositionQuad()
+    RectF getCropRect()
+    int getExtraVideoRotation()
+    LutMaskParameters getFileterStyleParams()
+    BitEffectParameters getFilterColorPaletteParams()
+    float getFilterIntensity()
+    String getFilterPath()
+    int getVideoHeight()
+    int getVideoWidth()
+    WaterMarkParams getWaterMarkParams()
+    boolean isCropNonRectMark()
+    boolean isFlipHorizon()
+    boolean isFlipVertical()
+    String toString()
+
+  ---   ↳ nested InnerConvertHandler ---
+    void onCompletion(VideoConverter)
+    void onError(int)
+    void onProgressChanged(int, int)
+
+  --- com.vivo.videoeditorsdk.videoeditor.VideoConverter ---
+    <init>()
+    field int mConverterBitrate
+    field int mConverterDuration
+    field int mConverterFrameRate
+    field boolean mConverterHasAudio
+    field boolean mConverterHasVideo
+    field int mConverterRotation
+    field int mConverterVideoHeight
+    field int mConverterVideoWidth
+    field int mSourceDuration
+    field int mSourceFrameRate
+    field boolean mSourceHasAudio
+    field boolean mSourceHasVideo
+    field int mSourceHeight
+    field int mSourceRotation
+    field int mSourceWidth
+    static long estimateConvertedFileSize(int, int)
+    int getEncoderVideoDuration()
+    int getEncoderVideoFrameCount()
+    long getEstimateFileSize()
+    long getRemainingTime()
+    MediaFormat getVideoFormat()
+    boolean hasYuvMeta()
+    static boolean isSupportConvert(String)
+    static boolean isSupportVideoEncoder(String, int, int)
+    void pause()
+    void resume()
+    void setAiAudioParams(AIAudioMixParams, String)
+    void setAllKeyFame(boolean)
+    void setCropRect(RectF)
+    void setCubeBytePath(String, LogCubeMode)
+    void setExportParameter(int, int, int, int)
+    void setExportParameter(int, int, int, int, String)
+    void setIsOpenSR(boolean)
+    void setOnCompletionListener(OnCompletionListener)
+    void setOnErrorListener(OnErrorListener)
+    void setOnProgressChangeListener(OnProgressChangeListener)
+    int setSource(FileDescriptorWrapper)
+    int setSource(FileDescriptorWrapper, ClipConstructorParam)
+    int setSourcePath(String)
+    int setSourcePath(String, ClipConstructorParam)
+    void setTargetFilePath(String)
+    void setYuvMeta(boolean)
+    void start()
+    void stop()
+
+  --- com.vivo.videoeditorsdk.videoeditor.VELoader ---
+    <init>()
+    static EGLHolder loadEGLHolder(int, int)
+    static Element loadElement(int, int)
+    static void releaseEGLHolder(EGLHolder)
+    static void releaseElement(Element)
+    static void setEGLHolderContext(EGLContext)
+
+  --- com.vivo.videoeditorsdk.media.ExportParam ---
+    <init>(String, int, int, int, long, int, int)
+    <init>(String, String, int, int, int, long, int, int)
+    <init>(String, String, int, int, int, long, int, int, boolean)
+    <init>(String, String, int, int, int, long, int, int, boolean, MediaFormat)
+    boolean getAllKeyFrame()
+    int getEncodeBitrate()
+    int getEncodeHeight()
+    long getEncodeMaxFileSize()
+    int getEncodeWidth()
+    MediaFormat getMediaFormat()
+    int getRotate()
+    int getSamplingRate()
+    String getStrExportAudioFile()
+    String getStrExportFile()
+    void setAllKeyFrame(boolean)
+    void setEncodeBitrate(int)
+    void setEncodeHeight(int)
+    void setEncodeMaxFileSize(long)
+    void setEncodeWidth(int)
+    void setMediaFormat(MediaFormat)
+    void setRotate(int)
+    void setSamplingRate(int)
+    void setStrExportAudioFile(String)
+    void setStrExportFile(String)
+
+  --- com.vivo.videoeditorsdk.videoeditor.VideoExportConfig : 不可加载，跳过 ---
+
+  --- com.vivo.videoeditorsdk.videoeditor.OnProgressListener ---
+    void onComplete()
+    void onPercentChanged(int)
+
+  --- com.vivo.videoeditorsdk.videoeditor.ErrorCode ---
+    field ErrorCode ADD_CLIP_FAIL
+    field ErrorCode ARGUMENT_FAILED
+    field ErrorCode AUDIORESAMPLER_CREATE_FAIL
+    field ErrorCode CAMERA_SETUP_ERROR
+    field ErrorCode CODEC_DECODE
+    field ErrorCode CODEC_INIT
+    field ErrorCode CREATE_FAILED
+    field ErrorCode DIRECTEXPORT_CHECK_ERROR
+    field ErrorCode DIRECTEXPORT_CLIPLIST_ERROR
+    field ErrorCode DIRECTEXPORT_DEC_DECODE_ERROR
+    field ErrorCode DIRECTEXPORT_DEC_INIT_ERROR
+    field ErrorCode DIRECTEXPORT_DEC_INIT_SURFACE_ERROR
+    field ErrorCode DIRECTEXPORT_ENC_DSI_DIFF_ERROR
+    field ErrorCode DIRECTEXPORT_ENC_ENCODE_ERROR
+    field ErrorCode DIRECTEXPORT_ENC_FRAME_CONVERT_ERROR
+    field ErrorCode DIRECTEXPORT_ENC_FUNCTION_ERROR
+    field ErrorCode DIRECTEXPORT_ENC_INIT_ERROR
+    field ErrorCode DIRECTEXPORT_ENC_INPUT_SURFACE_ERROR
+    field ErrorCode DIRECTEXPORT_FILEREADER_INIT_ERROR
+    field ErrorCode DIRECTEXPORT_FILEWRITER_INIT_ERROR
+    field ErrorCode DIRECTEXPORT_RENDER_INIT_ERROR
+    field ErrorCode DIRECTEXPORT_WRITER_UNKNOWN_ERROR
+    field ErrorCode DIRECTEXPORT_WRITER_WRITE_ERROR
+    field ErrorCode ENCODE_VIDEO_FAIL
+    field ErrorCode EVENTHANDLER
+    field ErrorCode EXPORT_AUDIO_DEC_INIT_FAIL
+    field ErrorCode EXPORT_NOT_ENOUGHT_DISK_SPACE
+    field ErrorCode EXPORT_USER_CANCEL
+    field ErrorCode EXPORT_VIDEO_DEC_INIT_FAIL
+    field ErrorCode EXPORT_VIDEO_ENC_FAIL
+    field ErrorCode EXPORT_VIDEO_RENDER_INIT_FAIL
+    field ErrorCode EXPORT_WRITER_INIT_FAIL
+    field ErrorCode EXPORT_WRITER_INVAILED_HANDLE
+    field ErrorCode EXPORT_WRITER_START_FAIL
+    field ErrorCode ErrorCodeMax
+    field ErrorCode FASTPREVIEW_BUSY
+    field ErrorCode FASTPREVIEW_CLIPLIST_ERROR
+    field ErrorCode FASTPREVIEW_DEC_INIT_ERROR
+    field ErrorCode FASTPREVIEW_DEC_INIT_SURFACE_ERROR
+    field ErrorCode FASTPREVIEW_FILEREADER_INIT_ERROR
+    field ErrorCode FASTPREVIEW_FIND_CLIP_ERROR
+    field ErrorCode FASTPREVIEW_FIND_READER_ERROR
+    field ErrorCode FASTPREVIEW_OUTPUTSURFACE_INIT_ERROR
+    field ErrorCode FASTPREVIEW_RENDER_INIT_ERROR
+    field ErrorCode FASTPREVIEW_TIME_ERROR
+    field ErrorCode FASTPREVIEW_USER_CANCEL
+    field ErrorCode FASTPREVIEW_VIDEO_RENDERER_ERROR
+    field ErrorCode FILEREADER_CREATE_FAIL
+    field ErrorCode FILEREADER_FAILED
+    field ErrorCode FILEWRITER_CREATE_FAIL
+    field ErrorCode FILE_INVALID_SYNTAX
+    field ErrorCode FILE_IO_FAILED
+    field ErrorCode GENERAL
+    field ErrorCode GETCLIPINFO_USER_CANCEL
+    field ErrorCode HIGHLIGHT_CODEC_DECODE_ERROR
+    field ErrorCode HIGHLIGHT_CODEC_INIT_ERROR
+    field ErrorCode HIGHLIGHT_FILEREADER_INIT_ERROR
+    field ErrorCode HIGHLIGHT_GET_INDEX_ERROR
+    field ErrorCode HIGHLIGHT_RENDER_INIT_ERROR
+    field ErrorCode HIGHLIGHT_TOO_SHORT_CONTENTS
+    field ErrorCode HIGHLIGHT_USER_CANCEL
+    field ErrorCode HIGHLIGHT_WRITER_INIT_ERROR
+    field ErrorCode HIGHLIGHT_WRITER_WRITE_ERROR
+    field ErrorCode HW_NOT_ENOUGH_MEMORY
+    field ErrorCode INPROGRESS_GETCLIPINFO
+    field ErrorCode INVALID_INFO
+    field ErrorCode INVALID_STATE
+    field ErrorCode LoadEffectTimeOut
+    field ErrorCode MEMALLOC_FAILED
+    field ErrorCode MediaCodecError
+    field ErrorCode MediaExtractorError
+    field ErrorCode NONE
+    field ErrorCode NOT_ENOUGH_NEMORY
+    field ErrorCode NO_ACTION
+    field ErrorCode PLAYSTART_FAILED
+    field ErrorCode PLAYSTOP_FAILED
+    field ErrorCode PROJECT_NOT_CREATE
+    field ErrorCode PROJECT_NOT_OPEN
+    field ErrorCode RENDERER_AUDIO
+    field ErrorCode RENDERER_INIT
+    field ErrorCode THEMESET_CREATE_FAIL
+    field ErrorCode THUMBNAIL_BUSY
+    field ErrorCode THUMBNAIL_INIT_FAIL
+    field ErrorCode TRANSCODING_BUSY
+    field ErrorCode TRANSCODING_CODEC_FAILED
+    field ErrorCode TRANSCODING_NOT_ENOUGHT_DISK_SPACE
+    field ErrorCode TRANSCODING_NOT_SUPPORTED_FORMAT
+    field ErrorCode TRANSCODING_USER_CANCEL
+    field ErrorCode UNKNOWN
+    field ErrorCode UNSUPPORT_AUDIO_CODEC
+    field ErrorCode UNSUPPORT_AUDIO_PROFILE
+    field ErrorCode UNSUPPORT_FORMAT
+    field ErrorCode UNSUPPORT_FORMAT_DECODER
+    field ErrorCode UNSUPPORT_MAX_RESOLUTION
+    field ErrorCode UNSUPPORT_MIN_DURATION
+    field ErrorCode UNSUPPORT_MIN_RESOLUTION
+    field ErrorCode UNSUPPORT_VIDEIO_PROFILE
+    field ErrorCode UNSUPPORT_VIDEO_CODEC
+    field ErrorCode UNSUPPORT_VIDEO_FPS
+    field ErrorCode UNSUPPORT_VIDEO_LEVEL
+    field ErrorCode VERSION_MISMATCH
+    int compareTo(Object)
+    static ErrorCode fromValue(int)
+    int getValue()
+    static ErrorCode valueOf(String)
+    static ErrorCode[] values()
+
+  --- com.vivo.videoeditorsdk.editor.api.entity.listener.VMConverterListener ---
+    void onCompletion()
+    void onError(int)
+    void onProgressChanged(int, int)
+
+  --- com.vivo.videoeditorsdk.editor.api.entity.listener.VMExportListener ---
+    void onEncodingDone(boolean, int)
+    void onEncodingProgress(int, int)
+
+  --- com.vivo.videoeditorsdk.videoeditor.VideoExportEngine ---
+    <init>()
+    VideoExportConfig getVideoExportConfig()
+    void setVideoExportConfig(VideoExportConfig)
+    int start(String, String, ExportListener)
+    void stop()
+
+  ---   ↳ nested ExportListener ---
+    void onCompletion(VideoConverter)
+    void onError(int)
+    void onProgressChanged(int, int, long)
+
+  ---   ↳ nested VideoExportConfig ---
+    Builder buildUpon()
+    BeautyParameters getAdjustParams()
+    AIAudioParams getAiAudioParams()
+    CompositionQuad getCompositionQuad()
+    RectF getCropRect()
+    int getExtraVideoRotation()
+    LutMaskParameters getFileterStyleParams()
+    BitEffectParameters getFilterColorPaletteParams()
+    float getFilterIntensity()
+    String getFilterPath()
+    int getVideoHeight()
+    int getVideoWidth()
+    WaterMarkParams getWaterMarkParams()
+    boolean isCropNonRectMark()
+    boolean isFlipHorizon()
+    boolean isFlipVertical()
+    String toString()
+
+  ---   ↳ nested InnerConvertHandler ---
+    void onCompletion(VideoConverter)
+    void onError(int)
+    void onProgressChanged(int, int)
+
+  --- com.vivo.videoeditorsdk.editor.api.entity.input.VMClip ---
+    <init>()
+    field Creator CREATOR
+    int describeContents()
+    boolean equals(Object)
+    ClipAudioParams getAudioParams()
+    ClipBackground getBackground()
+    VMBeginEffectData getBeginEffectData()
+    Clip getClip()
+    ClipAdjustEffectParams getClipAdjustEffectParams()
+    ClipCompositionParams getCompositionParams()
+    long getDurationMs()
+    VMEndEffectData getEndEffectData()
+    VMFilterData getFilterData()
+    String getPath()
+    ProxyClipParams getProxyClipParams()
+    int getRotation()
+    float getSpeed()
+    long getStartTimeMs()
+    VMTemplateOverlapEffectData getTemplateOverlapEffectData()
+    List getTextEffectDataList()
+    ClipTransformParams getTransformParams()
+    VMTransitionData getTransitionData()
+    Type getType()
+    String getUuid()
+    float getVolume()
+    int hashCode()
+    boolean isAudioSonic()
+    boolean isBrokenVideo()
+    boolean isMirror()
+    void setAudioParams(ClipAudioParams)
+    void setAudioSonic(boolean)
+    void setBackground(ClipBackground)
+    void setBeginEffectData(VMBeginEffectData)
+    void setBrokenVideo(boolean)
+    void setClip(Clip)
+    void setClipAdjustEffectParams(ClipAdjustEffectParams)
+    void setCompositionParams(ClipCompositionParams)
+    void setDurationMs(long)
+    void setEndEffectData(VMEndEffectData)
+    void setFilterData(VMFilterData)
+    void setMirror(boolean)
+    void setPath(String)
+    void setProxyClipParams(ProxyClipParams)
+    void setRotation(int)
+    void setSpeed(float)
+    void setStartTimeMs(long)
+    void setTemplateOverlapEffectData(VMTemplateOverlapEffectData)
+    void setTextEffectDataList(List)
+    void setTransformParams(ClipTransformParams)
+    void setTransitionData(VMTransitionData)
+    void setType(Type)
+    void setUuid(String)
+    void setVolume(float)
+    String toString()
+    void writeToParcel(Parcel, int)
+
+  ---   ↳ nested Type ---
+    field Type BGM
+    field Type PIC
+    field Type VIDEO
+    field Type VOICE
+    int compareTo(Object)
+    static Type valueOf(String)
+    static Type[] values()
+=== LPA SDK PROBE END ===

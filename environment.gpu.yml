@@ -1,0 +1,35 @@
+name: live-photo-agent
+channels:
+  - defaults
+dependencies:
+  - python=3.11
+  # NOTE: ffmpeg is intentionally NOT installed from conda `defaults`.
+  # That channel ships a GPL-stripped build without libx264, which breaks the
+  # L0 media tools (trim/concat/export). Use the system ffmpeg instead
+  # (Ubuntu: `sudo apt install ffmpeg`, verified 4.4.2 with libx264/libx265/aac).
+  # If you must have it inside the env, pull it from conda-forge:
+  #   conda install -c conda-forge ffmpeg
+  - pip
+  - pip:
+      - --extra-index-url https://download.pytorch.org/whl/cu128
+      # Project deps include fastapi/langgraph/opencv-python-headless/pydantic.
+      - -e .[dev]
+      # Local HF planner runtime (optional but supported by current agent).
+      #
+      # CUDA build must be cu128 or newer: Blackwell cards (RTX 50xx) are
+      # compute capability sm_120, which is absent from every cu121 wheel.
+      # torch 2.9.1+cu128 arch_list:
+      #   ['sm_70','sm_75','sm_80','sm_86','sm_90','sm_100','sm_120']
+      - torch==2.9.1+cu128
+      - torchvision==0.24.1+cu128
+      # transformers must be >=4.57 to load Qwen/Qwen3-VL-8B (see config.py
+      # `qwen_model`). The `qwen3_vl` architecture was only added in 4.57.0;
+      # older releases fail with KeyError: 'qwen3_vl'.
+      - transformers==4.57.6
+      - accelerate>=1.0,<2.0
+      - safetensors>=0.8
+      - sentencepiece>=0.2
+      # Live photo packaging in media_ops.pack_motion_photo_jpg.
+      - pyexiv2>=2.15,<3.0
+      # Reserved for the upcoming inpainting / generative fill tools.
+      - diffusers>=0.35,<1.0

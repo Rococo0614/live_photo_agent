@@ -1,0 +1,33 @@
+name: live-photo-agent-cpu
+channels:
+  - defaults
+dependencies:
+  - python=3.11
+  # NOTE: ffmpeg is intentionally NOT installed from conda `defaults`.
+  # That channel ships a GPL-stripped build without libx264, which breaks the
+  # L0 media tools (trim/concat/export). Use the system ffmpeg instead
+  # (Ubuntu: `sudo apt install ffmpeg`), or pull it from conda-forge:
+  #   conda install -c conda-forge ffmpeg
+  # Verify with: ffmpeg -encoders | grep libx264
+  - pip
+  - pip:
+      - --extra-index-url https://download.pytorch.org/whl/cpu
+      # Project deps include fastapi/langgraph/opencv-python-headless/pydantic.
+      - -e .[dev]
+      # Local HF planner runtime (optional but supported by current agent).
+      # Kept at the same torch/torchvision pair as environment.gpu.yml so both
+      # profiles behave identically apart from the compute backend.
+      - torch==2.9.1+cpu
+      - torchvision==0.24.1+cpu
+      # transformers must be >=4.57 to load Qwen/Qwen3-VL-8B (see config.py
+      # `qwen_model`). The `qwen3_vl` architecture was only added in 4.57.0;
+      # older releases fail with KeyError: 'qwen3_vl'.
+      - transformers==4.57.6
+      - accelerate>=1.0,<2.0
+      - safetensors>=0.8
+      - sentencepiece>=0.2
+      # Live photo packaging in media_ops.pack_motion_photo_jpg.
+      - pyexiv2>=2.15,<3.0
+      # Reserved for the upcoming inpainting / generative fill tools.
+      # CPU inference for diffusion is slow but functional for smoke tests.
+      - diffusers>=0.35,<1.0
