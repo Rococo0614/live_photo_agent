@@ -32,6 +32,64 @@ class LivePhotoAsset(BaseModel):
     preprocess_summary: AssetPreprocessSummary | None = None
 
 
+class LayoutRole(str, Enum):
+    """How a slot participates in the final composition."""
+
+    BACKGROUND = "background"  # spatial tile on the canvas (z-order low → high)
+    FOREGROUND = "foreground"  # segmented subject overlaid on top of the canvas
+
+
+class LayoutSlot(BaseModel):
+    """One resolved placement on the canvas.
+
+    Coordinates are deterministic percentages derived from the frontend grid
+    (GRID_LAYOUT cols x rows). This is the canonical spatial description shared
+    by forward composition and (future) reverse-engineering of a template.
+    """
+
+    asset_id: str
+    slot_id: str = ""
+    role: LayoutRole = LayoutRole.BACKGROUND
+    # Canvas-relative placement, in percent (0-100).
+    # left_pct / top_pct are the LEFT / TOP EDGE of the tile (not its center).
+    # width_pct / height_pct are the tile size. These are the canonical spatial
+    # coordinates consumed by the executor (compose_videos_spatial placements).
+    left_pct: float = 0.0
+    top_pct: float = 0.0
+    width_pct: float = 100.0
+    height_pct: float = 100.0
+    # Raw frontend grid box (GRID_LAYOUT cols x rows) that produced the
+    # percentages above. Carried through so the executor / tests can verify the
+    # grid -> percent mapping is lossless and edge-anchored.
+    grid_x: int = 0
+    grid_y: int = 0
+    grid_w: int = 0
+    grid_h: int = 0
+    # Lower z draws first (bottom); higher z draws later (top).
+    z_index: int = 0
+    # Foreground-only tuning (ignored for background slots).
+    anchor: str = "center"
+    scale: float = 0.45
+    x_offset: int = 0
+    y_offset: int = 0
+    label: str = ""
+
+
+class CompositionTemplate(BaseModel):
+    """Deterministic layout description shared by forward + reverse paths.
+
+    Forward:  layout_context (grid) -> LayoutResolver -> CompositionTemplate
+    Reverse:  decomposed成品 -> CompositionTemplate (future)
+    Both feed the same executor (compose_videos_spatial + overlay_subject_clip).
+    """
+
+    canvas_width: int = 1080
+    canvas_height: int = 1440
+    grid_cols: int = 120
+    grid_rows: int = 160
+    slots: list[LayoutSlot] = Field(default_factory=list)
+
+
 class ToolName(str, Enum):
     SCAN_LIBRARY = "scan_library"
     FILTER_SELECTED = "filter_selected"

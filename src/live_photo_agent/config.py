@@ -29,6 +29,11 @@ class Settings(BaseSettings):
                 return val.strip()
         return None
     qwen_timeout_seconds: float = 60.0
+    # 规划生成硬超时：从开始生成起超过该秒数仍未出结果，直接中断并抛错。
+    # Kept low so the deterministic fallback engages quickly (worst-case wall
+    # time stays well under ~30s for the user, since the fallback itself runs
+    # in a few seconds).
+    planner_generation_timeout_seconds: float = 12.0
     qwen_model: str = "Qwen/Qwen3-VL-8B"
     local_model_dir: Path | None = None
     local_device: str = "cpu"
@@ -41,7 +46,7 @@ class Settings(BaseSettings):
     vlm_prompt: str | None = None
     workspace_dir: Path = Field(default_factory=lambda: Path.cwd())
     memory_file: Path = Field(default_factory=lambda: Path.cwd() / ".agent_memory.json")
-    default_library_root: Path = Field(default_factory=lambda: Path.home() / "DCIM")
+    default_library_root: Path = Field(default_factory=lambda: Path("/home/vivo/live_photo_agent/data"))
     album_catalog_file: Path = Field(default_factory=lambda: Path.cwd() / ".album_catalog.json")
     album_operation_log_file: Path = Field(default_factory=lambda: Path.cwd() / ".album_operations.jsonl")
     album_preprocess_index_file: Path = Field(default_factory=lambda: Path.cwd() / ".album_preprocess_index.jsonl")

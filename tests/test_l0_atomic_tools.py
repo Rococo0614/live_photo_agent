@@ -334,6 +334,7 @@ def test_overlay_subject_clip_respects_arguments_and_cleans_temp_matte(
         x_offset: int,
         y_offset: int,
         fit_mode: str,
+        placement: dict[str, float] | None = None,
     ) -> Path:
         _ = background_path
         _ = foreground_frames_dir
@@ -343,6 +344,7 @@ def test_overlay_subject_clip_respects_arguments_and_cleans_temp_matte(
         captured["anchor"] = anchor
         captured["x_offset"] = x_offset
         captured["y_offset"] = y_offset
+        captured["placement"] = placement
         output_path.parent.mkdir(parents=True, exist_ok=True)
         output_path.write_bytes(b"composited")
         return output_path

@@ -11,7 +11,7 @@ from ..brain import QwenPlanner
 from ..capability.contracts import CapabilityLayer
 from ..capability.registry import ToolRegistry
 from ..config import settings
-from ..models import AgentRequest, ExecutionPlan, ToolName, ToolResult
+from ..models import AgentRequest, ExecutionPlan, ToolCall, ToolName, ToolResult
 
 
 class PlannerUnavailableError(RuntimeError):
@@ -483,137 +483,114 @@ class PlannerGraphRunner:
         capability: CapabilityLayer,
         tools: ToolRegistry,
     ) -> GraphRunResult:
+        """Deterministic fallback when the network planner is unavailable/timeout.
+
+        Instead of calling the (flaky) endpoint a second time, build the plan
+        directly from the already-resolved composition_template in base_context.
+        This guarantees a correct spatial layout + segmentation without depending
+        on the LLM at all.
+        """
         state = dict(initial_state)
+        request = state["request"]
+        base_context = dict(state["base_context"])
+        template = base_context.get("composition_template") or {}
 
-        while True:
-            request = state["request"]
-            library_summary = state["library_summary"]
-            base_context = state["base_context"]
-            replan_feedback = str(state.get("replan_feedback", ""))
-            attempts = int(state.get("replan_attempts", 0))
+        bg_slots = [s for s in template.get("slots", []) if s.get("role") != "foreground"]
+        fg_slots = [s for s in template.get("slots", []) if s.get("role") == "foreground"]
+        fg_ids = {s["asset_id"] for s in fg_slots}
+        # Background tiles ordered by z_index (bottom -> top); never reuse a
+        # foreground asset as a background tile.
+        bg_order = [s["asset_id"] for s in sorted(bg_slots, key=lambda s: int(s.get("z_index", 0))) if s["asset_id"] not in fg_ids]
+        canvas = f"{template.get('canvas_width', 1080)}x{template.get('canvas_height', 1440)}"
 
-            planned_request = request
-            if replan_feedback:
-                planned_request = request.model_copy(
-                    update={
-                        "text": (
-                            f"{request.text}\n\n"
-                            f"[validator_feedback]\n"
-                            f"{replan_feedback}\n"
-                            "Please revise the plan to satisfy the constraints above."
-                        )
-                    }
+        tool_calls = []
+        if fg_slots:
+            tool_calls.append(
+                ToolCall(
+                    tool=ToolName.EXTRACT_SUBJECT_MATTE,
+                    reason="fallback: foreground slot requires subject matte extraction (frames for overlay)",
+                    arguments={"asset_ids": [s["asset_id"] for s in fg_slots], "mode": "person_first"},
                 )
-
-            plan = planner.create_plan(planned_request, library_summary)
-            plan = capability.normalize_plan(plan, request)
-            errors = self._collect_validation_errors(request, plan)
-            gate_reasons = self._collect_clarification_gate_reasons(request, plan)
-            state["plan"] = plan
-            state["validation_errors"] = errors
-            state["clarification_gate_reasons"] = gate_reasons
-
-            if plan.need_clarification:
-                trace = self._record_trace(state, "fallback", "clarification", {"attempts": attempts})
-                state["graph_trace"] = trace
-                return GraphRunResult(
-                    run_id=str(state.get("run_id", "fallback")),
-                    plan=plan,
-                    context=dict(base_context),
-                    tool_results=[],
-                    route_reason="fallback_clarification",
-                    graph_trace=self._extract_trace(state, initial_state),
-                    replay_snapshot=self._build_replay_snapshot(state),
-                    execution_metrics={},
-                )
-
-            combined_reasons = errors + gate_reasons
-            if combined_reasons and attempts >= self.max_replans:
-                plan = plan.model_copy(
-                    update={
-                        "need_clarification": True,
-                        "blocking_missing_info": combined_reasons,
-                    }
-                )
-                trace = self._record_trace(
-                    state,
-                    "fallback",
-                    "forced_clarification_after_max_replans",
-                    {"attempts": attempts, "reason_count": len(combined_reasons)},
-                )
-                state["graph_trace"] = trace
-                return GraphRunResult(
-                    run_id=str(state.get("run_id", "fallback")),
-                    plan=plan,
-                    context=dict(base_context),
-                    tool_results=[],
-                    route_reason="fallback_forced_clarification",
-                    graph_trace=self._extract_trace(state, initial_state),
-                    replay_snapshot=self._build_replay_snapshot(state),
-                    execution_metrics={},
-                )
-
-            if combined_reasons:
-                state["replan_attempts"] = attempts + 1
-                state["replan_feedback"] = " | ".join(
-                    combined_reasons
-                    + [
-                        "If clarification is required, set need_clarification=true and provide clarification_questions.",
-                    ]
-                )
-                state["graph_trace"] = self._record_trace(
-                    state,
-                    "fallback",
-                    "replanning",
-                    {"attempts": int(state["replan_attempts"]), "reason_count": len(combined_reasons)},
-                )
-                continue
-
-            context = dict(base_context)
-            run_start = perf_counter()
-            tool_results: list[ToolResult] = []
-            tool_timings: list[dict[str, object]] = []
-            for call in plan.tool_calls:
-                tool_start = perf_counter()
-                result = tools.execute(call, context)
-                elapsed_ms = max(0, int((perf_counter() - tool_start) * 1000))
-                tool_results.append(result)
-                tool_timings.append(
-                    {
-                        "tool": call.tool.value,
-                        "duration_ms": elapsed_ms,
-                        "success": result.success,
-                    }
-                )
-            execution_duration_ms = max(0, int((perf_counter() - run_start) * 1000))
-            slowest_tool = max(tool_timings, key=lambda item: int(item.get("duration_ms", 0)), default=None)
-            execution_metrics = {
-                "execution_duration_ms": execution_duration_ms,
-                "tool_count": len(plan.tool_calls),
-                "success_count": len([item for item in tool_results if item.success]),
-                "tool_timings": tool_timings,
-                "slowest_tool": slowest_tool,
-            }
-            state["graph_trace"] = self._record_trace(
-                state,
-                "fallback",
-                "executed",
-                execution_metrics,
             )
-            state["context"] = context
-            state["tool_results"] = tool_results
-            state["route_reason"] = "fallback_executed"
-            state["execution_metrics"] = execution_metrics
-            return GraphRunResult(
-                run_id=str(state.get("run_id", "fallback")),
-                plan=plan,
-                context=context,
-                tool_results=tool_results,
-                route_reason="fallback_executed",
-                graph_trace=self._extract_trace(state, initial_state),
-                replay_snapshot=self._build_replay_snapshot(state),
-                execution_metrics=execution_metrics,
+        if bg_order:
+            tool_calls.append(
+                ToolCall(
+                    tool=ToolName.CONCAT_CLIPS,
+                    reason="fallback: spatial compose background tiles via composition_template placements",
+                    arguments={"order": bg_order, "layout": "auto", "canvas": canvas},
+                )
             )
+        for fg in fg_slots:
+            tool_calls.append(
+                ToolCall(
+                    tool=ToolName.OVERLAY_SUBJECT_CLIP,
+                    reason="fallback: overlay segmented subject onto composed timeline at its framed position",
+                    arguments={
+                        "timeline_id": "timeline_triptych_001",
+                        "foreground_asset_id": fg["asset_id"],
+                        "anchor": fg.get("anchor", "center"),
+                        "scale": fg.get("scale", 0.45),
+                        "x_offset": int(fg.get("x_offset", 0)),
+                        "y_offset": int(fg.get("y_offset", 0)),
+                        "left": float(fg.get("left_pct", 0.0)),
+                        "top": float(fg.get("top_pct", 0.0)),
+                        "width": float(fg.get("width_pct", 100.0)),
+                        "height": float(fg.get("height_pct", 100.0)),
+                    },
+                )
+            )
+
+        plan = ExecutionPlan(
+            user_goal=str(request.text),
+            intent="fallback_deterministic_template_execution",
+            selected_asset_ids=bg_order + [s["asset_id"] for s in fg_slots],
+            tool_calls=tool_calls,
+        )
+        plan = capability.normalize_plan(plan, request)
+
+        trace = self._record_trace(state, "fallback", "deterministic_template_plan", {"tool_count": len(tool_calls)})
+        state["plan"] = plan
+        state["graph_trace"] = trace
+
+        # Execute the deterministic plan directly.
+        context = base_context
+        run_start = perf_counter()
+        tool_results: list[ToolResult] = []
+        tool_timings: list[dict[str, object]] = []
+        for call in plan.tool_calls:
+            tool_start = perf_counter()
+            result = tools.execute(call, context)
+            elapsed_ms = max(0, int((perf_counter() - tool_start) * 1000))
+            tool_results.append(result)
+            tool_timings.append(
+                {
+                    "tool": call.tool.value,
+                    "duration_ms": elapsed_ms,
+                    "success": result.success,
+                }
+            )
+        execution_duration_ms = max(0, int((perf_counter() - run_start) * 1000))
+        metrics = {
+            "execution_duration_ms": execution_duration_ms,
+            "tool_count": len(plan.tool_calls),
+            "success_count": len([item for item in tool_results if item.success]),
+            "tool_timings": tool_timings,
+            "slowest_tool": max(tool_timings, key=lambda item: int(item.get("duration_ms", 0)), default=None),
+        }
+        trace = self._record_trace(state, "fallback.execute", "executed", metrics)
+        state["graph_trace"] = trace
+        state["execution_metrics"] = metrics
+
+        return GraphRunResult(
+            run_id=str(state.get("run_id", "fallback")),
+            plan=plan,
+            context=context,
+            tool_results=tool_results,
+            route_reason="fallback_deterministic",
+            graph_trace=self._extract_trace(state, initial_state),
+            replay_snapshot=self._build_replay_snapshot(state),
+            execution_metrics=metrics,
+        )
 
     def _record_trace(
         self,

@@ -1,11 +1,16 @@
 from __future__ import annotations
 
 import json
+import logging
 from dataclasses import dataclass
 from pathlib import Path
+from threading import Thread
+from time import perf_counter
 from typing import Any
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
+
+logger = logging.getLogger("live_photo_agent.planner")
 
 from .capability.contracts import TOOL_CONTRACTS
 from .config import settings
@@ -317,11 +322,24 @@ class QwenPlanner:
 
     def create_plan(self, request: AgentRequest, library_summary: dict[str, object]) -> ExecutionPlan:
         backend = self._resolve_backend()
-        if backend == "endpoint":
-            return self._call_remote_planner(request, library_summary)
-        if backend == "local_hf":
-            return self._call_local_hf_planner(request, library_summary)
-        raise RuntimeError(f"Unsupported planner backend: {backend}")
+        start = perf_counter()
+        logger.info("[PLANNER TIMER] create_plan start (backend=%s)", backend)
+        try:
+            if backend == "endpoint":
+                plan = self._call_remote_planner(request, library_summary)
+            elif backend == "local_hf":
+                plan = self._call_local_hf_planner(request, library_summary)
+            else:
+                raise RuntimeError(f"Unsupported planner backend: {backend}")
+        finally:
+            elapsed_ms = (perf_counter() - start) * 1000
+            logger.info(
+                "[PLANNER TIMER] create_plan done (backend=%s) elapsed=%.1fms tool_count=%d",
+                backend,
+                elapsed_ms,
+                len(getattr(plan, "tool_calls", [])) if "plan" in dir() else 0,
+            )
+        return plan
 
     def runtime_info(self) -> dict[str, object]:
         backend = self._resolve_backend()
@@ -368,14 +386,20 @@ class QwenPlanner:
             headers["X-DashScope-Workspace"] = settings.qwen_workspace_id
 
         request_obj = Request(url=endpoint, data=body, headers=headers, method="POST")
+        net_start = perf_counter()
         try:
-            with urlopen(request_obj, timeout=settings.qwen_timeout_seconds) as response:
+            with urlopen(request_obj, timeout=settings.planner_generation_timeout_seconds) as response:
                 raw_text = response.read().decode("utf-8")
         except HTTPError as exc:
             error_text = exc.read().decode("utf-8", errors="ignore") if exc.fp else ""
             raise RuntimeError(f"Planner endpoint HTTP {exc.code}: {error_text}") from exc
         except URLError as exc:
             raise RuntimeError(f"Planner endpoint unreachable: {exc.reason}") from exc
+        logger.info(
+            "[PLANNER TIMER] remote network elapsed=%.1fms timeout_limit=%.1fs",
+            (perf_counter() - net_start) * 1000,
+            settings.planner_generation_timeout_seconds,
+        )
 
         plan = self._parse_plan_response(raw_text)
         return ExecutionPlan.model_validate(plan)
@@ -394,13 +418,28 @@ class QwenPlanner:
         if hasattr(runtime.model, "device") and runtime.model.device is not None:
             inputs = {k: v.to(runtime.model.device) for k, v in inputs.items()}
 
-        with torch.no_grad():
-            out = runtime.model.generate(
-                **inputs,
-                max_new_tokens=settings.local_max_new_tokens,
-                do_sample=False,
-            )
+        box: dict[str, Any] = {}
 
+        def _generate() -> None:
+            with torch.no_grad():
+                box["out"] = runtime.model.generate(
+                    **inputs,
+                    max_new_tokens=settings.local_max_new_tokens,
+                    do_sample=False,
+                )
+
+        worker = Thread(target=_generate, name="local-planner-generate", daemon=True)
+        worker.start()
+        timeout = settings.planner_generation_timeout_seconds
+        worker.join(timeout=timeout)
+        if worker.is_alive():
+            raise RuntimeError(
+                f"Local HF planner generation exceeded planner_generation_timeout_seconds={timeout}s; aborted."
+            )
+        if "out" not in box:
+            raise RuntimeError("Local HF planner generation produced no output.")
+
+        out = box["out"]
         generated_tokens = out[:, inputs["input_ids"].shape[1] :]
         generated_text = runtime.tokenizer.decode(generated_tokens[0], skip_special_tokens=True).strip()
         plan_dict = self._parse_json_text(generated_text)
@@ -472,28 +511,27 @@ class QwenPlanner:
         return local_messages
 
     def _build_planner_payload(self, request: AgentRequest, library_summary: dict[str, object]) -> dict[str, object]:
+        from .foundation.layout_resolver import LayoutResolver
+
         tool_choices = "|".join(spec.name.value for spec in TOOL_SPECS)
         layout_assets = self._extract_layout_assets(request.layout_context)
         edit_directives = self._extract_edit_directives(request.layout_context)
+        # Deterministic spatial layout: grid coords -> canvas percentages + z-order.
+        # This is authoritative; the planner must use it instead of guessing geometry.
+        composition_template = LayoutResolver().resolve(request.layout_context).model_dump(mode="json")
+        # Slim tool catalog: the planner only needs tool name + purpose + argument
+        # names to plan a valid tool chain. The remaining contract metadata
+        # (preconditions, side_effects, failure_modes, security_scope, timings,
+        # quality_metrics, full argument_help) is for the local execution engine
+        # and UI, not the LLM — sending it inflates the prompt and is the main
+        # cause of 45-67s endpoint latency. Keep it minimal.
         tool_catalog = [
             {
                 "tool": spec.name.value,
-                "level": spec.level,
                 "purpose": spec.purpose,
-                "when_to_use": spec.when_to_use,
                 "allowed_arguments": list(spec.arguments.keys()),
-                "argument_help": spec.arguments,
-                "output_schema": spec.output_schema,
-                "preconditions": list(contract.preconditions),
-                "side_effects": list(contract.side_effects),
-                "failure_modes": list(contract.failure_modes),
-                "idempotent": contract.idempotent,
-                "security_scope": contract.security_scope,
-                "timeout_budget_ms": contract.timeout_budget_ms,
-                "quality_metrics": list(contract.quality_metrics),
             }
             for spec in TOOL_SPECS
-            for contract in [TOOL_CONTRACTS[spec.name]]
         ]
         return {
             "model": settings.qwen_model,
@@ -508,6 +546,10 @@ class QwenPlanner:
                         "If guided_tool_names is non-empty, prefer those tools when they fit the request and explain any omission in tool_calls.reason. "
                         "Treat request.layout_assets and request.edit_directives as authoritative user-provided edit constraints. "
                         "If request.edit_directives is non-empty, you must preserve those edit intents in the planned reasoning and relevant tool arguments when applicable. "
+                        "request.composition_template is the AUTHORITATIVE spatial layout, computed deterministically from the user's grid. "
+                        "You MUST honor it: background slots (role=background) become a single compose_videos_spatial call whose placements match each slot's "
+                        "left_pct/top_pct/width_pct/height_pct and z_index ordering; foreground slots (role=foreground) become subject_segmentation + overlay_subject_clip "
+                        "using that slot's anchor/scale/x_offset/y_offset. Do NOT fall back to concat_clips for a spatial layout, and do NOT recompute coordinates yourself. "
                         "If library_summary.reusable_strategies is provided, treat it as prior successful candidates "
                         "and adapt only when it fits the current request; do not copy blindly. "
                         "Do not infer hidden rules or default workflow stages beyond tool boundaries. "
@@ -528,8 +570,8 @@ class QwenPlanner:
                                 "selected_asset_ids": request.selected_asset_ids,
                                 "guided_tool_names": [tool.value for tool in request.guided_tool_names],
                                 "library_root": str(request.library_root),
-                                "layout_context": request.layout_context,
                                 "layout_assets": layout_assets,
+                                "composition_template": composition_template,
                                 "edit_directives": edit_directives,
                                 "has_canvas_edits": bool(edit_directives),
                                 "operation_log": request.operation_log,

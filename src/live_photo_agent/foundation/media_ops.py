@@ -19,6 +19,10 @@ class MediaOps:
     def __init__(self) -> None:
         self._ffmpeg = shutil.which("ffmpeg")
         self._ffprobe = shutil.which("ffprobe")
+        # Hard ceiling for any single ffmpeg/ffprobe invocation. Prevents a
+        # misconfigured filter graph (e.g. unbounded color source) from hanging
+        # the agent process indefinitely.
+        self.command_timeout_seconds: float = 300.0
 
     def ffmpeg_available(self) -> bool:
         return self._ffmpeg is not None and self._ffprobe is not None
@@ -217,7 +221,13 @@ class MediaOps:
         finally:
             capture.release()
 
-    def segment_subject(self, image_path: Path, output_mask_path: Path, mode: str = "person_first") -> dict[str, object]:
+    def segment_subject(
+        self,
+        image_path: Path,
+        output_mask_path: Path,
+        mode: str = "person_first",
+        rect: tuple[int, int, int, int] | None = None,
+    ) -> dict[str, object]:
         _ = mode
         try:
             import cv2
@@ -229,19 +239,44 @@ class MediaOps:
         if image is None:
             raise MediaOpsError(f"image_decode_failed: {image_path}")
 
-        mask = np.zeros(image.shape[:2], np.uint8)
+        height, width = image.shape[:2]
+        # grabCut cost scales ~quadratically with pixels. Phone photos are often
+        # 3000x4000+, where a full-res grabCut takes 20-30s. Downscale to a cap
+        # (preserving aspect) for the mask, then upscale the mask back to native
+        # resolution — visually indistinguishable for compositing, ~50-100x faster.
+        max_side = 512
+        scale = min(1.0, max_side / max(width, height))
+        if scale < 1.0:
+            small = cv2.resize(image, (max(1, int(width * scale)), max(1, int(height * scale))))
+        else:
+            small = image
+
+        s_h, s_w = small.shape[:2]
+        mask = np.zeros(small.shape[:2], np.uint8)
         bg_model = np.zeros((1, 65), np.float64)
         fg_model = np.zeros((1, 65), np.float64)
-
-        height, width = image.shape[:2]
-        rect = (
-            max(1, width // 10),
-            max(1, height // 10),
-            max(2, width * 8 // 10),
-            max(2, height * 8 // 10),
-        )
-        cv2.grabCut(image, mask, rect, bg_model, fg_model, 4, cv2.GC_INIT_WITH_RECT)
-        binary = ((mask == 1) | (mask == 3)).astype("uint8") * 255
+        if rect is not None:
+            # User-provided subject rectangle (already in small-image pixels).
+            # Constrains grabCut to the framed region instead of the whole frame.
+            rx, ry, rw, rh = rect
+            rx = max(0, min(s_w - 1, int(rx)))
+            ry = max(0, min(s_h - 1, int(ry)))
+            rw = max(1, min(s_w - rx, int(rw)))
+            rh = max(1, min(s_h - ry, int(rh)))
+            grab_rect = (rx, ry, rw, rh)
+        else:
+            grab_rect = (
+                max(1, s_w // 10),
+                max(1, s_h // 10),
+                max(2, s_w * 8 // 10),
+                max(2, s_h * 8 // 10),
+            )
+        cv2.grabCut(small, mask, grab_rect, bg_model, fg_model, 4, cv2.GC_INIT_WITH_RECT)
+        small_binary = ((mask == 1) | (mask == 3)).astype("uint8") * 255
+        if scale < 1.0:
+            binary = cv2.resize(small_binary, (width, height), interpolation=cv2.INTER_NEAREST)
+        else:
+            binary = small_binary
 
         output_mask_path.parent.mkdir(parents=True, exist_ok=True)
         cv2.imwrite(str(output_mask_path), binary)
@@ -365,6 +400,7 @@ class MediaOps:
         x_offset: int = 0,
         y_offset: int = 0,
         fit_mode: str = "loop",
+        placement: dict[str, float] | None = None,
     ) -> Path:
         self._ensure_binaries()
         if not background_path.exists():
@@ -373,6 +409,55 @@ class MediaOps:
         frame_files = sorted(foreground_frames_dir.glob("frame_*.png"))
         if not frame_files:
             raise MediaOpsError(f"no_matte_frames: {foreground_frames_dir}")
+
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+
+        # Precise spatial placement takes priority over the anchor keyword.
+        # placement is edge-anchored percentages (left/top/width/height) that
+        # match LayoutResolver / frontend grid semantics: the foreground tile
+        # is scaled to (width% x height%) of the canvas and placed at its
+        # LEFT/TOP edge (left%, top%). This is what makes a框选 region land
+        # exactly where the user dragged it on the canvas.
+        if placement:
+            left = float(placement.get("left", 0.0))
+            top = float(placement.get("top", 0.0))
+            width = max(0.0, min(100.0, float(placement.get("width", 100.0))))
+            height = max(0.0, min(100.0, float(placement.get("height", 100.0))))
+            # Scale the foreground to the requested tile size, then position it
+            # at the LEFT/TOP edge (not center) of the canvas region.
+            fg_scale_expr = f"iw*{width/100.0}:ih*{height/100.0}"
+            x_expr = f"main_w*{left/100.0}"
+            y_expr = f"main_h*{top/100.0}"
+            cmd = [str(self._ffmpeg), "-y", "-i", str(background_path)]
+            if fit_mode.strip().lower() == "loop":
+                cmd.extend(["-stream_loop", "-1"])
+            cmd.extend(
+                [
+                    "-framerate",
+                    f"{max(foreground_fps, 1.0):.3f}",
+                    "-i",
+                    str(foreground_frames_dir / "frame_%05d.png"),
+                    "-filter_complex",
+                    (
+                        f"[1:v]scale='{fg_scale_expr}'[fg];"
+                        f"[0:v][fg]overlay=x='{x_expr}':y='{y_expr}':shortest=1[outv]"
+                    ),
+                    "-map",
+                    "[outv]",
+                    "-c:v",
+                    "libx264",
+                    "-preset",
+                    "veryfast",
+                    "-crf",
+                    "20",
+                    "-pix_fmt",
+                    "yuv420p",
+                    "-an",
+                    str(output_path),
+                ]
+            )
+            self._run(cmd)
+            return output_path
 
         anchor_expressions = {
             "top_left": ("0", "0"),
@@ -386,8 +471,6 @@ class MediaOps:
         y_expr = f"({base_y})+({int(y_offset)})"
 
         safe_scale = scale if scale > 0 else 0.45
-        output_path.parent.mkdir(parents=True, exist_ok=True)
-
         cmd = [str(self._ffmpeg), "-y", "-i", str(background_path)]
         if fit_mode.strip().lower() == "loop":
             cmd.extend(["-stream_loop", "-1"])
@@ -717,16 +800,20 @@ class MediaOps:
     ) -> Path:
         filter_parts: list[str] = []
         overlay_inputs: list[str] = []
-        for index, path in enumerate(video_paths[:3]):
+        n = len(video_paths)
+        base_duration = self._longest_input_duration(video_paths)
+        for index, path in enumerate(video_paths):
             placement = placements[index] if index < len(placements) else {}
-            tile_w = max(round(canvas_w * float(placement.get("width", 24.0)) / 100), 2)
-            tile_h = max(round(canvas_h * float(placement.get("height", 42.0)) / 100), 2)
-            x = max(0, min(canvas_w - tile_w, round(canvas_w * float(placement.get("left", 0.0)) / 100 - tile_w / 2)))
-            y = max(0, min(canvas_h - tile_h, round(canvas_h * float(placement.get("top", 0.0)) / 100 - tile_h / 2)))
+            # left/top are the LEFT / TOP EDGE of the tile (edge-anchored),
+            # matching LayoutResolver's output and the frontend grid semantics.
+            tile_w = max(round(canvas_w * float(placement.get("width", 100.0)) / 100), 2)
+            tile_h = max(round(canvas_h * float(placement.get("height", 100.0)) / 100), 2)
+            x = max(0, min(canvas_w - tile_w, round(canvas_w * float(placement.get("left", 0.0)) / 100)))
+            y = max(0, min(canvas_h - tile_h, round(canvas_h * float(placement.get("top", 0.0)) / 100)))
             filter_parts.append(f"[{index}:v]{self._cover_filter(tile_w, tile_h)}[placed{index}]")
             overlay_inputs.append(f"[placed{index}]@{x},{y}")
 
-        filter_parts.append(f"color=c=black:s={canvas_w}x{canvas_h}:r=30:d=86400[base]")
+        filter_parts.append(f"color=c=black:s={canvas_w}x{canvas_h}:r=30:d={base_duration}[base]")
         current = "base"
         for index, placed in enumerate(overlay_inputs):
             source, coordinates = placed.split("@", maxsplit=1)
@@ -736,7 +823,7 @@ class MediaOps:
             current = output_label
 
         cmd = [str(self._ffmpeg), "-y"]
-        for path in video_paths[:3]:
+        for path in video_paths:
             cmd.extend(["-i", str(path)])
         cmd.extend([
             "-filter_complex", ";".join(filter_parts),
@@ -1005,7 +1092,17 @@ class MediaOps:
 
     def _run(self, cmd: list[str]) -> subprocess.CompletedProcess[str]:
         try:
-            return subprocess.run(cmd, check=True, text=True, capture_output=True)
+            return subprocess.run(
+                cmd,
+                check=True,
+                text=True,
+                capture_output=True,
+                timeout=self.command_timeout_seconds,
+            )
+        except subprocess.TimeoutExpired as exc:
+            raise MediaOpsError(
+                f"command_timed_out({self.command_timeout_seconds}s): {' '.join(cmd)}"
+            ) from exc
         except subprocess.CalledProcessError as exc:
             stderr = (exc.stderr or "").strip()
             raise MediaOpsError(f"command_failed: {' '.join(cmd)} :: {stderr}") from exc
@@ -1102,6 +1199,31 @@ class MediaOps:
         if not isinstance(tags, dict):
             tags = {}
         return {"streams": streams, "format_tags": tags}
+
+    def _longest_input_duration(self, video_paths: list[Path]) -> float:
+        """Return the longest input clip duration (seconds), with a 1s floor.
+
+        Used to size the color base source so ffmpeg terminates instead of
+        encoding an unbounded (e.g. 24h) color source forever. The floor is kept
+        small (1s) so short live-photo clips are not padded with a long black
+        curtain; the base always matches the real content length.
+        """
+        longest = 1.0
+        for path in video_paths:
+            try:
+                info = self._probe_streams_and_format(path)
+            except Exception:  # noqa: BLE001
+                continue
+            fmt = info.get("format", {})
+            duration = float(fmt.get("duration") or 0.0)
+            if duration <= 0.0:
+                for stream in info.get("streams", []):
+                    if stream.get("codec_type") == "video":
+                        duration = float(stream.get("duration") or 0.0)
+                        break
+            if duration > longest:
+                longest = duration
+        return round(longest, 3)
 
     def _video_has_audio(self, video_path: Path) -> bool:
         cmd = [

@@ -2452,14 +2452,19 @@
 
     function buildGenerationIntent() {
       const edits = state.operationLog.map((operation) => operation.intent).join('；');
-      const assetCount = state.layoutItems.filter((item) => item.asset_id).length;
-      const editCount = state.layoutItems.filter((item) => item.edit_rect || item.edit_prompt).length;
+      const items = state.layoutItems.filter((item) => item.asset_id);
+      const assetCount = items.length;
+      const editCount = items.filter((item) => item.edit_rect || item.edit_prompt).length;
       const preset = CANVAS_PRESETS[state.canvasPreset] ?? CANVAS_PRESETS.xhs;
       const template = TEMPLATE_LIBRARY.find((item) => item.id === state.activeTemplateId);
       const templateClause = template
         ? `本次使用模板 ${template.name}（${template.slots.length} 格）。`
         : '本次为自由拖拽布局。';
-      return `请根据当前布局生成最终 Live Photo：固定画布为 ${preset.width}x${preset.height}（${preset.label}），布局按 ${GRID_LAYOUT.cols}x${GRID_LAYOUT.rows} 网格解析，调用 concat_clips 对布局中的 ${assetCount} 张原始图片做空间拼接，严格使用每个布局项的 grid_x/grid_y/grid_w/grid_h 与 z_index，顶层 z-index 覆盖底层，不要仅按素材加入顺序排列。${templateClause}${editCount ? `并把 ${editCount} 个画布编辑产物叠加到拼接结果上。` : ''}${edits ? `处理中间步骤：${edits}。` : ''}当前测试只验证原始素材空间拼接，不需要分割。请保留完整的意图识别、工具使用和中间处理记录。`;
+      const foregroundItems = items.filter((item) => item.foreground || item.is_overlay);
+      const foregroundClause = foregroundItems.length
+        ? `布局中有 ${foregroundItems.length} 个前景项（foreground/is_overlay），必须先用 subject_segmentation 对其做主体分割，再用 overlay_subject_clip 叠加到拼接结果之上，按其 anchor/scale/x_offset/y_offset 定位。`
+        : '本次布局无前景叠加项。';
+      return `请根据当前布局生成最终 Live Photo：固定画布为 ${preset.width}x${preset.height}（${preset.label}），布局按 ${GRID_LAYOUT.cols}x${GRID_LAYOUT.rows} 网格解析。必须做空间拼接（compose_videos_spatial / concat_clips 的空间布局模式），严格使用每个布局项的 grid_x/grid_y/grid_w/grid_h 与 z_index 确定画布上的位置、大小和层级，顶层 z-index 覆盖底层，禁止退化为首尾相接的时间轴串行拼接。${templateClause}${foregroundClause}${editCount ? `并把 ${editCount} 个画布编辑产物叠加到拼接结果上。` : ''}${edits ? `处理中间步骤：${edits}。` : ''}请保留完整的意图识别、工具使用和中间处理记录。`;
     }
 
     els.refreshButton.addEventListener('click', () => refreshBootstrap().catch((error) => { els.resultPreview.textContent = String(error); }));

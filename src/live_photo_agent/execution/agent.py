@@ -1,16 +1,20 @@
 from __future__ import annotations
 
+import logging
 from time import perf_counter
 
 from ..brain import QwenPlanner
 from ..capability import CapabilityLayer, ToolRegistry
 from ..config import settings
 from ..foundation import LibraryService, MemoryService
+from ..foundation.layout_resolver import LayoutResolver
 from ..foundation.state import FoundationLayer
 from ..models import AgentRequest, AgentResponse, ExecutionPlan
 from .flow import InputFlowLayer
 from .input_preprocessor import InputPreprocessor
 from .langgraph_runner import PlannerGraphRunner, PlannerUnavailableError
+
+logger = logging.getLogger("live_photo_agent.execution")
 
 
 class LivePhotoAgent:
@@ -29,6 +33,7 @@ class LivePhotoAgent:
 
     def execute(self, request: AgentRequest) -> AgentResponse:
         request_start = perf_counter()
+        logger.info("[TIMER] execute start text=%r", str(request.text)[:80])
         request = self._apply_retry_feedback(request)
 
         preprocess_start = perf_counter()
@@ -54,6 +59,9 @@ class LivePhotoAgent:
             "tool_catalog": self.capability_layer.tool_catalog(),
             "preprocess": prepared_input.preprocess_info,
             "layout_context": runtime_request.layout_context,
+            "composition_template": LayoutResolver().resolve(
+                runtime_request.layout_context
+            ).model_dump(mode="json"),
             "operation_log": runtime_request.operation_log,
             "reusable_strategies": reusable_strategies,
             "retry_of_run_id": request.retry_of_run_id,
@@ -70,6 +78,11 @@ class LivePhotoAgent:
                 tools=self.tools,
             )
         except PlannerUnavailableError as exc:
+            logger.error(
+                "[TIMER] planner unavailable after %.1fms: %s",
+                (perf_counter() - graph_run_start) * 1000,
+                exc,
+            )
             return self._build_planner_unavailable_response(
                 request=runtime_request,
                 library_assets=library_assets,
@@ -77,6 +90,13 @@ class LivePhotoAgent:
                 message=str(exc),
             )
         graph_run_duration_ms = max(0, int((perf_counter() - graph_run_start) * 1000))
+        logger.info(
+            "[TIMER] graph_run (plan + execute tools) elapsed=%dms :: preprocess=%dms memory=%dms total=%dms",
+            graph_run_duration_ms,
+            preprocess_duration_ms,
+            memory_suggest_duration_ms,
+            max(0, int((perf_counter() - request_start) * 1000)),
+        )
 
         timings = {
             "total_duration_ms": max(0, int((perf_counter() - request_start) * 1000)),
