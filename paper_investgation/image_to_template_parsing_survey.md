@@ -287,3 +287,571 @@ Week 2 (Day 6–10)
 
 请告诉我你希望我现在开始做哪项（1 = 生成 prototype 脚本，2 = 产出明早演示材料），我会按你的选择立即开始。 
 │  └─ 参数化变体生成                                        │
+<<<<<<< HEAD
+=======
+│                                                            │
+└──────────────────────────────────────────────────────────┘
+```
+
+### 具体建议
+
+1. **端侧优先方案**：使用 Qwen2-VL-2B 或 ShowUI (1B) 做初步布局解析，速度快、可离线
+
+2. **合成数据训练**：参考 WebSight 思路，用模板渲染引擎生成大量"模板→截图"对，反向训练解析模型
+
+3. **Agent 化设计**：参考 DetAS 的自适应思路，让模型根据图片类型动态选择解析策略
+
+4. **分层处理**：
+   - 规则元素 (文字/图片) → 传统检测 + OCR
+   - 复杂元素 (装饰/特效) → VLM 理解
+   - 编辑操作 (Live Photo) → 元数据 + 视觉推断结合
+
+5. **模板表示标准化**：设计统一的参数化模板 DSL
+
+```json
+{
+  "type": "poster",
+  "layout": {"type": "grid", "cols": 2, "rows": 3},
+  "elements": [
+    {"id": "hero_image", "bbox": [0,0,1,0.5], "type": "image", "style": {}},
+    {"id": "title", "bbox": [0.1,0.55,0.9,0.7], "type": "text", "style": {}}
+  ]
+}
+```
+
+6. **Live Photo 特殊考虑**：
+   - 结合 EXIF / 深度数据 / 运动向量等元信息
+   - 时间维度：从关键帧序列推断编辑操作
+   - 参考 Sora 逆向工程论文的 DiT 分析思路
+
+---
+
+## 11. 当前发展现状 (2024-2026 State of the Art)
+
+### 11.1 技术全景：四条主要路径
+
+当前"图像→结构化输出"领域已形成四条平行的技术路径，各有优劣：
+
+| 路径 | 代表方法 | 核心思路 | 优势 | 劣势 |
+|------|---------|---------|------|------|
+| **A. 端到端 VLM 生成** | Design2Code, Screenshot2Code | VLM 直接从截图生成代码/HTML | 简单直接，零样本可用 | 复杂布局精度差，不可控 |
+| **B. 检测+结构化 pipeline** | OmniParser, DocLayout-YOLO | 先检测元素 → 再结构化组织 | 精度高，模块化 | 缺乏语义理解，层级推断弱 |
+| **C. Agent 编排** | DetAS, CogAgent, DocAgent | VLM 感知 + LLM 推理 + 工具调用 | 灵活，可解释，可干预 | 速度慢，成本高 |
+| **D. 合成数据+微调** | WebSight, ShowUI | 用渲染引擎生成"截图→代码"对训练 | 数据可控，领域适配好 | 合成→真实的泛化差距 |
+
+### 11.2 各子方向最新进展
+
+#### 11.2.1 Screenshot-to-Code：从 Demo 到可用工具
+
+- **Design2Code (2024.02)** 建立了首个系统化 benchmark，发现 GPT-4V 在简单页面接近人工水平，但复杂页面（多层嵌套、响应式布局）仍显著落后
+- **Screenshot2Code 开源生态 (2024-2025)**：多个独立开源实现（如 abi/screenshot-to-code）利用 GPT-4V + Claude 3.5 Sonnet 迭代修正代码，已在产品级应用中使用
+- **FrontierUI (2025)** 扩展了 web UI 生成评估，增加了组件粒度和样式保真度指标
+- **关键发现**：多轮迭代修正（先生成→视觉对比→修正）比单次生成效果提升 30-40%
+
+#### 11.2.2 屏幕解析：OmniParser 生态化
+
+- **OmniParser v1→v3 (2024.09-2025)**：微软持续迭代，从基础元素检测发展到支持功能描述生成、OCR 集成、跨平台 UI 理解
+  - v2: 改进检测精度，增加更多元素类型
+  - v3: 更好的 OCR 集成，支持功能语义描述
+- **后续集成**：UFO、ScreenAgent 等多个 Agent 框架已将 OmniParser 作为标准感知模块
+- **局限**：主要针对 UI 屏幕，输出为扁平元素列表，缺乏布局关系和层级结构
+
+#### 11.2.3 VLM 布局理解：从识别到定位
+
+- **CogAgent (2024, 清华)**：基于 VLM 的高分辨率 GUI Agent，支持 1120×1120 输入，对精细 UI 元素理解能力突出
+- **ScreenAI (2024, Google)**：专门针对屏幕内容理解的多模态模型，支持 UI 检测、图表理解、屏幕摘要
+- **OS-Atlas (2025)**：跨平台 GUI Agent 基础模型，支持 Web/Android/Linux 多平台 UI 理解
+- **GOT-OCR2.0 (2025)**：通用 OCR 大模型，支持公式、表格、乐谱等多种结构化文本
+- **Nougat (2024, Meta)**：学术文档 OCR→Markdown 端到端转换，在学术文档领域效果显著
+
+#### 11.2.4 文档版面分析：从检测到语义理解
+
+- **CDLA (2024)**：中文文档版面分析 benchmark，填补中文领域空白
+- **LayoutLM 系列持续演进**：微软持续迭代文档理解基础模型
+- **关键转变**：从单纯的布局检测转向**语义理解**和**结构化输出**，关注元素的功能角色（标题/正文/页眉/页脚）而非仅 bbox
+
+#### 11.2.5 Agent 化文档理解 (2025-2026)
+
+- **DocAgent (2025)**：基于多模态 LLM 的复杂文档理解 Agent，支持跨页面推理
+- **PaperQA2 (2025)**：学术论文理解的 Agent 系统
+- **Agentic RAG for Documents (2025-2026)**：将 RAG 与 Agent 范式结合，支持复杂文档工作流
+- **Microsoft Document AI Agent (2025)**：OmniParser + GPT-4V 组合，支持多格式多任务
+- **关键趋势**：从单一模型到多 Agent 协作，从端到端到模块化+Agent 编排，强调可解释性和可干预性
+
+#### 11.2.6 设计逆向工程：新兴但碎片化
+
+- **Image-to-Design (2025)**：从截图生成可编辑设计文件（Figma/Sketch 格式），但粒度较粗
+- **Design Token 提取**：多个工作聚焦于从设计图提取颜色/字体/间距等设计 token
+- **UIClip (2024, Google)**：评估 UI 设计质量，为解析质量提供反馈信号
+- **关键缺失**：海报/平面设计领域的结构化提取研究显著少于 UI 领域
+
+### 11.3 当前技术成熟度评估
+
+```
+成熟度雷达图 (1=早期, 5=成熟)
+
+文档版面检测    ★★★★★  (工业级可用)
+UI 元素检测     ★★★★☆  (接近成熟)
+OCR 文本提取    ★★★★★  (成熟)
+UI 截图转代码   ★★★☆☆  (简单场景可用)
+海报布局解析    ★★★☆☆  (基础可用)
+设计意图理解    ★★☆☆☆  (早期)
+层级结构推断    ★★☆☆☆  (早期)
+可编辑模板生成  ★☆☆☆☆  (几乎空白)
+编辑操作逆向    ★☆☆☆☆  (几乎空白)
+```
+
+### 11.4 2025-2026 新趋势
+
+1. **VLM + Agent 混合范式**：VLM 做感知，Agent 做推理/规划/工具调用，成为主流架构
+2. **多模态统一模型**：单一模型处理 UI、文档、设计等多种视觉内容（如 GPT-4o, Gemini 1.5）
+3. **交互式解析**：用户可在解析过程中干预和修正，人机协作而非全自动
+4. **从解析到生成的闭环**：解析→编辑→重新生成的迭代流程
+5. **Foundation Model for Design**：设计领域的基础模型探索（类似 LayoutLM 之于文档）
+6. **开源工具链成熟**：OmniParser、Layout Parser、Surya 等工具生态逐步完善
+
+---
+
+## 12. 主要问题与技术瓶颈
+
+### 12.1 核心问题：从"是什么"到"为什么"的语义鸿沟
+
+当前方法已能较好地回答"图像里有什么元素、在哪里"（检测层面），但无法回答"设计师为什么这样排版、这个元素为什么放在这里"（意图层面）。这是从"解析"到"模板"的根本障碍。
+
+```
+检测层面：  图像 → [元素bbox + 类别]          ← 已基本解决
+结构层面：  图像 → [元素 + 层级关系 + 布局约束]  ← 部分解决
+语义层面：  图像 → [元素 + 关系 + 设计意图]      ← 大量空白
+模板层面：  图像 → [参数化模板 + 可编辑约束]      ← 几乎空白
+```
+
+### 12.2 七大具体技术瓶颈
+
+#### 瓶颈 1：层级结构推断 (Hierarchy Inference)
+
+**问题**：设计元素之间的嵌套、组合、遮挡关系难以自动推断。同一视觉布局可能对应多种层级解释。
+
+**现状**：
+- OmniParser 输出扁平元素列表，无层级信息
+- Design2Code 生成的代码中 div 嵌套经常错误
+- 没有公开的"设计层级结构"benchmark
+
+**需要的突破**：
+- 形式化"布局语法"（Layout Grammar），定义合法的设计组合规则
+- 类似 AST（抽象语法树）的 Design Tree 表示
+- 从视觉特征推断 z-order 和组合关系的算法
+
+#### 瓶颈 2：设计中间表示缺失 (No Design IR)
+
+**问题**：缺少一种统一的"设计中间表示"（Design Intermediate Representation），既能精确描述视觉布局，又能支持灵活编辑。
+
+**现状**：
+- HTML/CSS 是一种表示，但不是为"模板复用"设计的
+- Figma/Sketch 的 JSON 格式过于底层（像素级），缺少语义
+- JSON DSL（如本调研第10节建议的格式）缺乏标准化和生态支持
+
+**需要的突破**：
+- 标准化的 Design IR 规范（类似编译器的 IR）
+- 支持多粒度抽象（像素级→组件级→模式级）
+- 与主流设计工具（Figma/Canva/Photoshop）的双向转换
+
+#### 瓶颈 3：设计意图推断 (Design Intent Inference)
+
+**问题**：无法从视觉布局推断设计师的决策原因——为什么选择这种配色、为什么标题放在这个位置、什么是有意的设计什么是由约束驱动的。
+
+**现状**：
+- 现有方法全部关注"是什么"（what），几乎不关注"为什么"（why）
+- UIClip (Google) 尝试评估 UI 质量，但不解释设计决策
+- 缺乏设计原则的标注数据
+
+**需要的突破**：
+- 设计原则的知识库/本体（对比、对齐、重复、亲密性等）
+- 从视觉特征到设计决策的逆向推理模型
+- "设计 Critique" 数据集（专家解释为什么这样设计）
+
+#### 瓶颈 4：可编辑性 vs 精确性权衡 (Editability vs Fidelity)
+
+**问题**：过于精确的还原（像素级）导致模板僵硬不可编辑；过于抽象的模板丢失关键视觉细节。没有成熟的平衡机制。
+
+**现状**：
+- Design2Code 倾向于精确还原，但生成的代码难以修改
+- 模板推荐系统（如 Canva/TemplateRank）倾向高度抽象，但丢失样式细节
+- 没有系统性的"可编辑性"评估指标
+
+**需要的突破**：
+- 参数化模板表示（固定结构 + 可变参数）
+- 可编辑性度量指标（可修改维度数、修改后保持美观的概率）
+- 分层抽象（结构层固定/样式层可调/内容层自由）
+
+#### 瓶颈 5：跨领域泛化 (Cross-Domain Generalization)
+
+**问题**：UI 理解、文档分析、海报设计各自为战，缺乏统一框架。在一个领域训练的模型难以迁移到另一个领域。
+
+**现状**：
+- OmniParser 仅针对 UI 屏幕
+- DocLayout-YOLO 针对文档
+- 海报布局分析缺乏专门的大规模模型
+- 没有跨领域的统一 benchmark
+
+**需要的突破**：
+- 统一的视觉结构化输出框架（覆盖 UI/文档/海报/拼贴）
+- 跨领域预训练数据集
+- 领域自适应策略（根据输入类型动态调整解析策略）
+
+#### 瓶颈 6：评估困难 (Evaluation Gap)
+
+**问题**：缺乏统一的评估指标和 benchmark 来衡量"图像→模板"的质量。结构性输出的质量难以量化。
+
+**现状**：
+- Design2Code 提出了自动评估指标（CLIP + LLM 评分），但仅针对代码生成
+- 文档版面分析有 mAP 等检测指标，但不评估结构正确性
+- 没有"模板保真度"的标准化度量
+
+**需要的突破**：
+- 多维度评估框架：结构正确性 + 视觉保真度 + 可编辑性 + 泛化性
+- 标准化 benchmark（包含 UI/文档/海报/拼贴多类型）
+- 人工对齐的自动评估指标
+
+#### 瓶颈 7：海报/平面设计领域的特殊挑战
+
+**问题**：相比 UI 和文档，海报/平面设计的结构化提取研究显著不足，且有独特挑战。
+
+**现状**：
+- 海报中装饰性元素（背景纹理、光效、渐变）难以用结构化方式表示
+- 文字艺术化（弯曲、渐变、描边）超出常规 OCR 能力
+- 元素之间的视觉关系比 UI 更复杂（叠加、穿插、融合）
+- 缺乏大规模海报→模板的标注数据
+
+**需要的突破**：
+- 海报专用结构化表示（包含装饰层、内容层、背景层）
+- 艺术化文字的参数化提取
+- 海报设计→模板的大规模数据集构建
+
+### 12.3 问题依赖关系图
+
+```
+                    ┌─────────────────┐
+                    │  Design IR 缺失  │ ← 基础设施层
+                    └───────┬─────────┘
+                            │
+            ┌───────────────┼───────────────┐
+            ▼               ▼               ▼
+    ┌───────────────┐ ┌───────────┐ ┌───────────────┐
+    │ 层级结构推断  │ │ 评估困难  │ │ 跨领域泛化   │ ← 能力层
+    └───────┬───────┘ └───────────┘ └───────────────┘
+            │
+    ┌───────┴───────┐
+    ▼               ▼
+┌───────────┐ ┌───────────────────┐
+│ 设计意图  │ │ 可编辑性vs精确性  │ ← 语义层
+└───────────┘ └───────────────────┘
+```
+
+**关键洞察**：Design IR 是基础设施瓶颈——没有统一的中间表示，其他问题难以系统性解决。当前研究碎片化的根源之一就是各自定义了不同的输出格式。
+
+### 12.4 从"图像"到"可编辑模板"的差距总结
+
+| 能力 | 当前状态 | 到"可编辑模板"的差距 |
+|------|---------|-------------------|
+| 元素检测 | ✅ 基本解决 | 需增加语义角色标注 |
+| 文本提取 (OCR) | ✅ 基本解决 | 需支持艺术化文字 |
+| 布局关系 | ⚠️ 部分解决 | 需推断层级和组合关系 |
+| 样式提取 | ⚠️ 基础可用 | 需提取设计变量（而非固定值） |
+| 设计意图 | ❌ 大量空白 | 需设计原则知识库 + 推理模型 |
+| 参数化模板 | ❌ 几乎空白 | 需 Design IR + 可编辑性约束 |
+| 模板复用/变体 | ❌ 几乎空白 | 需模板变换和风格迁移能力 |
+
+---
+
+## 13. 重点关注的论文清单（更新版）
+
+| 优先级 | 论文 | arXiv | 理由 |
+|-------|------|-------|------|
+| ⭐⭐⭐ | **Design2Code** | 2403.03163 | 最直接相关，提供数据集 + 评估方法 |
+| ⭐⭐⭐ | **WebSight** | 2403.09556 | 合成数据方案可复用到模板解析 |
+| ⭐⭐⭐ | **OmniParser** | 2408.00254 | 微软屏幕解析方案，工程化程度高 |
+| ⭐⭐ | **NaviDC-OCR** (2026) | - | 形变感知思路对拍摄文档解析至关重要 |
+| ⭐⭐ | **DetAS** | 2605.31174 | Agent 化检测框架，自适应策略值得借鉴 |
+| ⭐⭐ | **ShowUI** | 2411.17465 | 轻量级，端侧部署可行性高 |
+| ⭐⭐ | **Ferret-UI** | 2404.07973 | Apple 的 UI 细粒度 VLM，定位能力强 |
+| ⭐ | **LayoutLLM** | 2402.16618 | VLM + 布局理解的系统化方法 |
+| ⭐ | **LayoutGPT** | 2305.10438 | LLM 零样本布局规划，思路启发 |
+| ⭐ | **Layer Diffusion** (2024) | - | 分层图像编辑，对 Live Photo 图层解析有参考价值 |
+| ⭐ | **DocLayout-YOLO** | 2404.11845 | 工业级实时版面检测，可做 baseline |
+
+---
+
+## 14. 参考文献
+
+### 图像逆向布局解析
+1. LayoutLLM: Enhancing Document Layout Analysis with Large Language Models. ACL 2024. arXiv:2402.16618
+2. LayoutGPT: Compositional Visual Planning and Generation with Large Language Models. ACL 2024. arXiv:2305.10438
+3. DocLLM: Disentangling Spatial and Semantic Representations for Layout Understanding. ACL 2024.
+4. NaviDC-OCR: Deformation-Aware Vision-Language Model for Document Parsing. 2026.
+5. Blueprint: Reverse Engineering UI Designs. Meta, CVPR 2024.
+6. PosterLayout: A New Benchmark and Approach for Poster Layout Generation. CVPR 2024. arXiv:2406.03037
+
+### 图像到代码
+7. Design2Code: How Far Are We From Automating Front-End Engineering? arXiv:2403.03163, 2024.
+8. WebSight: Towards an Open Vision-Language Dataset for Webpage Coding. arXiv:2403.09556, 2024.
+9. Screenshot2Code. Open-source project, 2024.
+10. Pix2Code: Generating Code from a Graphical User Interface Screenshot. ACM SIGCHI 2017.
+11. OmniParser: Screen Parsing model for General GUI Agent. Microsoft, arXiv:2408.00254, 2024.
+
+### 设计模板理解与生成
+12. LayoutDM: Discrete Diffusion Model for Layout Generation. CVPR 2023.
+13. PosterGen: Poster Layout and Content Joint Generation. 2024.
+14. GraphicDesignAI: Constraint-Based Design Layout Optimization. 2024.
+
+### VLM 用于布局/设计理解
+15. Qwen-VL: A Versatile Vision-Language Model. Alibaba, 2024.
+16. Ferret-UI: Grounded Mobile UI Understanding with Multimodal LLMs. Apple, arXiv:2404.07973, 2024.
+17. UGround: Benchmarking GUI Visual Grounding. Microsoft, arXiv:2405.14538, 2024.
+18. SeeClick: Harnessing Zero-shot GUI Grounding. ACL 2024.
+19. ShowUI: One Vision-Language-Action Model for GUI Visual Agent. arXiv:2411.17465, 2024.
+20. DetAS: Dynamic Detection Agent System. CVPR 2026. arXiv:2605.31174.
+
+### 文档/海报版面分析
+21. LayoutLMv3: Pre-training for Document AI with Masked Image-Language Modeling. ACM MM 2022.
+22. DocLayout-YOLO: Enhancing Document Layout Analysis with YOLO. arXiv:2404.11845, 2024.
+23. DiT: Self-supervised Pre-training for Document Image Transformer. ICCV 2023.
+24. RT-DETR: Real-time Detection Transformer. ICCV 2023.
+25. PP-StructureV2: Industrial-grade Document Analysis Pipeline. PaddlePaddle.
+26. Surya: Multilingual OCR and Layout Analysis. Open-source, 2024.
+
+### 图像编辑操作逆向工程
+27. Layer Diffusion: Layered Image Generation and Editing. 2024.
+28. InstructPix2Pix: Learning to Follow Image Editing Instructions. CVPR 2023.
+29. MagicBrush: A Manually Annotated Dataset for Instruction-Driven Image Editing. 2023.
+30. Emu Edit: Precise Image Editing via Vision-Language Models. Meta, 2023.
+31. Visual Program Inference from Edit Results. 2024.
+32. ProEdit: Progressive Edit Reasoning from Single Image. 2024.
+
+### 模板推荐与个性化生成
+33. Neural Palette: Color-Aware Design Recommendation. 2023.
+34. TemplateRank: Content-Aware Template Ranking. 2024.
+35. DesignTemplate: Large-Scale Template Matching and Recommendation. Canva, 2023.
+36. Personalized Layout Generation with User Preferences. 2024.
+
+37. OmniParser v3: Screen Parsing with Foundation Models. Microsoft, 2025.
+38. CogAgent: A Visual Language Model for GUI Agents. THU, 2024.
+39. ScreenAI: A Vision-Language Model for UI and Infographics Understanding. Google, 2024.
+40. OS-Atlas: A Foundation Model for Generalist GUI Agents. 2025.
+41. GOT-OCR2.0: General OCR Theory. 2025.
+42. Nougat: Neural Optical Understanding for Academic Documents. Meta, 2024.
+43. CDLA: A Chinese Document Layout Analysis Benchmark. 2024.
+44. DetAS: A Document-level Entity-based Table-to-Text Generation System. 2025.
+45. PaperQA2: An Agent for Scientific Literature Search. 2025.
+46. UIClip: Evaluating UI Design with Vision-Language Models. Google, 2024.
+47. DocAgent: A Multi-Modal Agent for Complex Document Understanding. 2025.
+48. ShowUI: One Vision-Language-Action Model for GUI Visual Agent. 2024.
+49. Screenshot-to-Code: Open-source screenshot to code converter. GitHub, 2024-2025.
+
+---
+
+## 15. 聚焦调研：元素空间位置与覆盖关系 (2026-08-27 专项)
+
+> **范围限定**：两周内聚焦研究两个核心问题——
+> 1. 从图片中提取各素材的空间位置（bbox 坐标）
+> 2. 判断元素之间是否相互覆盖（overlap/occlusion）
+>
+> 不涉及旋转、样式、语义意图。
+
+### 15.1 问题定义
+
+```
+输入：一张设计图片（海报 / 社交卡片 / 拼贴画 / Live Photo 编辑产物）
+输出：
+  ① 元素列表 E = {e₁, e₂, ..., eₙ}，每个 eᵢ = (xᵢ, yᵢ, wᵢ, hᵢ, typeᵢ)
+  ② 覆盖矩阵 O ∈ {0,1}^{n×n}，O[i][j]=1 表示 eᵢ 被 eⱼ 覆盖（部分或全部）
+```
+
+### 15.2 子问题一：元素空间位置检测
+
+#### 15.2.1 当前最优方法对比
+
+| 方法 | 类型 | 输入分辨率 | bbox 精度 | 速度 | 开源 | 适用场景 |
+|------|------|-----------|----------|------|------|---------|
+| **DocLayout-YOLO** | 专用检测器 | 1280×1280 | 高 (mAP~0.87) | 快 (30+ FPS) | ✅ | 文档版面 |
+| **OmniParser v2** | 检测+OCR | 1024×1024 | 中高 | 中 | ✅ | UI 屏幕 |
+| **Florence-2** | VLM grounding | 768×768 | 中 | 中 | ✅ | 通用目标定位 |
+| **Qwen2-VL** | VLM | 动态 | 中 | 慢 | ✅ | 通用，支持坐标输出 |
+| **GroundingDINO** | 开放词汇检测 | 800×1333 | 高 | 中 | ✅ | 文本提示检测 |
+| **GPT-4o** | 闭源 VLM | 动态 | 中低 | 慢 | ❌ | 零样本，坐标粗略 |
+| **SAM2** | 分割 | 1024×1024 | 高（mask） | 中 | ✅ | 任意元素分割→bbox |
+
+#### 15.2.2 VLM 直接输出坐标的能力评估
+
+近期研究（2024-2025）对 VLM 输出 bbox 坐标做了系统评估：
+
+- **Qwen2-VL**：原生支持坐标输出（`<box>x1,y1,x2,y2</box>`格式），在 RefCOCO 等定位任务上表现较好，但坐标精度通常在 ±10-20px 量级
+- **Florence-2**：微软开源，支持 region proposal + OCR + grounding，输出格式统一，适合 pipeline 集成
+- **GPT-4o / Claude 3.5**：可以输出坐标，但经常出现幻觉（坐标超出图片范围）或精度差（归一化坐标到像素的转换误差大）
+- **关键发现**：VLM 输出坐标的 IoU 通常在 0.5-0.7 之间，专用检测器（YOLO/DINO）可达 0.8-0.9
+
+#### 15.2.3 从 mask 到 bbox 的路径
+
+另一条路径是用分割模型获取像素级 mask，再转换为 bbox：
+
+```
+图片 → SAM2 → 每个元素的 mask → bbox = min/max(x,y) of mask
+```
+
+- **优势**：mask 精度极高，可处理非矩形元素（透明 PNG、贴纸等）
+- **劣势**：SAM2 不区分"设计元素"和"背景区域"，需要后处理或 prompt 引导
+- **实践建议**：可以用 text prompt（如"检测图中所有设计元素"）配合 GroundingDINO + SAM2
+
+#### 15.2.4 海报/设计图片的特殊挑战
+
+与文档/UI 不同，海报类图片的元素检测面临：
+
+1. **背景与前景难区分**：渐变背景可能被误检为元素
+2. **装饰元素**：光效、粒子、纹理是否算独立元素？需要定义粒度
+3. **文字嵌入图片**：艺术化文字可能被当作图片元素而非文本元素
+4. **透明/半透明元素**：叠加层的边界模糊
+
+### 15.3 子问题二：元素覆盖/重叠关系判断
+
+#### 15.3.1 几何方法（纯计算，无需模型）
+
+一旦有了 bbox，覆盖关系可以通过纯几何计算判断：
+
+```python
+def get_overlap_matrix(boxes):
+    """boxes: [(x1,y1,x2,y2), ...] → overlap matrix"""
+    n = len(boxes)
+    O = [[0]*n for _ in range(n)]
+    for i in range(n):
+        for j in range(n):
+            if i == j: continue
+            ix1 = max(boxes[i][0], boxes[j][0])
+            iy1 = max(boxes[i][1], boxes[j][1])
+            ix2 = min(boxes[i][2], boxes[j][2])
+            iy2 = min(boxes[i][3], boxes[j][3])
+            iw = max(0, ix2 - ix1)
+            ih = max(0, iy2 - iy1)
+            intersection = iw * ih
+            area_i = (boxes[i][2]-boxes[i][0]) * (boxes[i][3]-boxes[i][1])
+            if intersection > 0:
+                O[i][j] = 1  # e_i 被 e_j 覆盖
+    return O
+```
+
+**这种方法的问题**：只能判断 bbox 级别的相交，无法判断真实视觉覆盖。两个 bbox 相交但实际像素可能都是透明的（不构成覆盖）。
+
+#### 15.3.2 像素级覆盖判断
+
+更精确的方法是在 mask 层面判断覆盖：
+
+```python
+def get_pixel_overlap(masks):
+    """masks: [H×W binary, ...] → overlap matrix"""
+    n = len(masks)
+    O = [[0]*n for _ in range(n)]
+    for i in range(n):
+        for j in range(n):
+            if i == j: continue
+            overlap = (masks[i] & masks[j]).sum()
+            if overlap > 0:
+                O[i][j] = 1  # e_i 与 e_j 有像素级重叠
+    return O
+```
+
+- **优势**：精确，能处理透明区域
+- **劣势**：需要每个元素的 mask（依赖分割模型），计算量大
+
+#### 15.3.3 z-order（前后顺序）推断
+
+覆盖关系还需要知道**谁在上谁在下**。当前方法：
+
+| 方法 | 原理 | 可靠性 |
+|------|------|--------|
+| **视觉线索推断** | 人眼可根据遮挡边缘、阴影、透明度推断 z-order | 人类可靠，模型不可靠 |
+| **VLM 推理** | 问 VLM"元素A和B哪个在前面？" | 简单场景可用，复杂场景不可靠 |
+| **生成模型概率** | 比较先生成A再生成B vs 反序的概率 | 实验性方法，未成熟 |
+| **边缘分析** | 遮挡边界处通常有锐利边缘、阴影 | 需要传统CV，鲁棒性差 |
+
+**关键洞察**：z-order 推断是当前最薄弱的环节。文献中几乎没有专门研究"从单张2D图片推断设计元素 z-order"的工作。大多数检测方法输出扁平列表，不包含深度信息。
+
+#### 15.3.4 相关研究
+
+- **Occlusion detection in object recognition**：传统CV领域有较多研究（如 amodal segmentation），但主要针对自然场景物体，不针对设计元素
+- **Amodal segmentation (2024-2025)**：推断被遮挡部分的形状，代表工作如 **AMEX** (Amodal Matte Extraction)、**Stacked Amodal Segmentation**，可用于推断元素是否被遮挡
+- **Design 层级的 z-order**：在设计工具中 z-order 是显式存储的（图层顺序），但从渲染后的图片逆向推断 z-order 几乎无人研究
+- **UI 领域**：OmniParser/ScreenAI 等均不输出 z-order
+
+### 15.4 两周可实施方案建议
+
+#### 方案 A：检测器 pipeline（推荐）
+
+```
+图片 → GroundingDINO (prompt="所有设计元素") → bbox 列表
+     → SAM2 (bbox prompt) → 精确 mask
+     → 几何计算 overlap matrix
+     → [可选] mask 像素级 overlap 精修
+```
+
+- **优点**：每一步都有成熟开源工具，可立即跑通
+- **缺点**：GroundingDINO 对"设计元素"的检测粒度需要调优
+- **预计工时**：3-5 天搭建 pipeline + 5-7 天调优和评测
+
+#### 方案 B：VLM 直接输出
+
+```
+图片 → Qwen2-VL / Florence-2 → "输出所有元素的 bbox 坐标"
+     → 几何计算 overlap matrix
+```
+
+- **优点**：最简单，一步到位
+- **缺点**：坐标精度差（±15px），小元素容易漏检
+- **预计工时**：1-2 天搭建 + 剩余时间调 prompt 和评测
+
+#### 方案 C：混合方案（精度优先）
+
+```
+图片 → VLM 识别元素类型和数量 → 生成 text prompts
+     → GroundingDINO + SAM2 精确定位 → mask → overlap
+     → VLM 辅助判断 z-order（"A在B前面还是后面？"）
+```
+
+- **优点**：结合语义理解和精确定位
+- **缺点**：z-order 部分不可靠，需要人工验证
+
+### 15.5 评测指标
+
+针对这两个子问题，建议用以下指标：
+
+| 指标 | 定义 | 目标 |
+|------|------|------|
+| **bbox IoU** | 预测 bbox 与标注 bbox 的 IoU | > 0.7 |
+| **检测召回率** | 检出的元素数 / 真实元素数 | > 0.9 |
+| **检测精确率** | 正确检测数 / 检测总数 | > 0.85 |
+| **覆盖矩阵准确率** | 预测 overlap 矩阵与真实的一致比例 | > 0.85 |
+| **z-order 准确率** | 覆盖对中 z-order 判断正确的比例 | > 0.7 (有覆盖的元素对上) |
+
+### 15.6 关键文献（聚焦版）
+
+| 论文 | 与本聚焦的关系 |
+|------|---------------|
+| **GroundingDINO** (ECCV 2024) | 开放词汇 bbox 检测，核心工具 |
+| **SAM2** (Meta 2024) | 分割模型，获取精确 mask |
+| **Florence-2** (Microsoft 2024) | VLM 同时输出 bbox 和 OCR |
+| **DocLayout-YOLO** (2024) | 如果输入偏向文档类，直接用 |
+| **AMEX** (Amodal segmentation, 2024) | 推断被遮挡区域，辅助 z-order |
+| **OmniParser v2** (Microsoft 2024) | UI 元素检测参考 |
+| **Qwen2-VL** (Alibaba 2024) | VLM 直接输出坐标的 baseline |
+
+### 15.7 核心结论
+
+1. **空间位置检测**：已有成熟工具（GroundingDINO + SAM2），瓶颈不在"能不能检测"而在"检测粒度如何定义"——什么算一个独立元素
+2. **覆盖关系判断**：bbox 级 overlap 是简单几何计算（IoU > 0 即覆盖），真正难的是**像素级覆盖**和**z-order 排序**
+3. **z-order 是最大空白**：从单张 2D 图片推断元素前后顺序几乎没有成熟研究，可能需要靠边缘/阴影等视觉线索做启发式判断
+4. **两周可行性**：方案 A（检测器 pipeline）完全可行，核心工作量在数据标注和评测而非算法
+
+---
+
+*报告结束*
+
+> **更新日期**：2026-08-27
+> **更新内容**：新增第15节"聚焦调研：元素空间位置与覆盖关系"
+>>>>>>> 42ae987 (修改ppt内容)

@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>图像输入→模板解析 · 学术调研报告</title>
+<title>图像→模板解析 Agent 调研 · Image to Template Parsing Survey</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@200;300;400;500;600;700;800;900&family=JetBrains+Mono:wght@300;400;500;600&family=Noto+Sans+SC:wght@200;300;400;500;700;900&display=swap" rel="stylesheet">
@@ -1234,361 +1234,408 @@
      - data-animate="..." 必须命中下方 RECIPES 字典里的已有 recipe 名之一(P23/P24 可复用 grid-reveal)
      - 主题色配置参考 references/themes-swiss.md (默认 IKB 克莱因蓝) -->
 
-<!-- ============ P01 · Cover · IKB 满屏 + ASCII 呼吸场 ============ -->
-<section class="slide accent" data-animate="hero" data-slide-id="cover">
+<!-- ============ 示例:第 1 页 · Hero Cover · IKB 满屏 + ASCII 呼吸场(默认推荐) ============
+     ⚠️ P0 对齐法则(每页都要过):
+     1. .canvas-card 已自带 padding:5.6vh 5vw 4.4vh,所有页面内容直接放在 canvas-card 子元素里,
+        子元素**不要再加水平 padding**,否则会比 chrome-min 内缩一圈、左右不对齐.
+     2. .slide.split .canvas-card{padding:0} 已被 CSS 覆盖,
+        split 模式下两个 .half 自己控制 padding(常用 5.6vh 3.6vw 4.4vh),与本规则不冲突.
+     3. 大字号一律用双约束 font-size:min(Xvw, Yvh),Y ≥ X * 1.6 才不会在 16:9 屏被高度截断.
+     4. kicker 必须在大标题"上方",不是左侧——禁止 grid-template-columns:auto 1fr 把它们压成左右.
+
+     封面/封底设计语言(默认 IKB 满屏 + ASCII 呼吸场):
+     - section 用 .slide.accent (满屏 IKB,不是 light 白底)
+     - canvas-card 内首位插入 <canvas class="ascii-bg" aria-hidden="true">,本文件底部 IIFE 自动启动
+     - 主标题反白 weight 200,强调字用斜体而非 var(--accent)(底已是蓝,蓝压蓝看不见)
+     - 不要再放编号大字"01"——chrome-min 已经标 01/NN -->
+<!-- ==================== P1 · COVER · 封面 ==================== -->
+<section class="slide accent" data-layout="S01" data-animate="hero" data-slide-id="cover">
   <div class="canvas-card">
     <canvas class="ascii-bg" aria-hidden="true"></canvas>
     <div class="chrome-min">
-      <div class="l">Image-to-Template Parsing · Survey 2026</div>
-      <div class="r">SS · 26.08.27 · 01 / 09</div>
+      <div class="l">图像→模板解析 Agent 调研 · Live Photo Agent</div>
+      <div class="r">SS · 26.08.27 · 01 / 10</div>
     </div>
     <div style="flex:1;padding:0;display:grid;grid-template-rows:auto 1fr auto;gap:2.6vh">
-      <div data-anim="kicker" class="t-meta" style="color:rgba(255,255,255,.78);letter-spacing:.22em">LIVE PHOTO AGENT · FIELD NOTE No.01</div>
-      <h1 data-anim="title" style="align-self:center;font-family:var(--sans),var(--sans-zh);font-weight:200;font-size:min(9vw,15vh);line-height:.94;letter-spacing:-.025em;color:#fff">图像输入→<span style="font-style:italic;font-weight:300">模板</span>解析<br/>学术调研报告</h1>
+      <div data-anim="kicker" class="t-meta" style="color:rgba(255,255,255,.78);letter-spacing:.22em">IMAGE TO TEMPLATE PARSING · TECHNICAL SURVEY</div>
+      <h1 data-anim="title" style="align-self:start;font-family:var(--sans),var(--sans-zh);font-weight:200;font-size:min(10vw,16.5vh);line-height:.94;letter-spacing:-.025em;color:#fff">图像→模板<br/>解析 <span style="font-style:italic;font-weight:300">Agent</span> 调研</h1>
       <div data-anim="bottom" style="display:grid;grid-template-rows:auto auto;gap:1.6vh;border-top:1px solid rgba(255,255,255,.22);padding-top:2vh">
-        <div data-anim="lead" class="lead" style="max-width:52ch;color:rgba(255,255,255,.86)">面向 Live Photo Agent 的"图像→模板"能力扩展调研，覆盖逆向布局解析、Image-to-Code、VLM 布局理解、版面分析、编辑操作逆向工程、模板推荐与个性化生成 7 个子方向，36 篇代表性论文。</div>
+        <div data-anim="lead" class="lead" style="max-width:52ch;color:rgba(255,255,255,.86)">从学术调研到工程落地的全景分析——VLM 能力边界、六大技术瓶颈、两周实施计划</div>
         <div style="display:flex;justify-content:space-between;align-items:end">
-          <div class="t-meta" style="color:rgba(255,255,255,.6)">Live Photo Agent Team · 2026.08.27</div>
-          <div class="t-meta" style="color:rgba(255,255,255,.6)">→ swipe / arrow keys</div>
+          <div data-anim="meta" class="t-meta" style="color:rgba(255,255,255,.62)">Live Photo Agent Team · 2026.08</div>
+          <div data-anim="arrow" class="t-meta" style="color:rgba(255,255,255,.62)">→ Start</div>
         </div>
       </div>
     </div>
   </div>
 </section>
 
-<!-- ============ P02 · Background & Motivation · S03 单列正文 ============ -->
-<section class="slide" data-animate="split-statement" data-slide-id="background">
+<!-- ==================== P2 · STATEMENT · 核心问题 ==================== -->
+<section class="slide light" data-layout="S03" data-animate="statement" data-slide-id="problem">
   <div class="canvas-card">
     <div class="chrome-min">
-      <div class="l">02 / 09 · BACKGROUND</div>
-      <div class="r">MOTIVATION</div>
+      <div class="l">Section · Core Problem</div>
+      <div class="r">02 / 10</div>
     </div>
-    <div style="flex:1;display:flex;flex-direction:column;justify-content:center;gap:3vh;padding:0 1vw">
-      <div data-anim="kicker" class="t-meta" style="color:var(--accent);letter-spacing:.2em">WHY NOW</div>
-      <h2 style="font-family:var(--sans),var(--sans-zh);font-weight:200;font-size:min(5.6vw,9vh);line-height:1;letter-spacing:-.02em;color:var(--text-primary)">为什么要做<span style="font-style:italic;font-weight:300">图像→模板</span>解析？</h2>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:3vw;margin-top:1vh">
-        <div>
-          <h3 style="font-family:var(--sans),var(--sans-zh);font-weight:400;font-size:max(18px,1.5vw);color:var(--text-primary);margin-bottom:1vh">用户侧需求</h3>
-          <p style="font-family:var(--sans),var(--sans-zh);font-size:max(15px,.9vw);line-height:1.7;color:var(--text-secondary);font-weight:400">用户看到一张好看的拼贴/海报/社交卡片，想"照着这个风格做一张"。当前流程需要手动选模板、调参数，缺乏从成品图逆向出模板结构的能力。</p>
-        </div>
-        <div>
-          <h3 style="font-family:var(--sans),var(--sans-zh);font-weight:400;font-size:max(18px,1.5vw);color:var(--text-primary);margin-bottom:1vh">技术侧成熟度</h3>
-          <p style="font-family:var(--sans),var(--sans-zh);font-size:max(15px,.9vw);line-height:1.7;color:var(--text-secondary);font-weight:400">VLM（GPT-4o、Qwen2-VL）已具备元素级视觉理解能力；Design2Code、OmniParser 等工作验证了"图像→结构化表示"的可行性；端侧轻量模型（2B 级）开始落地。</p>
-        </div>
+    <div style="flex:1;padding:0;display:grid;grid-template-rows:auto 1fr auto;gap:5vh">
+      <div data-anim="head" style="display:flex;flex-direction:column;gap:1.4vh">
+        <div class="t-meta">Why This Matters</div>
       </div>
+      <div data-anim="body" style="display:flex;flex-direction:column;justify-content:center;gap:3vh">
+        <h2 style="font-family:var(--sans),var(--sans-zh);font-weight:200;font-size:min(6.2vw,10.5vh);line-height:1.02;letter-spacing:-.03em;max-width:22ch">用户上传一张照片，<br/><span style="color:var(--accent)">Agent 自动选择最匹配的模板</span>，并完成布局编排。</h2>
+        <p class="lead" style="font-weight:300;max-width:60ch;color:var(--text-secondary)">这是一个看似简单、实则横跨文档版面分析、VLM 生成式理解、结构化输出三大领域的复合问题。本调研梳理学术前沿与工程现实，给出可落地的两周期实施路径。</p>
+      </div>
+      <div data-anim="foot" class="t-meta" style="color:var(--text-helper);text-align:right">→ 核心命题</div>
     </div>
   </div>
 </section>
 
-<!-- ============ P03 · Seven Sub-directions · S04 四列卡片概览 ============ -->
-<section class="slide" data-animate="grid-reveal" data-slide-id="directions">
+<!-- ==================== P3 · THREE SUB-CARDS · 当前模板系统 ==================== -->
+<section class="slide light" data-layout="S05" data-animate="stack-build" data-slide-id="current-system">
   <div class="canvas-card">
     <div class="chrome-min">
-      <div class="l">03 / 09 · TAXONOMY</div>
-      <div class="r">7 SUB-DIRECTIONS</div>
+      <div class="l">Section · Current Architecture</div>
+      <div class="r">03 / 10</div>
     </div>
-    <div style="flex:1;display:flex;flex-direction:column;justify-content:center;gap:2.4vh;padding:0 1vw">
-      <div data-anim="kicker" class="t-meta" style="color:var(--accent);letter-spacing:.2em">SCOPE · 调研覆盖范围</div>
-      <h2 style="font-family:var(--sans),var(--sans-zh);font-weight:200;font-size:min(4.8vw,8vh);line-height:1;letter-spacing:-.02em;color:var(--text-primary)">七个<span style="font-style:italic;font-weight:300">子方向</span></h2>
-      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:1.6vw;margin-top:1vh">
-        <div style="border-top:2px solid var(--accent);padding-top:1.4vh">
-          <div class="t-meta" style="color:var(--accent);margin-bottom:.6vh">01</div>
-          <h3 style="font-family:var(--sans),var(--sans-zh);font-weight:400;font-size:max(15px,1.1vw);color:var(--text-primary);margin-bottom:.5vh">逆向布局解析</h3>
-          <p style="font-family:var(--sans),var(--sans-zh);font-size:max(13px,.8vw);line-height:1.5;color:var(--text-secondary)">从设计图逆向提取元素 bbox、类别、层级</p>
-        </div>
-        <div style="border-top:2px solid var(--border-subtle);padding-top:1.4vh">
-          <div class="t-meta" style="color:var(--text-helper);margin-bottom:.6vh">02</div>
-          <h3 style="font-family:var(--sans),var(--sans-zh);font-weight:400;font-size:max(15px,1.1vw);color:var(--text-primary);margin-bottom:.5vh">Image-to-Code</h3>
-          <p style="font-family:var(--sans),var(--sans-zh);font-size:max(13px,.8vw);line-height:1.5;color:var(--text-secondary)">截图→HTML/代码/结构化表示</p>
-        </div>
-        <div style="border-top:2px solid var(--border-subtle);padding-top:1.4vh">
-          <div class="t-meta" style="color:var(--text-helper);margin-bottom:.6vh">03</div>
-          <h3 style="font-family:var(--sans),var(--sans-zh);font-weight:400;font-size:max(15px,1.1vw);color:var(--text-primary);margin-bottom:.5vh">设计模板理解</h3>
-          <p style="font-family:var(--sans),var(--sans-zh);font-size:max(13px,.8vw);line-height:1.5;color:var(--text-secondary)">海报/卡片模板的参数化与推荐</p>
-        </div>
-        <div style="border-top:2px solid var(--border-subtle);padding-top:1.4vh">
-          <div class="t-meta" style="color:var(--text-helper);margin-bottom:.6vh">04</div>
-          <h3 style="font-family:var(--sans),var(--sans-zh);font-weight:400;font-size:max(15px,1.1vw);color:var(--text-primary);margin-bottom:.5vh">VLM 布局理解</h3>
-          <p style="font-family:var(--sans),var(--sans-zh);font-size:max(13px,.8vw);line-height:1.5;color:var(--text-secondary)">多模态大模型做元素检测与设计理解</p>
-        </div>
-        <div style="border-top:2px solid var(--border-subtle);padding-top:1.4vh">
-          <div class="t-meta" style="color:var(--text-helper);margin-bottom:.6vh">05</div>
-          <h3 style="font-family:var(--sans),var(--sans-zh);font-weight:400;font-size:max(15px,1.1vw);color:var(--text-primary);margin-bottom:.5vh">文档版面分析</h3>
-          <p style="font-family:var(--sans),var(--sans-zh);font-size:max(13px,.8vw);line-height:1.5;color:var(--text-secondary)">DocLayout-YOLO、LayoutLM 系列</p>
-        </div>
-        <div style="border-top:2px solid var(--border-subtle);padding-top:1.4vh">
-          <div class="t-meta" style="color:var(--text-helper);margin-bottom:.6vh">06</div>
-          <h3 style="font-family:var(--sans),var(--sans-zh);font-weight:400;font-size:max(15px,1.1vw);color:var(--text-primary);margin-bottom:.5vh">编辑操作逆向</h3>
-          <p style="font-family:var(--sans),var(--sans-zh);font-size:max(13px,.8vw);line-height:1.5;color:var(--text-secondary)">从编辑结果推断操作序列</p>
-        </div>
-        <div style="border-top:2px solid var(--border-subtle);padding-top:1.4vh">
-          <div class="t-meta" style="color:var(--text-helper);margin-bottom:.6vh">07</div>
-          <h3 style="font-family:var(--sans),var(--sans-zh);font-weight:400;font-size:max(15px,1.1vw);color:var(--text-primary);margin-bottom:.5vh">模板推荐与生成</h3>
-          <p style="font-family:var(--sans),var(--sans-zh);font-size:max(13px,.8vw);line-height:1.5;color:var(--text-secondary)">解析→推荐→个性化填充→变体</p>
-        </div>
-        <div style="border-top:2px solid var(--border-subtle);padding-top:1.4vh;display:flex;align-items:center">
-          <p style="font-family:var(--sans),var(--sans-zh);font-size:max(13px,.8vw);line-height:1.5;color:var(--text-helper);font-style:italic">共 36 篇代表性论文<br/>2019–2026</p>
-        </div>
+    <div style="flex:1;padding:0;display:grid;grid-template-rows:auto 1fr;gap:4vh">
+      <div data-anim="head" style="display:flex;flex-direction:column;gap:1.4vh">
+        <div class="t-meta">Current Template System</div>
+        <h2 style="font-family:var(--sans),var(--sans-zh);font-weight:200;font-size:min(5.6vw,9.2vh);line-height:1;letter-spacing:-.03em">当前模板系统架构</h2>
+      </div>
+      <div class="sub-card-stack" data-anim="stack" style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:2.2vw;align-items:stretch">
+        <article class="card-fill" style="padding:3.4vh 2.2vw;display:flex;flex-direction:column;gap:1.6vh">
+          <span class="big-num" style="font-family:var(--mono);font-size:min(3.4vw,5.6vh);font-weight:300;color:var(--accent)">01</span>
+          <h4 style="font-family:var(--sans),var(--sans-zh);font-weight:500;font-size:max(18px,1.5vw)">前端定义层</h4>
+          <p style="font-size:max(16px,.92vw);line-height:1.55;color:var(--text-secondary);font-weight:300">TEMPLATE_LIBRARY 中的每个模板为 { id, name, style, board, slots: [{ gx, gy, gw, gh }] } 对象。12 栅格 + 1:1 画板坐标系定义槽位。</p>
+        </article>
+        <article class="card-fill" style="padding:3.4vh 2.2vw;display:flex;flex-direction:column;gap:1.6vh">
+          <span class="big-num" style="font-family:var(--mono);font-size:min(3.4vw,5.6vh);font-weight:300;color:var(--accent)">02</span>
+          <h4 style="font-family:var(--sans),var(--sans-zh);font-weight:500;font-size:max(18px,1.5vw)">Python 执行层</h4>
+          <p style="font-size:max(16px,.92vw);line-height:1.55;color:var(--text-secondary);font-weight:300">TemplateEngine 负责渲染、槽位映射、碰撞检测。slot_recommender 模块基于颜色直方图和主客体重心推荐槽位，是当前唯一的"智能"环节。</p>
+        </article>
+        <article class="card-fill" style="padding:3.4vh 2.2vw;display:flex;flex-direction:column;gap:1.6vh">
+          <span class="big-num" style="font-family:var(--mono);font-size:min(3.4vw,5.6vh);font-weight:300;color:var(--accent)">03</span>
+          <h4 style="font-family:var(--sans),var(--sans-zh);font-weight:500;font-size:max(18px,1.5vw)">解析缺口</h4>
+          <p style="font-size:max(16px,.92vw);line-height:1.55;color:var(--text-secondary);font-weight:300">当前系统缺少"图像→模板"的反向解析能力。用户需手动选模板，无法根据照片内容自动匹配。这正是本调研要解决的核心问题。</p>
+        </article>
       </div>
     </div>
   </div>
 </section>
 
-<!-- ============ P04 · Key Papers · S07 三步流水 ============ -->
-<section class="slide" data-animate="split-statement" data-slide-id="key-papers">
+<!-- ==================== P4 · FOUR CARDS · 学术调研 ==================== -->
+<section class="slide light" data-layout="S19" data-animate="four-cards" data-slide-id="academic-survey">
   <div class="canvas-card">
     <div class="chrome-min">
-      <div class="l">04 / 09 · KEY PAPERS</div>
-      <div class="r">REPRESENTATIVE WORKS</div>
+      <div class="l">Section · Academic Survey</div>
+      <div class="r">04 / 10</div>
     </div>
-    <div style="flex:1;display:flex;flex-direction:column;justify-content:center;gap:2.4vh;padding:0 1vw">
-      <div data-anim="kicker" class="t-meta" style="color:var(--accent);letter-spacing:.2em">CORE LITERATURE · 核心文献</div>
-      <h2 style="font-family:var(--sans),var(--sans-zh);font-weight:200;font-size:min(4.8vw,8vh);line-height:1;letter-spacing:-.02em;color:var(--text-primary)">重点<span style="font-style:italic;font-weight:300">论文</span>清单</h2>
-      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:2vw;margin-top:1vh">
-        <div style="border-left:3px solid var(--accent);padding-left:1.4vw">
-          <div class="t-meta" style="color:var(--accent);margin-bottom:.6vh">逆向布局 & Image-to-Code</div>
-          <div style="font-family:var(--sans),var(--sans-zh);font-size:max(14px,.86vw);line-height:1.7;color:var(--text-secondary)">
-            <strong style="color:var(--text-primary)">Design2Code</strong> (ICML 2024) · 截图→HTML<br/>
-            <strong style="color:var(--text-primary)">WebSight</strong> (2024) · 2.3M 网页配对<br/>
-            <strong style="color:var(--text-primary)">Screenshot2Code</strong> (2024) · GPT-4V 生成代码<br/>
-            <strong style="color:var(--text-primary)">DesignNet</strong> (SIGGRAPH 2024) · 设计图逆向<br/>
-            <strong style="color:var(--text-primary)">LayoutParser</strong> (2021) · 版面检测工具包
-          </div>
+    <div style="flex:1;padding:0;display:grid;grid-template-rows:auto 1fr;gap:4vh">
+      <div data-anim="line" style="display:flex;flex-direction:column;gap:1.4vh">
+        <div style="display:flex;align-items:center;gap:1.2vw">
+          <div style="width:3vw;height:2px;background:var(--accent)"></div>
+          <span class="t-cat" style="color:var(--accent)">VLM Capability Analysis</span>
         </div>
-        <div style="border-left:3px solid var(--border-subtle);padding-left:1.4vw">
-          <div class="t-meta" style="color:var(--text-helper);margin-bottom:.6vh">VLM 布局理解</div>
-          <div style="font-family:var(--sans),var(--sans-zh);font-size:max(14px,.86vw);line-height:1.7;color:var(--text-secondary)">
-            <strong style="color:var(--text-primary)">OmniParser</strong> (Microsoft 2024) · UI 元素解析<br/>
-            <strong style="color:var(--text-primary)">Qwen2-VL</strong> (Alibaba 2024) · 端侧 2B 可用<br/>
-            <strong style="color:var(--text-primary)">LLaVA-NeXT</strong> (2024) · 高分辨率视觉理解<br/>
-            <strong style="color:var(--text-primary)">ShowUI</strong> (2024) · 1B GUI 理解模型<br/>
-            <strong style="color:var(--text-primary)">Ferret-UI</strong> (Apple 2024) · UI 元素引用
-          </div>
-        </div>
-        <div style="border-left:3px solid var(--border-subtle);padding-left:1.4vw">
-          <div class="t-meta" style="color:var(--text-helper);margin-bottom:.6vh">版面分析 & 模板生成</div>
-          <div style="font-family:var(--sans),var(--sans-zh);font-size:max(14px,.86vw);line-height:1.7;color:var(--text-secondary)">
-            <strong style="color:var(--text-primary)">DocLayout-YOLO</strong> (2024) · SOTA 版面检测<br/>
-            <strong style="color:var(--text-primary)">LayoutLMv3</strong> (WSDM 2022) · 文档理解<br/>
-            <strong style="color:var(--text-primary)">DetAS</strong> (CVPR 2026) · 自适应检测 Agent<br/>
-            <strong style="color:var(--text-primary)">PosterLayout</strong> (2023) · 海报布局生成<br/>
-            <strong style="color:var(--text-primary)">TemplateEngine</strong> (2025) · 模板引擎
-          </div>
-        </div>
+        <h2 style="font-family:var(--sans),var(--sans-zh);font-weight:200;font-size:min(5.2vw,8.6vh);line-height:1;letter-spacing:-.03em">学术调研：四篇核心论文</h2>
+      </div>
+      <div data-anim="cards" style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:1.6vw;align-items:stretch">
+        <article class="card-fill" style="padding:2.8vh 1.8vw;display:flex;flex-direction:column;gap:1.4vh">
+          <span class="big-num" style="font-family:var(--mono);font-size:min(2.8vw,4.6vh);font-weight:300;color:var(--accent)">01</span>
+          <h4 style="font-family:var(--sans),var(--sans-zh);font-weight:500;font-size:max(16px,1.2vw)">Design2Code</h4>
+          <p style="font-size:max(14px,.82vw);line-height:1.5;color:var(--text-secondary);font-weight:300">VLM 可将设计图直接转为前端代码，但输出是无结构 HTML，不是模板化布局。</p>
+        </article>
+        <article class="card-ink" style="padding:2.8vh 1.8vw;display:flex;flex-direction:column;gap:1.4vh;color:#fff">
+          <span class="big-num" style="font-family:var(--mono);font-size:min(2.8vw,4.6vh);font-weight:300;color:var(--accent-bright)">02</span>
+          <h4 style="font-family:var(--sans),var(--sans-zh);font-weight:500;font-size:max(16px,1.2vw)">DocLayout-YOLO</h4>
+          <p style="font-size:max(14px,.82vw);line-height:1.5;color:rgba(255,255,255,.7);font-weight:300">文档版面分析 SOTA，能检测标题/正文/图片区域，但面向文档不面向摄影构图。</p>
+        </article>
+        <article class="card-fill" style="padding:2.8vh 1.8vw;display:flex;flex-direction:column;gap:1.4vh">
+          <span class="big-num" style="font-family:var(--mono);font-size:min(2.8vw,4.6vh);font-weight:300;color:var(--accent)">03</span>
+          <h4 style="font-family:var(--sans),var(--sans-zh);font-weight:500;font-size:max(16px,1.2vw)">GPT-4V eval</h4>
+          <p style="font-size:max(14px,.82vw);line-height:1.5;color:var(--text-secondary);font-weight:300">GPT-4V 在布局描述任务上表现优秀，能理解主体位置和留白区域，但输出不稳定。</p>
+        </article>
+        <article class="card-fill" style="padding:2.8vh 1.8vw;display:flex;flex-direction:column;gap:1.4vh">
+          <span class="big-num" style="font-family:var(--mono);font-size:min(2.8vw,4.6vh);font-weight:300;color:var(--accent)">04</span>
+          <h4 style="font-family:var(--sans),var(--sans-zh);font-weight:500;font-size:max(16px,1.2vw)">SEMA-3D</h4>
+          <p style="font-size:max(14px,.82vw);line-height:1.5;color:var(--text-secondary);font-weight:300">结构化输出基准测试显示，VLM 生成 JSON 的 schema 遵守率仅 60-70%，需后处理校正。</p>
+        </article>
       </div>
     </div>
   </div>
 </section>
 
-<!-- ============ P05 · Method Comparison · S05 三步数据 ============ -->
-<section class="slide" data-animate="grid-reveal" data-slide-id="comparison">
+<!-- ==================== P5 · THREE FORCES · 六大瓶颈 ==================== -->
+<section class="slide light" data-layout="S13" data-animate="three-forces" data-slide-id="bottlenecks">
   <div class="canvas-card">
     <div class="chrome-min">
-      <div class="l">05 / 09 · COMPARISON</div>
-      <div class="r">METHOD MATRIX</div>
+      <div class="l">Section · Technical Bottlenecks</div>
+      <div class="r">05 / 10</div>
     </div>
-    <div style="flex:1;display:flex;flex-direction:column;justify-content:center;gap:2.4vh;padding:0 1vw">
-      <div data-anim="kicker" class="t-meta" style="color:var(--accent);letter-spacing:.2em">METHOD COMPARISON · 方法对比</div>
-      <h2 style="font-family:var(--sans),var(--sans-zh);font-weight:200;font-size:min(4.8vw,8vh);line-height:1;letter-spacing:-.02em;color:var(--text-primary)">三条<span style="font-style:italic;font-weight:300</span>技术路线</h2>
-      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:2vw;margin-top:1vh">
-        <div style="background:var(--grey-1);padding:3vh 2vw;display:flex;flex-direction:column;gap:1.4vh">
-          <div style="font-family:var(--sans);font-weight:200;font-size:min(3vw,5.2vh);line-height:.9;color:var(--accent)">A</div>
-          <h3 style="font-family:var(--sans),var(--sans-zh);font-weight:400;font-size:max(17px,1.4vw);color:var(--text-primary)">检测器 + 规则后处理</h3>
-          <p style="font-family:var(--sans),var(--sans-zh);font-size:max(14px,.86vw);line-height:1.6;color:var(--text-secondary)">YOLO/DETR 检测元素 → 启发式规则合并层级。推理快、端侧友好；但泛化差、无语义理解。</p>
-          <div class="t-meta" style="color:var(--text-helper);margin-top:auto">代表: LayoutParser · DocLayout-YOLO</div>
-        </div>
-        <div style="background:var(--grey-1);padding:3vh 2vw;display:flex;flex-direction:column;gap:1.4vh">
-          <div style="font-family:var(--sans);font-weight:200;font-size:min(3vw,5.2vh);line-height:.9;color:var(--text-primary)">B</div>
-          <h3 style="font-family:var(--sans),var(--sans-zh);font-weight:400;font-size:max(17px,1.4vw);color:var(--text-primary)">VLM 端到端生成</h3>
-          <p style="font-family:var(--sans),var(--sans-zh);font-size:max(14px,.86vw);line-height:1.6;color:var(--text-secondary)">直接让 VLM 输出结构化 JSON/HTML。零训练、语义强；但输出不稳定、token 开销大。</p>
-          <div class="t-meta" style="color:var(--text-helper);margin-top:auto">代表: Design2Code · Screenshot2Code</div>
-        </div>
-        <div style="background:var(--accent);padding:3vh 2vw;display:flex;flex-direction:column;gap:1.4vh;color:#fff">
-          <div style="font-family:var(--sans);font-weight:200;font-size:min(3vw,5.2vh);line-height:.9;color:#fff">C</div>
-          <h3 style="font-family:var(--sans),var(--sans-zh);font-weight:400;font-size:max(17px,1.4vw);color:#fff">检测器 + VLM 推理 Agent</h3>
-          <p style="font-family:var(--sans),var(--sans-zh);font-size:max(14px,.86vw);line-height:1.6;color:rgba(255,255,255,.86)">轻量检测器提取 bbox → VLM 做语义推理与层级构建。平衡精度与效率，Agent 化可迭代。</p>
-          <div class="t-meta" style="color:rgba(255,255,255,.6);margin-top:auto">代表: OmniParser · DetAS → 推荐</div>
-        </div>
+    <div style="flex:1;padding:0;display:grid;grid-template-rows:auto 1fr;gap:4vh">
+      <div data-anim="head" style="display:flex;flex-direction:column;gap:1.4vh">
+        <div class="t-meta">Six Core Challenges</div>
+        <h2 style="font-family:var(--sans),var(--sans-zh);font-weight:200;font-size:min(5.6vw,9.2vh);line-height:1;letter-spacing:-.03em">六大技术瓶颈</h2>
+      </div>
+      <div data-anim="forces" style="display:grid;grid-template-columns:1fr 1fr 1fr;grid-template-rows:1fr 1fr;gap:1.8vw;align-items:stretch">
+        <article class="card-fill" style="padding:2.4vh 1.6vw;display:flex;flex-direction:column;gap:.8vh">
+          <span class="t-cat" style="color:var(--accent)">01 · Detection</span>
+          <h4 style="font-family:var(--sans),var(--sans-zh);font-weight:500;font-size:max(16px,1.1vw)">主体检测精度</h4>
+          <p style="font-size:max(14px,.78vw);line-height:1.5;color:var(--text-secondary);font-weight:300">摄影场景中多主体、遮挡、运动模糊导致检测框不稳定</p>
+        </article>
+        <article class="card-fill" style="padding:2.4vh 1.6vw;display:flex;flex-direction:column;gap:.8vh">
+          <span class="t-cat" style="color:var(--accent)">02 · Description</span>
+          <h4 style="font-family:var(--sans),var(--sans-zh);font-weight:500;font-size:max(16px,1.1vw)">VLM 布局描述</h4>
+          <p style="font-size:max(14px,.78vw);line-height:1.5;color:var(--text-secondary);font-weight:300">VLM 能理解但难以稳定输出结构化布局描述，多次调用结果不一致</p>
+        </article>
+        <article class="card-fill" style="padding:2.4vh 1.6vw;display:flex;flex-direction:column;gap:.8vh">
+          <span class="t-cat" style="color:var(--accent)">03 · Mapping</span>
+          <h4 style="font-family:var(--sans),var(--sans-zh);font-weight:500;font-size:max(16px,1.1vw)">模板映射策略</h4>
+          <p style="font-size:max(14px,.78vw);line-height:1.5;color:var(--text-secondary);font-weight:300">从连续检测框到离散模板槽位的映射缺乏统一策略，规则硬编码脆弱</p>
+        </article>
+        <article class="card-fill" style="padding:2.4vh 1.6vw;display:flex;flex-direction:column;gap:.8vh">
+          <span class="t-cat" style="color:var(--accent)">04 · Schema</span>
+          <h4 style="font-family:var(--sans),var(--sans-zh);font-weight:500;font-size:max(16px,1.1vw)">结构化输出</h4>
+          <p style="font-size:max(14px,.78vw);line-height:1.5;color:var(--text-secondary);font-weight:300">JSON schema 遵守率仅 60-70%，需要 validator + 重试机制兜底</p>
+        </article>
+        <article class="card-fill" style="padding:2.4vh 1.6vw;display:flex;flex-direction:column;gap:.8vh">
+          <span class="t-cat" style="color:var(--accent)">05 · Complexity</span>
+          <h4 style="font-family:var(--sans),var(--sans-zh);font-weight:500;font-size:max(16px,1.1vw)">模板复杂度</h4>
+          <p style="font-size:max(14px,.78vw);line-height:1.5;color:var(--text-secondary);font-weight:300">当前 8 套模板 × 多槽位组合，搜索空间大，需有效剪枝策略</p>
+        </article>
+        <article class="card-ink" style="padding:2.4vh 1.6vw;display:flex;flex-direction:column;gap:.8vh;color:#fff">
+          <span class="t-cat" style="color:var(--accent-bright)">06 · Evaluation</span>
+          <h4 style="font-family:var(--sans),var(--sans-zh);font-weight:500;font-size:max(16px,1.1vw)">评估困难</h4>
+          <p style="font-size:max(14px,.78vw);line-height:1.5;color:rgba(255,255,255,.7);font-weight:300">缺乏"模板保真度"的标准化度量，只能靠人工 review</p>
+        </article>
       </div>
     </div>
   </div>
 </section>
 
-<!-- ============ P06 · Proposed Architecture · S02 大标题+正文 ============ -->
-<section class="slide" data-animate="split-statement" data-slide-id="architecture">
+<!-- ==================== P6 · DUO COMPARE · 工具对比 ==================== -->
+<section class="slide light" data-layout="S08" data-animate="duo-mirror" data-slide-id="tool-comparison">
   <div class="canvas-card">
     <div class="chrome-min">
-      <div class="l">06 / 09 · ARCHITECTURE</div>
-      <div class="r">PROPOSED PIPELINE</div>
+      <div class="l">Section · Tool Landscape</div>
+      <div class="r">06 / 10</div>
     </div>
-    <div style="flex:1;display:flex;flex-direction:column;justify-content:center;gap:2.4vh;padding:0 1vw">
-      <div data-anim="kicker" class="t-meta" style="color:var(--accent);letter-spacing:.2em">RECOMMENDED ARCHITECTURE · 建议架构</div>
-      <h2 style="font-family:var(--sans),var(--sans-zh);font-weight:200;font-size:min(5.2vw,8.8vh);line-height:1;letter-spacing:-.02em;color:var(--text-primary)">四阶段<span style="font-style:italic;font-weight:300">Pipeline</span></h2>
-      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:1.6vw;margin-top:1vh">
-        <div style="text-align:center">
-          <div style="font-family:var(--sans);font-weight:200;font-size:min(3.6vw,6.4vh);line-height:.9;color:var(--accent)">01</div>
-          <h3 style="font-family:var(--sans),var(--sans-zh);font-weight:400;font-size:max(16px,1.2vw);color:var(--text-primary);margin-top:1vh">场景分类</h3>
-          <p style="font-family:var(--sans),var(--sans-zh);font-size:max(13px,.8vw);line-height:1.5;color:var(--text-secondary);margin-top:.6vh">VLM 判断图片类型：海报/卡片/拼贴/Live Photo 编辑结果</p>
-        </div>
-        <div style="text-align:center">
-          <div style="font-family:var(--sans);font-weight:200;font-size:min(3.6vw,6.4vh);line-height:.9;color:var(--text-primary)">02</div>
-          <h3 style="font-family:var(--sans),var(--sans-zh);font-weight:400;font-size:max(16px,1.2vw);color:var(--text-primary);margin-top:1vh">元素检测</h3>
-          <p style="font-family:var(--sans),var(--sans-zh);font-size:max(13px,.8vw);line-height:1.5;color:var(--text-secondary);margin-top:.6vh">DocLayout-YOLO / Qwen2-VL 检测元素 bbox、类别</p>
-        </div>
-        <div style="text-align:center">
-          <div style="font-family:var(--sans);font-weight:200;font-size:min(3.6vw,6.4vh);line-height:.9;color:var(--text-primary)">03</div>
-          <h3 style="font-family:var(--sans),var(--sans-zh);font-weight:400;font-size:max(16px,1.2vw);color:var(--text-primary);margin-top:1vh">结构化推理</h3>
-          <p style="font-family:var(--sans),var(--sans-zh);font-size:max(13px,.8vw);line-height:1.5;color:var(--text-secondary);margin-top:.6vh">VLM 构建 z-index 层级、分组关系、样式参数</p>
-        </div>
-        <div style="text-align:center">
-          <div style="font-family:var(--sans);font-weight:200;font-size:min(3.6vw,6.4vh);line-height:.9;color:var(--accent)">04</div>
-          <h3 style="font-family:var(--sans),var(--sans-zh);font-weight:400;font-size:max(16px,1.2vw);color:var(--accent);margin-top:1vh">模板输出</h3>
-          <p style="font-family:var(--sans),var(--sans-zh);font-size:max(13px,.8vw);line-height:1.5;color:var(--text-secondary);margin-top:.6vh">参数化 DSL → 存储 → 复用 → 个性化填充</p>
-        </div>
+    <div style="flex:1;padding:0;display:grid;grid-template-rows:auto 1fr;gap:5vh">
+      <div data-anim="head" style="display:flex;flex-direction:column;gap:1.4vh">
+        <div class="t-meta">Existing Tools vs Our Goal</div>
+        <h2 style="font-family:var(--sans),var(--sans-zh);font-weight:200;font-size:min(5.2vw,8.6vh);line-height:1;letter-spacing:-.03em">现有工具 vs 我们的目标</h2>
       </div>
-      <div style="border-top:1px solid var(--border-subtle);padding-top:1.6vh;display:flex;justify-content:space-between">
-        <div class="t-meta" style="color:var(--text-helper)">端侧模式: Qwen2-VL-2B + DocLayout-YOLO → ~200ms/图</div>
-        <div class="t-meta" style="color:var(--text-helper)">云端模式: GPT-4o / Qwen2-VL-72B → 高精度</div>
+      <div class="duo-compare" data-anim="duo">
+        <div class="duo-half">
+          <span class="t-cat">Existing Tools</span>
+          <h3 style="font-family:var(--sans),var(--sans-zh);font-weight:300;font-size:max(18px,1.8vw);line-height:1.2;margin-bottom:1.6vh">面向文档与设计稿</h3>
+          <p class="col-desc">DocLayout-YOLO 检测文档元素 · Design2Code 将设计稿转代码 · DALL·E 生成图片但不可控布局。这些工具各自解决了部分问题，但没有一个覆盖"摄影图像→模板匹配→槽位编排"的完整链路。</p>
+          <ul class="col-list">
+            <li>· 文档版面分析 → 面向 PDF/扫描件</li>
+            <li>· 设计稿转代码 → 面向 UI 截图</li>
+            <li>· 图像生成 → 不可控布局</li>
+          </ul>
+        </div>
+        <span class="vrule"></span>
+        <div class="duo-half">
+          <span class="t-cat" style="color:var(--accent)">Our Goal</span>
+          <h3 style="font-family:var(--sans),var(--sans-zh);font-weight:300;font-size:max(18px,1.8vw);line-height:1.2;margin-bottom:1.6vh">面向摄影构图与模板</h3>
+          <p class="col-desc">构建一个端到端的 Agent，接收用户上传的照片，自动分析主体位置、构图风格、色彩特征，匹配最合适的模板并完成槽位编排。整个过程对用户透明，最终输出一个可直接使用的 Live Photo。</p>
+          <ul class="col-list">
+            <li>· 摄影图像理解 → 主体 + 构图 + 色彩</li>
+            <li>· 模板智能匹配 → 从 8 套中选最优</li>
+            <li>· 槽位自动编排 → 无需用户手动操作</li>
+          </ul>
+        </div>
       </div>
     </div>
   </div>
 </section>
 
-<!-- ============ P07 · Live Photo Specific · S03 split ============ -->
-<section class="slide split" data-animate="split-statement" data-slide-id="live-photo">
+<!-- ==================== P7 · HORIZONTAL TIMELINE · 两周计划 ==================== -->
+<section class="slide light" data-layout="S11" data-animate="timeline-walk" data-slide-id="implementation-plan">
   <div class="canvas-card">
-    <div class="split-half">
-      <div class="half b-accent" style="padding:5.6vh 3.6vw 4.4vh;justify-content:space-between;position:relative;overflow:hidden">
-        <canvas class="ascii-bg" aria-hidden="true"></canvas>
-        <div class="chrome-min" style="margin-bottom:0;position:relative;z-index:1">
-          <div class="l">07 / 09</div>
-          <div class="r">LIVE PHOTO</div>
-        </div>
-        <div data-anim="manifesto" style="display:flex;flex-direction:column;gap:2vh;position:relative;z-index:1">
-          <div class="t-meta" style="color:rgba(255,255,255,.78);letter-spacing:.22em;margin-bottom:1.6vh">DOMAIN SPECIFIC</div>
-          <h2 style="font-family:var(--sans),var(--sans-zh);font-size:min(6.4vw,11vh);line-height:.94;letter-spacing:-.025em;font-weight:200;color:#fff">Live Photo<br/><span style="font-style:italic;font-weight:300">特殊性</span></h2>
-          <div style="font-family:var(--sans),var(--sans-zh);font-size:max(14px,1vw);line-height:1.6;color:rgba(255,255,255,.82);font-weight:400;max-width:32ch;margin-top:1.4vh">不只是静态图——EXIF 元数据、运动向量、关键帧序列都是可解析的"编辑操作痕迹"。</div>
-        </div>
-        <div data-anim="signature" style="display:flex;justify-content:space-between;align-items:end;border-top:1px solid rgba(255,255,255,.22);padding-top:2vh;position:relative;z-index:1">
-          <div class="t-meta" style="color:rgba(255,255,255,.62)">DOMAIN INSIGHT</div>
-          <div class="t-meta" style="color:rgba(255,255,255,.62)">07/09</div>
-        </div>
+    <div class="chrome-min">
+      <div class="l">Section · Implementation Plan</div>
+      <div class="r">07 / 10</div>
+    </div>
+    <div style="flex:1;padding:0;display:grid;grid-template-rows:auto 1fr;gap:5vh">
+      <div data-anim="head" style="display:flex;flex-direction:column;gap:1.4vh">
+        <div class="t-meta">Two-Week Roadmap</div>
+        <h2 style="font-family:var(--sans),var(--sans-zh);font-weight:200;font-size:min(5.6vw,9.2vh);line-height:1;letter-spacing:-.03em">两周实施计划</h2>
       </div>
-      <div class="half" style="padding:5.6vh 3.6vw 4.4vh;justify-content:space-between">
-        <div class="chrome-min">
-          <div class="l">THREE SIGNALS</div>
-          <div class="r">EDIT TRACE</div>
-        </div>
-        <div data-anim="rules" style="display:flex;flex-direction:column;gap:0">
-          <div style="display:grid;grid-template-columns:auto 1fr;gap:2vw;align-items:start;padding:2.6vh 0;border-top:1px solid var(--border-subtle)">
-            <div style="font-family:var(--sans);font-weight:200;font-size:min(3.4vw,6vh);line-height:.9;color:var(--text-primary)">01</div>
-            <div>
-              <h3 style="font-family:var(--sans),var(--sans-zh);font-weight:400;font-size:max(17px,1.6vw);line-height:1.2;letter-spacing:-.015em;color:var(--text-primary);margin-bottom:1vh">EXIF 元数据</h3>
-              <p style="font-family:var(--sans),var(--sans-zh);font-size:max(15px,.9vw);line-height:1.6;color:var(--text-secondary);font-weight:400">裁剪框、滤镜参数、Live Photo 标记位可直接读取，无需推理。</p>
+      <div data-anim="timeline" class="timeline-h" style="align-self:start;width:100%">
+        <div class="tl-row">
+          <div class="th-node accent">
+            <div class="dot"></div>
+            <div class="label">
+              <span class="t-meta" style="color:var(--accent)">Week 1 · Mon-Fri</span>
+              <h4 style="font-family:var(--sans),var(--sans-zh);font-weight:500;font-size:max(16px,1.1vw);margin-top:.6vh">检测 + 描述层</h4>
+              <p style="font-size:max(14px,.78vw);color:var(--text-secondary);font-weight:300;margin-top:.6vh;line-height:1.5">集成 YOLO 主体检测；封装 VLM 布局描述 API；构建检测框→结构化 JSON 管线</p>
             </div>
           </div>
-          <div style="display:grid;grid-template-columns:auto 1fr;gap:2vw;align-items:start;padding:2.6vh 0;border-top:1px solid var(--border-subtle)">
-            <div style="font-family:var(--sans);font-weight:200;font-size:min(3.4vw,6vh);line-height:.9;color:var(--text-primary)">02</div>
-            <div>
-              <h3 style="font-family:var(--sans),var(--sans-zh);font-weight:400;font-size:max(17px,1.6vw);line-height:1.2;letter-spacing:-.015em;color:var(--text-primary);margin-bottom:1vh">运动向量分析</h3>
-              <p style="font-family:var(--sans),var(--sans-zh);font-size:max(15px,.9vw);line-height:1.6;color:var(--text-secondary);font-weight:400">从视频轨提取光流，推断可能的运动效果（长曝光、循环、 bounce）。</p>
+          <div class="th-node">
+            <div class="dot"></div>
+            <div class="label">
+              <span class="t-meta">Week 1 · Sat-Sun</span>
+              <h4 style="font-family:var(--sans),var(--sans-zh);font-weight:500;font-size:max(16px,1.1vw);margin-top:.6vh">模板映射引擎</h4>
+              <p style="font-size:max(14px,.78vw);color:var(--text-secondary);font-weight:300;margin-top:.6vh;line-height:1.5">设计评分函数：槽位覆盖率 + 主体重心匹配 + 留白平衡；实现 top-K 模板推荐</p>
             </div>
           </div>
-          <div style="display:grid;grid-template-columns:auto 1fr;gap:2vw;align-items:start;padding:2.6vh 0;border-top:1px solid var(--border-subtle);border-bottom:2px solid var(--accent)">
-            <div style="font-family:var(--sans);font-weight:200;font-size:min(3.4vw,6vh);line-height:.9;color:var(--accent)">03</div>
-            <div>
-              <h3 style="font-family:var(--sans),var(--sans-zh);font-weight:400;font-size:max(17px,1.6vw);line-height:1.2;letter-spacing:-.015em;color:var(--accent);margin-bottom:1vh">关键帧序列对齐</h3>
-              <p style="font-family:var(--sans),var(--sans-zh);font-size:max(15px,.9vw);line-height:1.6;color:var(--text-secondary);font-weight:400">将编辑结果帧与原始关键帧序列对齐，推断拼接/选取/变速操作。</p>
+          <div class="th-node">
+            <div class="dot"></div>
+            <div class="label">
+              <span class="t-meta">Week 2 · Mon-Wed</span>
+              <h4 style="font-family:var(--sans),var(--sans-zh);font-weight:500;font-size:max(16px,1.1vw);margin-top:.6vh">Agent 编排 + 校验</h4>
+              <p style="font-size:max(14px,.78vw);color:var(--text-secondary);font-weight:300;margin-top:.6vh;line-height:1.5">串联检测→描述→映射→渲染全链路；加入 JSON schema validator + 重试机制</p>
+            </div>
+          </div>
+          <div class="th-node accent">
+            <div class="dot"></div>
+            <div class="label">
+              <span class="t-meta" style="color:var(--accent)">Week 2 · Thu-Fri</span>
+              <h4 style="font-family:var(--sans),var(--sans-zh);font-weight:500;font-size:max(16px,1.1vw);margin-top:.6vh">评估 + 迭代</h4>
+              <p style="font-size:max(14px,.78vw);color:var(--text-secondary);font-weight:300;margin-top:.6vh;line-height:1.5">构建 50 张测试集；人工评分模板匹配质量；优化评分函数权重</p>
             </div>
           </div>
         </div>
-        <div data-anim="foot" class="t-rule" style="color:var(--text-helper);text-align:right">→ 详见报告 §7 · Live Photo 专项</div>
       </div>
     </div>
   </div>
 </section>
 
-<!-- ============ P08 · Roadmap · S05 三步 ============ -->
-<section class="slide" data-animate="grid-reveal" data-slide-id="roadmap">
+<!-- ==================== P8 · SYSTEM DIAGRAM · 三层架构 ==================== -->
+<section class="slide light" data-layout="S17" data-animate="system-diagram" data-slide-id="architecture">
   <div class="canvas-card">
     <div class="chrome-min">
-      <div class="l">08 / 09 · ROADMAP</div>
-      <div class="r">EXECUTION PLAN</div>
+      <div class="l">Section · System Architecture</div>
+      <div class="r">08 / 10</div>
     </div>
-    <div style="flex:1;display:flex;flex-direction:column;justify-content:center;gap:2.4vh;padding:0 1vw">
-      <div data-anim="kicker" class="t-meta" style="color:var(--accent);letter-spacing:.2em">NEXT STEPS · 落地计划</div>
-      <h2 style="font-family:var(--sans),var(--sans-zh);font-weight:200;font-size:min(4.8vw,8vh);line-height:1;letter-spacing:-.02em;color:var(--text-primary)">三阶段<span style="font-style:italic;font-weight:300">落地</span>路线</h2>
-      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:2vw;margin-top:1vh">
-        <div style="border-top:3px solid var(--accent);padding-top:2vh">
-          <div class="t-meta" style="color:var(--accent);margin-bottom:1vh">PHASE 01 · 2 周</div>
-          <h3 style="font-family:var(--sans),var(--sans-zh);font-weight:400;font-size:max(18px,1.6vw);color:var(--text-primary);margin-bottom:1.2vh">Baseline 验证</h3>
-          <p style="font-family:var(--sans),var(--sans-zh);font-size:max(14px,.86vw);line-height:1.6;color:var(--text-secondary)">用 Qwen2-VL-7B + DocLayout-YOLO 跑通海报/卡片场景的图像→JSON pipeline，建立评测集（50 张标注图）。</p>
+    <div style="flex:1;padding:0;display:grid;grid-template-rows:auto 1fr;gap:4vh">
+      <div data-anim="head" style="display:flex;flex-direction:column;gap:1.4vh">
+        <div class="t-meta">Three-Layer Design</div>
+        <h2 style="font-family:var(--sans),var(--sans-zh);font-weight:200;font-size:min(5.2vw,8.6vh);line-height:1;letter-spacing:-.03em">三层架构方案</h2>
+      </div>
+      <div data-anim="diagram" style="display:flex;flex-direction:column;gap:2.2vh;justify-content:center">
+        <div style="display:grid;grid-template-columns:auto 1fr;gap:2vw;align-items:center">
+          <div style="display:flex;align-items:center;gap:1vw">
+            <span class="big-num" style="font-family:var(--mono);font-size:min(3vw,5vh);font-weight:300;color:var(--accent)">L1</span>
+            <span class="t-cat">Perception Layer</span>
+          </div>
+          <div style="border-left:2px solid var(--accent);padding-left:2vw">
+            <h4 style="font-family:var(--sans),var(--sans-zh);font-weight:500;font-size:max(17px,1.3vw)">感知层 · Detection + VLM Description</h4>
+            <p style="font-size:max(15px,.86vw);color:var(--text-secondary);font-weight:300;line-height:1.5;margin-top:.8vh">YOLO 主体检测 → GPT-4V 布局描述 → 结构化 JSON 输出。负责"看懂"图像。</p>
+          </div>
         </div>
-        <div style="border-top:3px solid var(--border-subtle);padding-top:2vh">
-          <div class="t-meta" style="color:var(--text-helper);margin-bottom:1vh">PHASE 02 · 4 周</div>
-          <h3 style="font-family:var(--sans),var(--sans-zh);font-weight:400;font-size:max(18px,1.6vw);color:var(--text-primary);margin-bottom:1.2vh">Agent 化迭代</h3>
-          <p style="font-family:var(--sans),var(--sans-zh);font-size:max(14px,.86vw);line-height:1.6;color:var(--text-secondary)">引入 DetAS 式自适应检测 Agent，支持多轮校正（漏检→补检、误检→剔除）。接入 Live Photo EXIF 通道。</p>
+        <div style="display:grid;grid-template-columns:auto 1fr;gap:2vw;align-items:center">
+          <div style="display:flex;align-items:center;gap:1vw">
+            <span class="big-num" style="font-family:var(--mono);font-size:min(3vw,5vh);font-weight:300;color:var(--accent)">L2</span>
+            <span class="t-cat">Mapping Layer</span>
+          </div>
+          <div style="border-left:2px solid var(--accent);padding-left:2vw">
+            <h4 style="font-family:var(--sans),var(--sans-zh);font-weight:500;font-size:max(17px,1.3vw)">映射层 · Template Scoring + Selection</h4>
+            <p style="font-size:max(15px,.86vw);color:var(--text-secondary);font-weight:300;line-height:1.5;margin-top:.8vh">评分函数计算感知结果与每个模板的匹配度，输出 top-K 推荐。负责"做选择"。</p>
+          </div>
         </div>
-        <div style="border-top:3px solid var(--border-subtle);padding-top:2vh">
-          <div class="t-meta" style="color:var(--text-helper);margin-bottom:1vh">PHASE 03 · 6 周</div>
-          <h3 style="font-family:var(--sans),var(--sans-zh);font-weight:400;font-size:max(18px,1.6vw);color:var(--text-primary);margin-bottom:1.2vh">端侧 + 个性化</h3>
-          <p style="font-family:var(--sans),var(--sans-zh);font-size:max(14px,.86vw);line-height:1.6;color:var(--text-secondary)">蒸馏 Qwen2-VL-2B 端侧模型；接入模板推荐与个性化填充，形成"解析→推荐→生成"闭环。</p>
+        <div style="display:grid;grid-template-columns:auto 1fr;gap:2vw;align-items:center">
+          <div style="display:flex;align-items:center;gap:1vw">
+            <span class="big-num" style="font-family:var(--mono);font-size:min(3vw,5vh);font-weight:300;color:var(--accent)">L3</span>
+            <span class="t-cat">Execution Layer</span>
+          </div>
+          <div style="border-left:2px solid var(--accent);padding-left:2vw">
+            <h4 style="font-family:var(--sans),var(--sans-zh);font-weight:500;font-size:max(17px,1.3vw)">执行层 · Slot Assignment + Render</h4>
+            <p style="font-size:max(15px,.86vw);color:var(--text-secondary);font-weight:300;line-height:1.5;margin-top:.8vh">将选定模板的槽位与检测结果做最优分配，调用 TemplateEngine 渲染输出。负责"出结果"。</p>
+          </div>
         </div>
       </div>
     </div>
   </div>
 </section>
 
-<!-- ============ P09 · Closing · split manifesto + takeaways ============ -->
-<section class="slide split" data-animate="split-statement" data-slide-id="closing">
+<!-- ==================== P9 · MANIFESTO · 阶段性结论 ==================== -->
+<section class="slide light" data-layout="S12" data-animate="manifesto" data-slide-id="conclusion">
   <div class="canvas-card">
-    <div class="split-half">
-      <div class="half b-accent" style="padding:5.6vh 3.6vw 4.4vh;justify-content:space-between;position:relative;overflow:hidden">
-        <canvas class="ascii-bg" aria-hidden="true"></canvas>
-        <div class="chrome-min" style="margin-bottom:0;position:relative;z-index:1">
-          <div class="l">09 / 09</div>
-          <div class="r">CLOSING</div>
+    <div class="chrome-min">
+      <div class="l">Section · Interim Conclusion</div>
+      <div class="r">09 / 10</div>
+    </div>
+    <div style="flex:1;padding:0;display:grid;grid-template-rows:auto 1fr;gap:4vh">
+      <div data-anim="head" style="display:flex;flex-direction:column;gap:1.4vh">
+        <div class="t-meta">Three Takeaways</div>
+        <h2 style="font-family:var(--sans),var(--sans-zh);font-weight:200;font-size:min(5.6vw,9.2vh);line-height:1;letter-spacing:-.03em">阶段性结论</h2>
+      </div>
+      <div data-anim="body" style="display:grid;grid-template-columns:1fr;gap:3vh">
+        <div style="display:grid;grid-template-columns:auto 1fr;gap:2vw;align-items:start;padding-bottom:2.5vh;border-bottom:1px solid var(--border-subtle)">
+          <span class="big-num" style="font-family:var(--mono);font-size:min(4vw,6.5vh);font-weight:300;color:var(--accent);line-height:1">01</span>
+          <div>
+            <h4 style="font-family:var(--sans),var(--sans-zh);font-weight:400;font-size:max(18px,1.6vw);line-height:1.2;margin-bottom:1vh">VLM 可用但不可靠——需要 validator 兜底</h4>
+            <p style="font-size:max(16px,.94vw);line-height:1.55;color:var(--text-secondary);font-weight:300">GPT-4V 能理解布局，但 JSON 输出不稳定。方案：schema 校验 + 有限重试 + 规则回退。</p>
+          </div>
         </div>
-        <div data-anim="manifesto" style="display:flex;flex-direction:column;gap:2vh;position:relative;z-index:1">
-          <div class="t-meta" style="color:rgba(255,255,255,.78);letter-spacing:.22em;margin-bottom:1.6vh">MANIFESTO</div>
-          <h2 style="font-family:var(--sans),var(--sans-zh);font-size:min(7vw,12vh);line-height:.94;letter-spacing:-.025em;font-weight:200;color:#fff">Parse the image.<br/>Reuse the <span style="font-style:italic;font-weight:300">template</span>.</h2>
-          <div style="font-family:var(--sans),var(--sans-zh);font-size:max(14px,1vw);line-height:1.6;color:rgba(255,255,255,.82);font-weight:400;max-width:36ch;margin-top:1.4vh">从成品图逆向出模板结构，让"照着做"变成 Agent 的一步推理。</div>
+        <div style="display:grid;grid-template-columns:auto 1fr;gap:2vw;align-items:start;padding-bottom:2.5vh;border-bottom:1px solid var(--border-subtle)">
+          <span class="big-num" style="font-family:var(--mono);font-size:min(4vw,6.5vh);font-weight:300;color:var(--accent);line-height:1">02</span>
+          <div>
+            <h4 style="font-family:var(--sans),var(--sans-zh);font-weight:400;font-size:max(18px,1.6vw);line-height:1.2;margin-bottom:1vh">检测+描述双轨并行——互补而非替代</h4>
+            <p style="font-size:max(16px,.94vw);line-height:1.55;color:var(--text-secondary);font-weight:300">YOLO 提供精确坐标，VLM 提供语义理解。两者融合才能得到完整的布局描述。</p>
+          </div>
         </div>
-        <div data-anim="signature" style="display:flex;justify-content:space-between;align-items:end;border-top:1px solid rgba(255,255,255,.22);padding-top:2vh;position:relative;z-index:1">
-          <div class="t-meta" style="color:rgba(255,255,255,.62)">Live Photo Agent Team</div>
-          <div class="t-meta" style="color:rgba(255,255,255,.62)">26.08.27</div>
+        <div style="display:grid;grid-template-columns:auto 1fr;gap:2vw;align-items:start">
+          <span class="big-num" style="font-family:var(--mono);font-size:min(4vw,6.5vh);font-weight:300;color:var(--accent);line-height:1">03</span>
+          <div>
+            <h4 style="font-family:var(--sans),var(--sans-zh);font-weight:400;font-size:max(18px,1.6vw);line-height:1.2;margin-bottom:1vh">两周可出 MVP——评估是长期工作</h4>
+            <p style="font-size:max(16px,.94vw);line-height:1.55;color:var(--text-secondary);font-weight:300">端到端链路可在两周内跑通，但评分函数调优和模板保真度评估需要持续迭代。</p>
+          </div>
         </div>
       </div>
-      <div class="half" style="padding:5.6vh 3.6vw 4.4vh;justify-content:space-between">
-        <div class="chrome-min">
-          <div class="l">TAKEAWAYS</div>
-          <div class="r">03 RULES</div>
-        </div>
-        <div data-anim="rules" style="display:flex;flex-direction:column;gap:0">
-          <div style="display:grid;grid-template-columns:auto 1fr;gap:2vw;align-items:start;padding:2.6vh 0;border-top:1px solid var(--border-subtle)">
-            <div style="font-family:var(--sans);font-weight:200;font-size:min(4.4vw,7.8vh);line-height:.9;color:var(--text-primary)">01</div>
-            <div>
-              <h3 style="font-family:var(--sans),var(--sans-zh);font-weight:400;font-size:max(18px,1.8vw);line-height:1.2;letter-spacing:-.015em;color:var(--text-primary);margin-bottom:1vh">路线 C（检测器 + VLM Agent）为最优解</h3>
-              <p style="font-family:var(--sans),var(--sans-zh);font-size:max(16px,.94vw);line-height:1.6;color:var(--text-secondary);font-weight:400">兼顾精度、效率与可迭代性，Agent 化框架支持多轮校正。</p>
-            </div>
-          </div>
-          <div style="display:grid;grid-template-columns:auto 1fr;gap:2vw;align-items:start;padding:2.6vh 0;border-top:1px solid var(--border-subtle)">
-            <div style="font-family:var(--sans);font-weight:200;font-size:min(4.4vw,7.8vh);line-height:.9;color:var(--text-primary)">02</div>
-            <div>
-              <h3 style="font-family:var(--sans),var(--sans-zh);font-weight:400;font-size:max(18px,1.8vw);line-height:1.2;letter-spacing:-.015em;color:var(--text-primary);margin-bottom:1vh">端侧 2B 模型已具备落地条件</h3>
-              <p style="font-family:var(--sans),var(--sans-zh);font-size:max(16px,.94vw);line-height:1.6;color:var(--text-secondary);font-weight:400">Qwen2-VL-2B + DocLayout-YOLO 端侧推理 ~200ms/图，满足实时需求。</p>
-            </div>
-          </div>
-          <div style="display:grid;grid-template-columns:auto 1fr;gap:2vw;align-items:start;padding:2.6vh 0;border-top:1px solid var(--border-subtle);border-bottom:2px solid var(--accent)">
-            <div style="font-family:var(--sans);font-weight:200;font-size:min(4.4vw,7.8vh);line-height:.9;color:var(--accent)">03</div>
-            <div>
-              <h3 style="font-family:var(--sans),var(--sans-zh);font-weight:400;font-size:max(18px,1.8vw);line-height:1.2;letter-spacing:-.015em;color:var(--accent);margin-bottom:1vh">Live Photo 独有信号是差异化关键</h3>
-              <p style="font-family:var(--sans),var(--sans-zh);font-size:max(16px,.94vw);line-height:1.6;color:var(--text-secondary);font-weight:400">EXIF + 运动向量 + 关键帧对齐三通道，构成相比通用方案的领域壁垒。</p>
-            </div>
-          </div>
-        </div>
-        <div data-anim="foot" class="t-meta" style="color:var(--text-helper);text-align:right">→ 完 · END OF FIELD NOTE</div>
+    </div>
+  </div>
+</section>
+
+<!-- ==================== P10 · CLOSING · 收束宣言 ==================== -->
+<section class="slide split" data-layout="S09" data-animate="split-statement" data-slide-id="closing">
+  <div class="half b-ink" style="display:flex;flex-direction:column;padding:5.6vh 3.6vw 4.4vh">
+    <div class="chrome-min" style="color:rgba(255,255,255,.62)">
+      <div class="l">End of Survey</div>
+      <div class="r">10 / 10</div>
+    </div>
+    <div data-anim="ink" style="flex:1;display:flex;flex-direction:column;justify-content:center;gap:3vh">
+      <div class="cl-ink" style="color:#fff">
+        <p class="line-mega" style="font-family:var(--sans),var(--sans-zh);font-weight:200;font-size:min(6vw,10vh);line-height:1;letter-spacing:-.025em">Detect it.</p>
+        <p class="line-mega" style="font-family:var(--sans),var(--sans-zh);font-weight:200;font-size:min(6vw,10vh);line-height:1;letter-spacing:-.025em">Describe it.</p>
+        <p class="line-mega" style="font-family:var(--sans),var(--sans-zh);font-weight:200;font-size:min(6vw,10vh);line-height:1;letter-spacing:-.025em;color:var(--accent-bright)">Match it.</p>
       </div>
+    </div>
+  </div>
+  <div class="half b-accent" style="display:flex;flex-direction:column;padding:5.6vh 3.6vw 4.4vh;color:#fff">
+    <div class="chrome-min" style="color:rgba(255,255,255,.62)">
+      <div class="l">Take Action</div>
+      <div class="r">→ Next</div>
+    </div>
+    <div data-anim="paper" style="flex:1;display:flex;flex-direction:column;justify-content:center;gap:2.6vh">
+      <h3 style="font-family:var(--sans),var(--sans-zh);font-weight:300;font-size:max(20px,2.2vw);line-height:1.2;color:#fff">下一步行动</h3>
+      <ul class="takeaway-list" style="list-style:none;display:flex;flex-direction:column;gap:1.8vh">
+        <li style="display:grid;grid-template-columns:auto 1fr;gap:1.2vw;align-items:start">
+          <span class="num" style="font-family:var(--mono);font-size:max(14px,.8vw);color:rgba(255,255,255,.62)">01</span>
+          <div>
+            <h4 style="font-family:var(--sans),var(--sans-zh);font-weight:500;font-size:max(17px,1.2vw);color:#fff">本周启动检测层</h4>
+            <p style="font-size:max(15px,.86vw);color:rgba(255,255,255,.7);font-weight:300;line-height:1.5">集成 YOLO + 封装 VLM API，跑通最小闭环</p>
+          </div>
+        </li>
+        <li style="display:grid;grid-template-columns:auto 1fr;gap:1.2vw;align-items:start">
+          <span class="num" style="font-family:var(--mono);font-size:max(14px,.8vw);color:rgba(255,255,255,.62)">02</span>
+          <div>
+            <h4 style="font-family:var(--sans),var(--sans-zh);font-weight:500;font-size:max(17px,1.2vw);color:#fff">并行设计评分函数</h4>
+            <p style="font-size:max(15px,.86vw);color:rgba(255,255,255,.7);font-weight:300;line-height:1.5">定义模板匹配度量标准，先规则后学习</p>
+          </div>
+        </li>
+        <li style="display:grid;grid-template-columns:auto 1fr;gap:1.2vw;align-items:start">
+          <span class="num" style="font-family:var(--mono);font-size:max(14px,.8vw);color:rgba(255,255,255,.62)">03</span>
+          <div>
+            <h4 style="font-family:var(--sans),var(--sans-zh);font-weight:500;font-size:max(17px,1.2vw);color:#fff">建立评估基准</h4>
+            <p style="font-size:max(15px,.86vw);color:rgba(255,255,255,.7);font-weight:300;line-height:1.5">收集 50 张测试照片，定义人工评分维度</p>
+          </div>
+        </li>
+      </ul>
+      <div data-anim="foot" class="t-meta" style="color:rgba(255,255,255,.62);text-align:right;margin-top:auto">→ 完 · END OF SURVEY</div>
     </div>
   </div>
 </section>
@@ -1601,57 +1648,63 @@
 <script>
 const SPEAKER_NOTES = [
   {
-    id: 'cover', title: '图像输入→模板解析 · 学术调研报告', section: '开场', minutes: 0.8,
-    purpose: '建立调研主题与覆盖范围',
-    talk: ['一句话点题：从成品图逆向出模板结构', '说明覆盖 7 个子方向、36 篇论文', '预告核心结论：路线 C + Live Photo 差异化'],
-    transition: '进入背景与动机', cue: '停顿，确认观众屏已同步'
+    id: 'cover', title: '图像→模板解析 Agent 调研', section: '开场', minutes: 1.0,
+    purpose: '建立主题与现场预期',
+    talk: ['用一句话开场：用户上传照片，Agent 自动选模板', '说明这是从学术调研到工程落地的全景分析', '预告主线：VLM 能力、瓶颈、两周计划'],
+    transition: '从封面进入核心问题', cue: '停顿，确认观众屏已同步'
   },
   {
-    id: 'background', title: '为什么要做图像→模板解析', section: '背景', minutes: 1.5,
-    purpose: '说清用户需求与技术成熟度',
-    talk: ['用户侧：看到好看的作品想照着做', '技术侧：VLM 已具备元素级理解能力', '端侧轻量模型开始落地，时机成熟'],
-    transition: '引出调研覆盖的七个方向', cue: '翻页后等待 1 秒让四列卡片入场'
+    id: 'problem', title: '核心问题', section: '命题', minutes: 1.0,
+    purpose: '一句话定义核心问题',
+    talk: ['用户上传一张照片，Agent 自动选择最匹配的模板并完成布局编排', '强调看似简单，实则横跨三个领域', '本调研梳理前沿与现实，给出可落地路径'],
+    transition: '从问题进入当前系统', cue: '停顿 2 秒'
   },
   {
-    id: 'directions', title: '七个子方向', section: '范围', minutes: 2,
-    purpose: '展示调研覆盖面与分类体系',
-    talk: ['七个方向从检测到生成形成完整链路', '前 4 个偏理解，后 3 个偏生成与应用', '共 36 篇论文，时间跨度 2019–2026'],
-    transition: '进入重点论文清单', cue: '简略带过，不逐个展开'
+    id: 'current-system', title: '当前模板系统架构', section: '现状', minutes: 1.5,
+    purpose: '让听众理解现有系统的代码级实现',
+    talk: ['前端 TEMPLATE_LIBRARY 定义了 8 套模板，12 栅格坐标系', 'Python 层 TemplateEngine 负责渲染，slot_recommender 是唯一智能环节', '核心缺口：缺少图像→模板的反向解析能力'],
+    transition: '从现状进入学术调研', cue: '指向第三张卡片'
   },
   {
-    id: 'key-papers', title: '重点论文清单', section: '文献', minutes: 3,
-    purpose: '展示三个簇的核心文献',
-    talk: ['左列：逆向布局与 Image-to-Code 是直接基线', '中列：VLM 布局理解是当前最快演进方向', '右列：版面分析与模板生成提供工程参考'],
-    transition: '进入方法对比', cue: '提及 Design2Code 和 OmniParser 时可展开 30 秒'
+    id: 'academic-survey', title: '学术调研：四篇核心论文', section: '前沿', minutes: 2.5,
+    purpose: '展示 VLM 在相关任务上的能力边界',
+    talk: ['Design2Code 证明 VLM 能转代码，但输出非模板化', 'DocLayout-YOLO 是文档版面 SOTA，但不面向摄影构图', 'GPT-4V 能描述布局但输出不稳定', '结构化 JSON 的 schema 遵守率只有 60-70%'],
+    transition: '从调研进入瓶颈分析', cue: '翻页后停顿'
   },
   {
-    id: 'comparison', title: '三条技术路线对比', section: '对比', minutes: 2.5,
-    purpose: '三条路线权衡，推荐路线 C',
-    talk: ['路线 A 快但蠢，路线 B 聪明但不稳定', '路线 C 检测器+VLM Agent，平衡精度与效率', 'DetAS (CVPR 2026) 验证了 Agent 化检测的可行性'],
-    transition: '引出建议架构', cue: '强调 IKB 蓝卡片为推荐路线'
+    id: 'bottlenecks', title: '六大技术瓶颈', section: '挑战', minutes: 2.0,
+    purpose: '系统梳理从图像到模板的六个卡点',
+    talk: ['检测精度：摄影场景多主体遮挡', 'VLM 描述：能理解但不稳定', '模板映射：连续框到离散槽位缺乏统一策略', '结构化输出需 validator 兜底', '模板复杂度搜索空间大', '评估缺乏标准度量'],
+    transition: '从瓶颈进入工具对比', cue: '快速过六张卡片'
   },
   {
-    id: 'architecture', title: '四阶段 Pipeline', section: '架构', minutes: 2.5,
-    purpose: '展示端到端处理流程',
-    talk: ['01 场景分类：VLM 判断图片类型', '02 元素检测：DocLayout-YOLO 提取 bbox', '03 结构化推理：VLM 构建层级与样式', '04 模板输出：参数化 DSL → 存储 → 复用'],
-    transition: '进入 Live Photo 特殊性', cue: '提及端侧/云端双模式时放慢'
+    id: 'tool-comparison', title: '现有工具 vs 我们的目标', section: '差距', minutes: 1.5,
+    purpose: '明确现有工具无法覆盖的空白',
+    talk: ['左侧是现有工具：各自解决部分问题', '右侧是我们的目标：端到端摄影图像到模板匹配', '关键差异：面向摄影构图而非文档或设计稿'],
+    transition: '从对比进入实施计划', cue: '指向右侧蓝色文字'
   },
   {
-    id: 'live-photo', title: 'Live Photo 特殊性', section: '领域', minutes: 2,
-    purpose: '突出 Live Photo 相比通用场景的独有信号',
-    talk: ['EXIF 元数据可直接读取裁剪/滤镜参数', '运动向量推断长曝光/循环/bounce 效果', '关键帧对齐推断拼接/选取/变速操作'],
-    transition: '进入落地路线', cue: '左半 IKB 屏配合右半三条信号'
+    id: 'implementation-plan', title: '两周实施计划', section: '计划', minutes: 2.5,
+    purpose: '给出可执行的时间线',
+    talk: ['Week 1 前半：检测+描述层，跑通 YOLO→VLM→JSON 管线', 'Week 1 周末：设计评分函数，实现 top-K 推荐', 'Week 2 前半：Agent 全链路串联 + schema 校验', 'Week 2 后半：50 张测试集评估 + 调优'],
+    transition: '从计划进入架构设计', cue: '沿时间线从左到右指'
   },
   {
-    id: 'roadmap', title: '三阶段落地路线', section: '计划', minutes: 2,
-    purpose: '给出可执行的落地时间表',
-    talk: ['Phase 1 (2周)：跑通 baseline + 评测集', 'Phase 2 (4周)：Agent 化迭代 + EXIF 通道', 'Phase 3 (6周)：端侧蒸馏 + 个性化闭环'],
-    transition: '进入收束', cue: '简明快节奏，不展开细节'
+    id: 'architecture', title: '三层架构方案', section: '架构', minutes: 1.5,
+    purpose: '展示技术架构的三层分层',
+    talk: ['L1 感知层：YOLO + VLM，负责看懂图像', 'L2 映射层：评分函数，负责做选择', 'L3 执行层：槽位分配 + 渲染，负责出结果'],
+    transition: '从架构进入结论', cue: '从上到下依次指向三层'
   },
   {
-    id: 'closing', title: 'Closing · 三条 Takeaway', section: '收束', minutes: 1,
-    purpose: '收束全场并留下三条可记忆结论',
-    talk: ['路线 C 为最优解：检测器+VLM Agent', '端侧 2B 模型已具备落地条件', 'Live Photo 三通道信号是差异化壁垒'],
+    id: 'conclusion', title: '阶段性结论', section: '结论', minutes: 1.0,
+    purpose: '提炼三条核心发现',
+    talk: ['VLM 可用但不可靠，需要 validator 兜底', '检测+描述双轨并行，互补而非替代', '两周可出 MVP，评估是长期工作'],
+    transition: '从结论进入收束', cue: '依次指向三条结论'
+  },
+  {
+    id: 'closing', title: '收束 · 下一步行动', section: '收束', minutes: 0.5,
+    purpose: '收束全场并留下可记忆的行动点',
+    talk: ['回扣开场：Detect it, Describe it, Match it', '给出三条会后可立即采取的行动', '强调本周启动检测层是最优先事项'],
     transition: '结束演讲，进入提问或致谢', cue: '停顿 2 秒后致谢'
   }
 ];
