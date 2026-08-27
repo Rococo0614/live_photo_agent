@@ -646,13 +646,23 @@ class CapabilityLayer:
         return ToolCall(tool=call.tool, reason=call.reason, arguments=args)
 
     def _foreground_asset_from_layout_edits(self, layout_context: list[dict[str, object]]) -> str:
+        # Prefer explicit framed edits (edit_rect / edit_prompt).
         for item in layout_context:
             if not isinstance(item, dict):
                 continue
             has_edit = bool(item.get("edit_rect")) or bool(str(item.get("edit_prompt", "")).strip())
-            if not has_edit:
+            if has_edit:
+                asset_id = str(item.get("asset_id", "")).strip()
+                if asset_id:
+                    return asset_id
+
+        # Fallback: consider items explicitly marked as foreground/overlay
+        for item in layout_context:
+            if not isinstance(item, dict):
                 continue
-            asset_id = str(item.get("asset_id", "")).strip()
-            if asset_id:
-                return asset_id
+            if bool(item.get("foreground") or item.get("is_overlay")):
+                asset_id = str(item.get("asset_id", "")).strip()
+                if asset_id:
+                    return asset_id
+
         return ""

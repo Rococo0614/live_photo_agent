@@ -2077,7 +2077,15 @@
         return;
       }
       const intent = prompt || '对当前选区执行矩形编辑';
+      // Store viewport-normalized rect for UI replay, and also compute
+      // a source-image-normalized rect for backend segmentation consumption.
       activeLayout.edit_rect = normalizedRect;
+      const sourceRect = computeSourceNormalizedRect(normalizedRect, interactiveCanvasState.image, interactiveCanvasState.viewport);
+      if (sourceRect) {
+        activeLayout.edit_rect_source = sourceRect;
+      } else {
+        delete activeLayout.edit_rect_source;
+      }
       activeLayout.edit_prompt = prompt;
       // 后来居上：框选分割的素材自动成为前景层，不需要额外勾选抠像工具。
       const maxZ = state.layoutItems.reduce((m, it) => Math.max(m, Number(it.z_index ?? 0)), 0);
@@ -2125,6 +2133,38 @@
         viewport.width,
         viewport.height,
       );
+    }
+
+    function computeSourceNormalizedRect(normalizedRect, image, viewport) {
+      // normalizedRect: {x,y,w,h} in 0-1 relative to the viewport
+      // compute crop used by drawImageCover to map viewport -> source
+      if (!normalizedRect || !image || !viewport || viewport.width <= 0 || viewport.height <= 0) return null;
+      const sourceWidth = Math.max(Number(image.naturalWidth || image.width || 0), 1);
+      const sourceHeight = Math.max(Number(image.naturalHeight || image.height || 0), 1);
+      const sourceAspect = sourceWidth / sourceHeight;
+      const targetAspect = viewport.width / viewport.height;
+
+      let cropWidth = sourceWidth;
+      let cropHeight = sourceHeight;
+      if (sourceAspect > targetAspect) {
+        cropWidth = Math.round(sourceHeight * targetAspect);
+      } else if (sourceAspect < targetAspect) {
+        cropHeight = Math.round(sourceWidth / targetAspect);
+      }
+      const sx = Math.max(0, Math.round((sourceWidth - cropWidth) / 2));
+      const sy = Math.max(0, Math.round((sourceHeight - cropHeight) / 2));
+
+      // Map normalizedRect within viewport to source coordinates, then normalize by source size
+      const x_src = (sx + normalizedRect.x * cropWidth) / sourceWidth;
+      const y_src = (sy + normalizedRect.y * cropHeight) / sourceHeight;
+      const w_src = (normalizedRect.w * cropWidth) / sourceWidth;
+      const h_src = (normalizedRect.h * cropHeight) / sourceHeight;
+      return {
+        x: Math.max(0, Math.min(1, x_src)),
+        y: Math.max(0, Math.min(1, y_src)),
+        w: Math.max(0, Math.min(1 - Math.max(0, x_src), w_src)),
+        h: Math.max(0, Math.min(1 - Math.max(0, y_src), h_src)),
+      };
     }
 
     function drawInteractivePoints() {
@@ -2434,7 +2474,7 @@
           grid_rows: GRID_LAYOUT.rows,
           prompt: item.prompt || '',
           edit_prompt: item.edit_prompt || '',
-          edit_rect: item.edit_rect || null,
+          edit_rect: item.edit_rect_source ?? item.edit_rect ?? null,
           selection_mode: item.selection_mode || '',
         });
         }),

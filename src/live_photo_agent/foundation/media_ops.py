@@ -428,9 +428,21 @@ class MediaOps:
             # format=rgba preserves the alpha channel through scale so overlay
             # correctly composites only the segmented subject (transparent
             # background lets the underlying tile show through).
-            fg_scale_expr = f"iw*{width/100.0}:ih*{height/100.0}"
-            x_expr = f"main_w*{left/100.0}"
-            y_expr = f"main_h*{top/100.0}"
+            # Probe the background to get exact canvas pixel dimensions so
+            # we can scale the foreground to the absolute pixel size the
+            # user expects. Scaling relative to the foreground input (iw/ih)
+            # leads to tiny overlays when the source image resolution is low.
+            probe = self.probe_video(background_path)
+            main_w = int(probe.get("width") or 0)
+            main_h = int(probe.get("height") or 0)
+            if main_w <= 0 or main_h <= 0:
+                raise MediaOpsError(f"invalid_background_dimensions: {background_path}")
+
+            target_w = max(1, int(round(main_w * (width / 100.0))))
+            target_h = max(1, int(round(main_h * (height / 100.0))))
+            fg_scale_expr = f"{target_w}:{target_h}"
+            x_expr = f"{int(round(main_w * (left / 100.0)))}"
+            y_expr = f"{int(round(main_h * (top / 100.0)))}"
             cmd = [str(self._ffmpeg), "-y", "-i", str(background_path)]
             if fit_mode.strip().lower() == "loop":
                 cmd.extend(["-stream_loop", "-1"])
@@ -889,6 +901,129 @@ class MediaOps:
             f"setpts=PTS-STARTPTS,"
             f"scale={target_w}:{target_h}:force_original_aspect_ratio=increase,"
             f"crop={target_w}:{target_h},"
+            f"format=yuv420p,setsar=1"
+        )
+    def apply_ffmpeg_filter(self, input_path: Path, output_path: Path, filter_graph: str) -> Path:
+        """Apply an ffmpeg filter graph to a single input file and write output.
+
+        This is a thin wrapper around `ffmpeg -i input -vf <filter_graph> output`.
+        """
+        self._ensure_binaries()
+        if not input_path.exists():
+            raise MediaOpsError(f"input_not_found: {input_path}")
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        cmd = [
+            str(self._ffmpeg),
+            "-y",
+            "-i",
+            str(input_path),
+            "-vf",
+            filter_graph,
+            str(output_path),
+        ]
+        self._run(cmd)
+        return output_path
+
+    def apply_cv_mask_smooth(self, mask_path: Path, output_mask_path: Path, blur_radius: int = 5) -> Path:
+        """Smooth/feather a binary mask using OpenCV Gaussian blur + threshold.
+
+        Reads a grayscale mask, blurs it, thresholds and writes the result.
+        """
+        try:
+            import cv2
+            import numpy as np
+        except ImportError as exc:
+            raise MediaOpsError("opencv_missing") from exc
+
+        if not mask_path.exists():
+            raise MediaOpsError(f"mask_not_found: {mask_path}")
+
+        m = cv2.imread(str(mask_path), cv2.IMREAD_GRAYSCALE)
+        if m is None:
+            raise MediaOpsError(f"mask_read_failed: {mask_path}")
+
+        # Ensure odd kernel size for Gaussian
+        k = max(1, int(blur_radius) // 2 * 2 + 1)
+        blurred = cv2.GaussianBlur(m, (k, k), 0)
+        _, th = cv2.threshold(blurred, 128, 255, cv2.THRESH_BINARY)
+        output_mask_path.parent.mkdir(parents=True, exist_ok=True)
+        cv2.imwrite(str(output_mask_path), th)
+        return output_mask_path
+
+    def apply_cv_frames_denoise(self, frames_dir: Path, method: str = "nlmeans") -> Path:
+        """Apply a lightweight denoise/blend to all PNG frames in `frames_dir`.
+
+        Preserves alpha channel when present.
+        """
+        try:
+            import cv2
+            import numpy as np
+            from pathlib import Path as _P
+        except ImportError as exc:
+            raise MediaOpsError("opencv_missing") from exc
+
+        if not frames_dir.exists():
+            raise MediaOpsError(f"frames_dir_missing: {frames_dir}")
+
+        pngs = sorted(frames_dir.glob("frame_*.png"))
+        if not pngs:
+            raise MediaOpsError(f"no_frames_in_dir: {frames_dir}")
+
+        for p in pngs:
+            img = cv2.imread(str(p), cv2.IMREAD_UNCHANGED)
+            if img is None:
+                continue
+            if img.shape[2] == 4:
+                bgr = img[:, :, :3]
+                a = img[:, :, 3]
+            else:
+                bgr = img
+                a = None
+
+            if method == "nlmeans":
+                # fastNlMeansDenoisingColored expects 8-bit
+                denoised = cv2.fastNlMeansDenoisingColored(bgr, None, 3, 3, 7, 21)
+            else:
+                denoised = cv2.GaussianBlur(bgr, (3, 3), 0)
+
+            if a is not None:
+                out = cv2.cvtColor(denoised, cv2.COLOR_BGR2BGRA)
+                out[:, :, 3] = a
+            else:
+                out = denoised
+
+            cv2.imwrite(str(p), out)
+
+        return frames_dir
+
+    def optimize_subject_matte(self, frames_dir: Path, mask_path: Path, optimize_cfg: dict | None) -> None:
+        """Apply optional optimize steps to a generated subject matte (mask + frames).
+
+        optimize_cfg may specify keys like `mask: {gauss: 5}` and
+        `foreground: {denoise: true}`. This method applies sensible defaults
+        when keys are present.
+        """
+        if not optimize_cfg:
+            return
+        # Mask smoothing
+        mask_cfg = optimize_cfg.get("mask") if isinstance(optimize_cfg, dict) else None
+        if mask_cfg:
+            radius = int(mask_cfg.get("gauss", 5))
+            tmp = mask_path.parent / (mask_path.stem + "_smoothed" + mask_path.suffix)
+            try:
+                self.apply_cv_mask_smooth(mask_path, tmp, blur_radius=radius)
+                tmp.replace(mask_path)
+            except MediaOpsError:
+                pass
+
+        # Foreground denoise
+        fg_cfg = optimize_cfg.get("foreground") if isinstance(optimize_cfg, dict) else None
+        if fg_cfg:
+            method = "nlmeans" if fg_cfg.get("denoise", False) else fg_cfg.get("method", "nlmeans")
+            try:
+                self.apply_cv_frames_denoise(frames_dir, method=method)
+            except MediaOpsError:
+                pass
             f"format=yuv420p,"
             f"setsar=1"
         )

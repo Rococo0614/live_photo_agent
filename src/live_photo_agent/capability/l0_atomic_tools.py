@@ -193,7 +193,10 @@ class L0AtomicTools:
                 if motion_path is not None and use_motion:
                     result = self.media_ops.extract_subject_matte_frames(motion_path, output_dir, mode=mode)
                 else:
-                    result = self._extract_subject_matte_from_still(asset, output_dir, edit_rect=edit_rect)
+                    optimize_cfg = call.arguments.get("optimize_filters")
+                    result = self._extract_subject_matte_from_still(
+                        asset, output_dir, edit_rect=edit_rect, optimize_cfg=optimize_cfg
+                    )
             except MediaOpsError as exc:
                 failed_asset_ids.append(asset.asset_id)
                 return ToolResult(
@@ -217,7 +220,11 @@ class L0AtomicTools:
         )
 
     def _extract_subject_matte_from_still(
-        self, asset: LivePhotoAsset, output_dir: Path, edit_rect: dict[str, float] | None = None
+        self,
+        asset: LivePhotoAsset,
+        output_dir: Path,
+        edit_rect: dict[str, float] | None = None,
+        optimize_cfg: dict | None = None,
     ) -> dict[str, object]:
         output_dir.mkdir(parents=True, exist_ok=True)
         mask_path = output_dir / "mask.png"
@@ -246,6 +253,17 @@ class L0AtomicTools:
         for index in range(frame_count):
             frame_path = output_dir / f"frame_{index:05d}.png"
             cv2.imwrite(str(frame_path), rgba)
+
+        # Optional post-processing: smooth mask + denoise foreground frames
+        try:
+            mask_path = Path(mask_path)
+        except Exception:
+            mask_path = output_dir / "mask.png"
+        try:
+            self.media_ops.optimize_subject_matte(output_dir, mask_path, optimize_cfg)
+        except Exception:
+            # Don't fail the whole tool if optimization step errors; it's best-effort
+            pass
 
         return {
             "frames_dir": str(output_dir),

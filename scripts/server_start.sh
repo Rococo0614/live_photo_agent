@@ -17,11 +17,22 @@ if [[ -f "$PID_FILE" ]]; then
 fi
 
 cd "$REPO_ROOT"
-nohup /home/vivo/miniconda3/envs/live-photo-agent/bin/uvicorn \
-    live_photo_agent.api:app \
-    --host 127.0.0.1 \
-    --port 8000 \
-    >> "$LOG_FILE" 2>&1 &
+# Resolve a portable uvicorn invocation:
+# Prefer a uvicorn binary on PATH, otherwise fall back to `python -m uvicorn`.
+UVICORN_BIN="$(command -v uvicorn || true)"
+if [[ -n "$UVICORN_BIN" ]]; then
+    nohup "$UVICORN_BIN" \
+        live_photo_agent.api:app \
+        --host 127.0.0.1 \
+        --port 8000 \
+        >> "$LOG_FILE" 2>&1 &
+else
+    nohup python -m uvicorn \
+        live_photo_agent.api:app \
+        --host 127.0.0.1 \
+        --port 8000 \
+        >> "$LOG_FILE" 2>&1 &
+fi
 
 PID=$!
 echo $PID > "$PID_FILE"
