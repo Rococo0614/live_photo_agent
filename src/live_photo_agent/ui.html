@@ -1696,7 +1696,7 @@
       const candidates = TEMPLATE_LIBRARY.filter((template) => template.slots.length === selectedCount);
       const templateRows = candidates.length > 0 ? candidates : TEMPLATE_LIBRARY;
       const strict = candidates.length > 0;
-      state.pendingTemplateId = templateRows[0]?.id || '';
+      state.pendingTemplateId = state.activeTemplateId || templateRows[0]?.id || '';
 
       els.templateDialogHint.textContent = strict
         ? `已选素材 ${selectedCount} 项，仅展示 ${selectedCount} 格模板。`

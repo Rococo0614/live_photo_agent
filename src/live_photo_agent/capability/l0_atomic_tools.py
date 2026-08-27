@@ -194,9 +194,10 @@ class L0AtomicTools:
                     result = self.media_ops.extract_subject_matte_frames(motion_path, output_dir, mode=mode)
                 else:
                     optimize_cfg = call.arguments.get("optimize_filters")
-                    result = self._extract_subject_matte_from_still(
-                        asset, output_dir, edit_rect=edit_rect, optimize_cfg=optimize_cfg
-                    )
+                    if optimize_cfg is not None:
+                        result = self._extract_subject_matte_from_still(asset, output_dir, edit_rect, optimize_cfg)
+                    else:
+                        result = self._extract_subject_matte_from_still(asset, output_dir, edit_rect)
             except MediaOpsError as exc:
                 failed_asset_ids.append(asset.asset_id)
                 return ToolResult(
@@ -889,18 +890,36 @@ class L0AtomicTools:
             str(s.get("asset_id")): s for s in bg_slots if s.get("asset_id")
         }
         placements: list[dict[str, float]] = []
+        # Try deterministic mapping by asset_id first.
+        missing = False
         for asset_id in resolved_order:
             slot = by_asset.get(asset_id)
             if slot is None:
-                # A background asset has no spatial placement -> cannot honor
-                # the template deterministically; bail to fallback.
-                return None
+                missing = True
+                break
             placements.append({
                 "left": float(slot.get("left_pct", 0.0)),
                 "top": float(slot.get("top_pct", 0.0)),
                 "width": float(slot.get("width_pct", 100.0)),
                 "height": float(slot.get("height_pct", 100.0)),
             })
+
+        if missing:
+            # Fallback: if the template's background slots count exactly matches
+            # the resolved_order length, map slots positionally (ordered by
+            # z_index) to tolerate ID mismatches while preserving layout.
+            if len(bg_slots) == len(resolved_order):
+                placements = []
+                sorted_slots = sorted(bg_slots, key=lambda s: (s.get("z_index", 0), str(s.get("slot_id"))))
+                for slot in sorted_slots:
+                    placements.append({
+                        "left": float(slot.get("left_pct", 0.0)),
+                        "top": float(slot.get("top_pct", 0.0)),
+                        "width": float(slot.get("width_pct", 100.0)),
+                        "height": float(slot.get("height_pct", 100.0)),
+                    })
+            else:
+                return None
         if not placements:
             return None
         return placements
