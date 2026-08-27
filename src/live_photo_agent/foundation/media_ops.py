@@ -1024,9 +1024,7 @@ class MediaOps:
                 self.apply_cv_frames_denoise(frames_dir, method=method)
             except MediaOpsError:
                 pass
-            f"format=yuv420p,"
-            f"setsar=1"
-        )
+        
 
     def add_text_overlay(self, video_path: Path, output_path: Path, text: str, style: str) -> Path:
         self._ensure_binaries()
