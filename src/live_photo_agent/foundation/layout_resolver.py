@@ -35,6 +35,7 @@ class LayoutResolver:
         self.grid_rows = grid_rows
 
     def resolve(self, layout_context: list[dict[str, object]]) -> CompositionTemplate:
+        canvas_width, canvas_height = self._resolve_canvas(layout_context)
         slots: list[LayoutSlot] = []
         for index, item in enumerate(layout_context):
             if not isinstance(item, dict):
@@ -48,6 +49,10 @@ class LayoutResolver:
                 grid = {"x": 0, "y": 0, "w": self.grid_cols, "h": self.grid_rows}
 
             is_foreground = bool(item.get("foreground") or item.get("is_overlay"))
+            # 兜底：带 edit_rect 的素材（用户框选分割）也视为前景，
+            # 不依赖前端显式 foreground 标记。
+            if not is_foreground and item.get("edit_rect"):
+                is_foreground = True
             left_pct = self._pct(grid["x"], self.grid_cols)
             top_pct = self._pct(grid["y"], self.grid_rows)
             width_pct = self._pct(grid["w"], self.grid_cols)
@@ -71,17 +76,36 @@ class LayoutResolver:
                 x_offset=int(item.get("x_offset", 0)),
                 y_offset=int(item.get("y_offset", 0)),
                 label=str(item.get("label", "")),
+                edit_rect=self._parse_edit_rect(item.get("edit_rect")),
             )
             slots.append(slot)
 
         slots.sort(key=lambda s: (s.z_index, s.slot_id))
         return CompositionTemplate(
-            canvas_width=self.canvas_width,
-            canvas_height=self.canvas_height,
+            canvas_width=canvas_width,
+            canvas_height=canvas_height,
             grid_cols=self.grid_cols,
             grid_rows=self.grid_rows,
             slots=slots,
         )
+
+    @staticmethod
+    def _resolve_canvas(layout_context: list[dict[str, object]]) -> tuple[int, int]:
+        """Use the frontend canvas preset when provided, else the default.
+
+        The frontend sends ``canvas_width`` / ``canvas_height`` (from the active
+        canvas preset) on every layout item. Honoring it is required so that the
+        resolved percentages map onto the actual output canvas; otherwise the
+        overlay/compose coordinates drift whenever the preset is not 1080x1440.
+        """
+        for item in layout_context:
+            if not isinstance(item, dict):
+                continue
+            w = item.get("canvas_width")
+            h = item.get("canvas_height")
+            if isinstance(w, (int, float)) and isinstance(h, (int, float)) and w > 0 and h > 0:
+                return int(w), int(h)
+        return 1080, 1440
 
     def _grid_box(self, item: dict[str, object]) -> dict[str, int] | None:
         x = item.get("grid_x")
@@ -100,3 +124,19 @@ class LayoutResolver:
         if total <= 0:
             return 0.0
         return max(0.0, min(100.0, value / total * 100.0))
+
+    @staticmethod
+    def _parse_edit_rect(raw: object) -> dict[str, float] | None:
+        """Normalise the frontend edit_rect into {x, y, w, h} floats in 0-1."""
+        if not isinstance(raw, dict):
+            return None
+        keys = ("x", "y", "w", "h")
+        parsed: dict[str, float] = {}
+        for key in keys:
+            val = raw.get(key)
+            if not isinstance(val, (int, float)) or not (0.0 <= float(val) <= 1.0):
+                return None
+            parsed[key] = float(val)
+        if parsed["w"] <= 0 or parsed["h"] <= 0:
+            return None
+        return parsed

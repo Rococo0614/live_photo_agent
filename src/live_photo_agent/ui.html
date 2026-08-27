@@ -389,6 +389,15 @@
       background: currentColor;
       box-shadow: 0 0 0 2px rgba(187, 247, 208, 0.22);
     }
+    .composition-edit-rect {
+      position: absolute;
+      z-index: 3;
+      border: 2px dashed rgba(74, 222, 128, 0.85);
+      border-radius: 4px;
+      background: rgba(74, 222, 128, 0.12);
+      pointer-events: none;
+      box-sizing: border-box;
+    }
     .resize-handle {
       position: absolute;
       z-index: 4;
@@ -1646,10 +1655,15 @@
       els.compositionLayoutLayer.innerHTML = `${gridOverlay}${sortedItems.map((item) => {
         const isActive = item.id === state.activeLayoutId;
         const edited = item.edit_rect || item.edit_prompt;
+        const rect = item.edit_rect;
+        const rectOverlay = rect && Number.isFinite(rect.x) && Number.isFinite(rect.y) && Number.isFinite(rect.w) && Number.isFinite(rect.h)
+          ? `<div class="composition-edit-rect" style="left: ${(rect.x * 100).toFixed(2)}%; top: ${(rect.y * 100).toFixed(2)}%; width: ${(rect.w * 100).toFixed(2)}%; height: ${(rect.h * 100).toFixed(2)}%"></div>`
+          : '';
         return `
         <div class="composition-layout-item ${isActive ? 'active' : ''}" data-layout-id="${escapeHtml(item.id)}" style="left: ${gridToPercentX(item.grid_x)}%; top: ${gridToPercentY(item.grid_y)}%; width: ${gridToPercentX(item.grid_w)}%; height: ${gridToPercentY(item.grid_h)}%; z-index: ${item.z_index ?? 1}">
           <img src="${item.image_src || mediaUrl(item.image_path)}" alt="${escapeHtml(item.label)}" draggable="false">
           ${edited ? '<span class="composition-edit-badge">已编辑</span>' : ''}
+          ${rectOverlay}
           <div class="composition-layout-label">${escapeHtml(item.label)}${edited ? ' · 已编辑' : ''} · z${item.z_index ?? 1}</div>
           <span class="resize-handle tl" data-resize-dir="tl"></span>
           <span class="resize-handle tr" data-resize-dir="tr"></span>
@@ -2065,6 +2079,11 @@
       const intent = prompt || '对当前选区执行矩形编辑';
       activeLayout.edit_rect = normalizedRect;
       activeLayout.edit_prompt = prompt;
+      // 后来居上：框选分割的素材自动成为前景层，不需要额外勾选抠像工具。
+      const maxZ = state.layoutItems.reduce((m, it) => Math.max(m, Number(it.z_index ?? 0)), 0);
+      activeLayout.z_index = maxZ + 1;
+      activeLayout.foreground = true;
+      activeLayout.is_overlay = true;
       state.operationLog.push({
         intent,
         tool: 'interactive_canvas_edit',

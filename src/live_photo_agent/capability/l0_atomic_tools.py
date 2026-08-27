@@ -185,13 +185,11 @@ class L0AtomicTools:
             if output_dir.exists():
                 shutil.rmtree(output_dir, ignore_errors=True)
             try:
-                # Prefer the still-image subject cutout for overlay use-cases: it
-                # isolates the subject in the representative frame (grabCut), which
-                # is what a user wants to embed. The motion/video background
-                # subtraction path only makes sense for pure-video assets or when
-                # the caller explicitly opts into motion-derived mattes.
                 use_motion = str(call.arguments.get("use_motion", "")).strip().lower() in ("1", "true", "yes")
-                edit_rect = self._parse_edit_rect(call.arguments.get("edit_rect"))
+                # edit_rect 来源优先级：
+                #   1. call.arguments 中显式传入（planner 指定）
+                #   2. composition_template 中对应 asset 的 slot.edit_rect（前端画布框选）
+                edit_rect = self._resolve_edit_rect(call, context, asset.asset_id)
                 if motion_path is not None and use_motion:
                     result = self.media_ops.extract_subject_matte_frames(motion_path, output_dir, mode=mode)
                 else:
@@ -286,6 +284,27 @@ class L0AtomicTools:
         }
 
     @staticmethod
+    def _parse_edit_rect_for_asset(raw: object, asset_id: str) -> dict[str, float] | None:
+        """Resolve edit_rect for a specific asset.
+
+        Supports two forms:
+        1. A single {x, y, w, h} dict (applies to all assets).
+        2. A {asset_id: {x, y, w, h}} mapping (per-asset, e.g. from fallback).
+        """
+        if not isinstance(raw, dict):
+            return None
+        # Form 2: per-asset mapping — check if any value is itself a rect dict
+        for key, val in raw.items():
+            if isinstance(val, dict) and "x" in val and "w" in val:
+                if str(key) == str(asset_id):
+                    return L0AtomicTools._parse_edit_rect(val)
+                continue
+        # Form 1: single rect dict
+        if "x" in raw and "w" in raw:
+            return L0AtomicTools._parse_edit_rect(raw)
+        return None
+
+    @staticmethod
     def _normalize_edit_rect_to_pixels(
         asset: LivePhotoAsset, edit_rect: dict[str, float] | None
     ) -> tuple[int, int, int, int] | None:
@@ -315,6 +334,41 @@ class L0AtomicTools:
         rw = max(1, int(edit_rect["w"] * s_w))
         rh = max(1, int(edit_rect["h"] * s_h))
         return (rx, ry, rw, rh)
+
+    def _resolve_edit_rect(
+        self,
+        call: ToolCall,
+        context: dict[str, object],
+        asset_id: str,
+    ) -> dict[str, float] | None:
+        """Resolve edit_rect for *asset_id* from call args or composition_template.
+
+        Priority:
+          1. ``call.arguments["edit_rect"]`` — planner explicitly passes it
+             (can be a single ``{x,y,w,h}`` or ``{asset_id: {x,y,w,h}}`` map).
+          2. ``context["composition_template"]["slots"]`` — the LayoutResolver
+             carried the frontend canvas edit_rect into the slot.
+        """
+        raw = call.arguments.get("edit_rect")
+        parsed = self._parse_edit_rect_for_asset(raw, asset_id)
+        if parsed:
+            return parsed
+        template = context.get("composition_template")
+        if isinstance(template, dict):
+            for slot in template.get("slots", []):
+                if str(slot.get("asset_id")) != str(asset_id):
+                    continue
+                rect = slot.get("edit_rect")
+                if isinstance(rect, dict) and all(
+                    isinstance(rect.get(k), (int, float)) for k in ("x", "y", "w", "h")
+                ):
+                    return {
+                        "x": float(rect["x"]),
+                        "y": float(rect["y"]),
+                        "w": float(rect["w"]),
+                        "h": float(rect["h"]),
+                    }
+        return None
 
     def overlay_subject_clip(self, call: ToolCall, context: dict[str, object]) -> ToolResult:
         foreground_asset_id = str(call.arguments.get("foreground_asset_id", "")).strip()
@@ -690,7 +744,7 @@ class L0AtomicTools:
                 asset = by_id.get(asset_id)
                 if asset is None:
                     continue
-                source_path = self._resolve_asset_video_path(asset, source_maps)
+                source_path = self._resolve_asset_video_path(asset, source_maps, workspace)
                 if source_path is None:
                     continue
                 clip_paths.append(source_path)
@@ -1292,9 +1346,28 @@ class L0AtomicTools:
                 return path
         return self._asset_motion_path(asset)
 
-    def _resolve_asset_video_path(self, asset: LivePhotoAsset, source_maps: list[dict[str, object]]) -> Path | None:
+    def _resolve_asset_video_path(
+        self, asset: LivePhotoAsset, source_maps: list[dict[str, object]], workspace: Path | None = None
+    ) -> Path | None:
         for source_map in source_maps:
             resolved = self._segment_source_path(asset, source_map)
             if resolved is not None and resolved.exists():
                 return resolved
-        return self._asset_motion_path(asset)
+        motion = self._asset_motion_path(asset)
+        if motion is not None:
+            return motion
+        # Pure still asset (no motion clip): materialize a short static-frame
+        # video so it can participate in the composition timeline like a live
+        # photo. This is what lets a plain JPEG be embedded into the result.
+        image_path = Path(asset.image_path) if asset.image_path else None
+        if image_path is not None and image_path.exists():
+            if workspace is None:
+                workspace = self._workspace_dir({"library_root": image_path.parent})
+            out_dir = workspace / "static_frames"
+            out_dir.mkdir(parents=True, exist_ok=True)
+            out_path = out_dir / f"{asset.asset_id}.mp4"
+            try:
+                return self.media_ops.image_to_static_video(image_path, out_path)
+            except MediaOpsError:
+                return None
+        return None

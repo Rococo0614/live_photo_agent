@@ -618,3 +618,83 @@ def test_segment_subject_uses_provided_rect(tmp_path: Path, monkeypatch: pytest.
     assert grab_rects, "grabCut was not called"
     # The provided rect must be passed through verbatim to grabCut.
     assert grab_rects[0] == (10, 20, 100, 80)
+
+
+def test_layout_resolver_honors_frontend_canvas_size() -> None:
+    """The resolved canvas must come from the frontend preset, not the default."""
+    layout_context = [
+        {
+            "id": "slot_0",
+            "asset_id": "a1",
+            "grid_x": 0,
+            "grid_y": 0,
+            "grid_w": 120,
+            "grid_h": 160,
+            "z_index": 1,
+            "canvas_width": 1920,
+            "canvas_height": 1080,
+            "grid_cols": 120,
+            "grid_rows": 160,
+        }
+    ]
+    template = LayoutResolver().resolve(layout_context)
+    assert template.canvas_width == 1920
+    assert template.canvas_height == 1080
+    # Full-canvas slot must still resolve to 100% under the non-default canvas.
+    slot = template.slots[0]
+    assert slot.left_pct == 0.0
+    assert slot.top_pct == 0.0
+    assert slot.width_pct == 100.0
+    assert slot.height_pct == 100.0
+
+
+def test_concat_clips_materializes_static_video_for_jpeg(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """A pure still (no motion clip) must be turned into a static video and
+    composed into the canvas, instead of being silently dropped."""
+    from live_photo_agent.models import LivePhotoAsset
+
+    service = LibraryService()
+    tools = L0AtomicTools(service)
+    # Still asset with NO motion_path -> previously skipped by concat_clips.
+    jpg = tmp_path / "still1.jpg"
+    jpg.write_bytes(b"\xff\xd8still\xff\xd9")
+    asset = LivePhotoAsset(asset_id="still1", image_path=jpg, motion_path=None)
+    assets = [asset]
+
+    layout_context = _grid_layout_context(["still1"], [{"x": 0, "y": 0, "w": 120, "h": 160}])
+    composition_template = LayoutResolver().resolve(layout_context).model_dump(mode="json")
+
+    composed: dict[str, object] = {}
+    static_calls: list[object] = []
+
+    def _fake_compose(videos, output_path, *, canvas, layout, placements=None):
+        composed["video_count"] = len(videos)
+        composed["placements"] = placements
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        output_path.write_bytes(b"spatial")
+        return output_path
+
+    def _fake_static(image_path, output_path, **kwargs):
+        static_calls.append(image_path)
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        output_path.write_bytes(b"static")
+        return output_path
+
+    monkeypatch.setattr(tools.media_ops, "compose_videos_spatial", _fake_compose)
+    monkeypatch.setattr(tools.media_ops, "concat_videos", lambda v, o: (_ for _ in ()).throw(RuntimeError("should not concat")))
+    monkeypatch.setattr(tools.media_ops, "image_to_static_video", _fake_static)
+
+    call = ToolCall(tool=ToolName.CONCAT_CLIPS, reason="concat", arguments={})
+    context: dict[str, object] = {
+        "library_root": tmp_path,
+        "assets": assets,
+        "request_text": "把这张静态图拼进画布",
+        "layout_context": layout_context,
+        "composition_template": composition_template,
+    }
+    result = tools.concat_clips(call, context)
+
+    assert result.success is True
+    # The still was materialized into exactly one video and composed.
+    assert composed.get("video_count") == 1
+    assert composed.get("placements") is not None

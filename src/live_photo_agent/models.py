@@ -73,6 +73,10 @@ class LayoutSlot(BaseModel):
     x_offset: int = 0
     y_offset: int = 0
     label: str = ""
+    # Normalized (0-1) subject rectangle from the frontend canvas edit.
+    # When present, the segmentation (grabCut) is constrained to this region
+    # so only the framed subject is cut out and the rest becomes transparent.
+    edit_rect: dict[str, float] | None = None
 
 
 class CompositionTemplate(BaseModel):

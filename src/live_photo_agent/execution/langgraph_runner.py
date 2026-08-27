@@ -505,11 +505,16 @@ class PlannerGraphRunner:
 
         tool_calls = []
         if fg_slots:
+            # 透传 edit_rect 让分割限定在用户框选区域
+            matte_args: dict[str, object] = {"asset_ids": [s["asset_id"] for s in fg_slots], "mode": "person_first"}
+            edit_rects = {s["asset_id"]: s.get("edit_rect") for s in fg_slots if s.get("edit_rect")}
+            if edit_rects:
+                matte_args["edit_rect"] = edit_rects
             tool_calls.append(
                 ToolCall(
                     tool=ToolName.EXTRACT_SUBJECT_MATTE,
                     reason="fallback: foreground slot requires subject matte extraction (frames for overlay)",
-                    arguments={"asset_ids": [s["asset_id"] for s in fg_slots], "mode": "person_first"},
+                    arguments=matte_args,
                 )
             )
         if bg_order:

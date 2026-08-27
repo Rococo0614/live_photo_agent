@@ -425,6 +425,9 @@ class MediaOps:
             height = max(0.0, min(100.0, float(placement.get("height", 100.0))))
             # Scale the foreground to the requested tile size, then position it
             # at the LEFT/TOP edge (not center) of the canvas region.
+            # format=rgba preserves the alpha channel through scale so overlay
+            # correctly composites only the segmented subject (transparent
+            # background lets the underlying tile show through).
             fg_scale_expr = f"iw*{width/100.0}:ih*{height/100.0}"
             x_expr = f"main_w*{left/100.0}"
             y_expr = f"main_h*{top/100.0}"
@@ -439,7 +442,7 @@ class MediaOps:
                     str(foreground_frames_dir / "frame_%05d.png"),
                     "-filter_complex",
                     (
-                        f"[1:v]scale='{fg_scale_expr}'[fg];"
+                        f"[1:v]scale='{fg_scale_expr}',format=rgba[fg];"
                         f"[0:v][fg]overlay=x='{x_expr}':y='{y_expr}':shortest=1[outv]"
                     ),
                     "-map",
@@ -482,7 +485,7 @@ class MediaOps:
                 str(foreground_frames_dir / "frame_%05d.png"),
                 "-filter_complex",
                 (
-                    f"[1:v]scale=iw*{safe_scale}:ih*{safe_scale}[fg];"
+                    f"[1:v]scale=iw*{safe_scale}:ih*{safe_scale},format=rgba[fg];"
                     f"[0:v][fg]overlay=x='{x_expr}':y='{y_expr}':shortest=1[outv]"
                 ),
                 "-map",
@@ -631,6 +634,49 @@ class MediaOps:
             "0",
             "-i",
             str(list_file),
+            "-c:v",
+            "libx264",
+            "-preset",
+            "veryfast",
+            "-crf",
+            "20",
+            "-pix_fmt",
+            "yuv420p",
+            "-an",
+            str(output_path),
+        ]
+        self._run(cmd)
+        return output_path
+
+    def image_to_static_video(
+        self,
+        image_path: Path,
+        output_path: Path,
+        *,
+        duration_seconds: float = 3.0,
+        fps: float = 15.0,
+    ) -> Path:
+        """Render a still JPEG into a short static-frame video.
+
+        Live-photo compositions require a video timeline. A pure still asset
+        (no motion clip) is materialized as a fixed-duration video so it can
+        participate in concat/compose just like a live photo.
+        """
+        self._ensure_binaries()
+        if not image_path.exists():
+            raise MediaOpsError(f"image_not_found: {image_path}")
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        cmd = [
+            str(self._ffmpeg),
+            "-y",
+            "-loop",
+            "1",
+            "-i",
+            str(image_path),
+            "-t",
+            f"{duration_seconds:.3f}",
+            "-r",
+            f"{fps:.3f}",
             "-c:v",
             "libx264",
             "-preset",
