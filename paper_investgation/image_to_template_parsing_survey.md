@@ -1,3 +1,85 @@
+模板当前实现详解（代码级）
+--
+下面是当前代码库中与模板表示、映射、执行相关的关键实现点，便于你在实现解析 agent 时能无缝对接：
+
+- 前端定义（权威视觉源）：`src/live_photo_agent/ui.html` 中的 `TEMPLATE_LIBRARY`。
+  - 每个模板为一个对象：`{ id, name, style, board, slots: [{ gx, gy, gw, gh }, ...] }`。
+  - `applyActiveTemplateToLayout(templateId)` 将所选素材按 `slots` 顺序映射为 `state.layoutItems`，并设置字段：
+    - `id`: `slot:${template.id}:${index+1}`
+    - `kind`: `'source_asset'` 或 `'template_slot'`
+    - `template_id`, `slot_index`, `asset_id`, `image_path`, `label`
+    - 网格/百分比坐标：`grid_x/grid_y/grid_w/grid_h` 与 `left/top/width/height`（百分比）
+    - `z_index`（按 slot 序或用户调整），可选 `foreground` / `is_overlay` 标记
+
+- 后端权威转换：`src/live_photo_agent/foundation/layout_resolver.py`
+  - `LayoutResolver.resolve(layout_context)` 把前端 `grid`（gx/gy/gw/gh）确定性地转换为 `CompositionTemplate`（`left_pct/top_pct/width_pct/height_pct`），并填充 `LayoutSlot`（含 `slot_id`、`z_index`、`edit_rect`、`anchor` 等）。
+
+- 数据模型：`src/live_photo_agent/models.py`
+  - `LayoutSlot` 已包含 `left_pct/top_pct/width_pct/height_pct`、`grid_*`、`z_index`、`anchor`、`scale`、`edit_rect` 与 `role`（`foreground`/`background`）。
+
+- 执行器消费：`src/live_photo_agent/capability/l0_atomic_tools.py`
+  - `_build_placements_from_template`（或等价函数）读取 `composition_template.slots` 的百分比字段，生成 `placements`（left/top/width/height）并供 `compose_videos_spatial` 使用。
+  - 目前执行器以 `z_index` 与 `foreground` 判断层次，且在 asset_id 不匹配时已有 positional fallback（已在本分支加入）。
+
+UI 覆盖（overlay）逻辑现状
+--
+- 在前端，用户可通过“置顶/置底”操作修改 `state.layoutItems[].z_index`，并且当使用抠像工具时，前端会把当前激活项标记为 `foreground=true` 与 `is_overlay=true`（参见 `renderTemplateControls` 与工具栏交互逻辑）。
+- `applyActiveTemplateToLayout` 在映射模板时不会额外设置复杂的叠层分组；默认 `z_index` 是按 slot 序号生成，用户可手动调整。
+- 后端对 `foreground`/`is_overlay` 的语义是：需要先跑 `extract_subject_matte` 再用 `overlay_subject_clip` 将前景叠加到空间拼接结果上。
+
+新增字段建议（兼容性与对接指南）
+--
+为更精确地表达“空间的前后覆盖”语义并与 UI 的覆盖操作兼容，建议在 slot / layout item 层增加两个小字段：
+
+- `overlay_group`（string, 可选）
+  - 含义：把若干视觉元素归为同一覆盖组（例如 `title_badges`, `subject_layers`, `text_overlays`），用于定义组内相对顺序与组间合成策略（组内按 `overlay_priority` 排序，组间再按 `z_index`/组级规则合成）。
+  - UI 映射建议：`applyActiveTemplateToLayout` 可读取模板 slot 的 `overlay_group` 并写入 `state.layoutItems`；`moveActiveLayer`/模板卡片操作应保持不改变 `overlay_group`（除非用户显式重新分组）。
+
+- `overlay_priority`（int, 可选）
+  - 含义：组内覆盖优先级（越大越在上层）；与 `z_index` 互为补充：`z_index` 决定组間全局先后，`overlay_priority` 决定同一组內微排序。
+  - 后端使用建议：`_build_placements_from_template` 在构建最终层序時，优先按 `(z_index, overlay_group, overlay_priority)` 计算渲染顺序；对未指定的 slot 用默认值 `overlay_priority=0`。
+
+兼容性说明与实现要点
+--
+- `LayoutResolver`：无需改动（会把额外字段原样放入 `LayoutSlot` 的 `extra`/未指定字段或直接允许 `overlay_group`/`overlay_priority` 保持）。
+- 前端：
+  - `TEMPLATE_LIBRARY` 中模板 slot 可扩展为包含可选 `overlay_group`/`overlay_priority` 字段（不会影响现有模板）；
+  - `applyActiveTemplateToLayout` 在构造 `state.layoutItems` 時把这些字段写入，`renderCompositionDropZone` 在渲染時可显示小徽章或层级控制 UI（可后续迭代）。
+- 后端执行器：
+  - 在排序 placements 時，修改排序键為 `(slot.z_index, slot.overlay_group or '', slot.overlay_priority or 0)`，并确保 `overlay_subject_clip` 在叠加時遵循該顺序。
+  - 现有的 `foreground`/`is_overlay` 保持用于是否需要抠像/叠加的触发条件。
+
+示例（slot JSON）
+--
+```
+{
+  "slot_id": "slot:live_four_grid:1",
+  "asset_id": "127",
+  "role": "background",
+  "left_pct": 5.0,
+  "top_pct": 6.25,
+  "width_pct": 43.333,
+  "height_pct": 41.25,
+  "grid_x": 6,
+  "grid_y": 10,
+  "grid_w": 52,
+  "grid_h": 66,
+  "z_index": 1,
+  "overlay_group": "subject_layers",
+  "overlay_priority": 0
+}
+```
+
+短期行动建议（把这些加入技术报告并落地）
+--
+1. 把 `TEMPLATE_LIBRARY` 的 schema 文档化，声明 `overlay_group`/`overlay_priority` 为可选字段（前端先兼容写入）。
+2. 在后端 `LayoutResolver` 的 `CompositionTemplate` 输出里保留这些字段（无需改模型类型，如果要严格化可在 `models.py` 中增加字段并运行测试）。
+3. 在 executor 的排序逻辑中采用新的排序键并添加单元测试，验证 overlay 行为在 `compose_videos_spatial` 与 `overlay_subject_clip` 流程中一致。 
+
+我已把以上技术级说明合入报告。如需我现在继续（选一）：
+- A）把 `models.py` 中添加 `overlay_group`/`overlay_priority` 的类型声明并调整相关序列化（我会运行测试），
+- B）实现前端 `TEMPLATE_LIBRARY` 示例改动并更新 `applyActiveTemplateToLayout` 来写入新字段（并运行 UI 的单元/集成测试模拟），或
+- C）只把这份增强后的技术报告另存为 PPT 要点供你明早汇报。
 # 图像输入→模板解析 (Image-to-Template Parsing) 学术调研报告
 
 > **项目背景**：Live Photo Agent 项目需要扩展"图像输入→解析出模板"的能力，即给定一张图片（海报、社交媒体卡片、拼贴画、Live Photo 编辑产物等），通过视觉语言模型（VLM）或布局分析方法，自动解析出该图片的模板结构（布局、元素位置、层级关系、样式参数等），用于复用、参数化生成与逆向工程。
