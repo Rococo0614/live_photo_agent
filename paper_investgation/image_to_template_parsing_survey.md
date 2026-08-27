@@ -117,201 +117,91 @@
 |------|-----------|---------|---------|
 | **Layer Diffusion** (2024) | - | 分层图像生成与编辑 | 将图像分解为可编辑图层 |
 | **InstructPix2Pix** (2023) | CVPR 2023 | 基于指令的图像编辑 | 编辑操作的空间化理解 |
-| **MagicBrush** (2023) | - | 多轮图像编辑数据集 | 支持编辑序列追踪 |
-| **Emu Edit** (Meta, 2023) | - | 细粒度图像编辑理解 | 识别并执行特定编辑操作 |
-| **Visual Program Inference** (2024) | - | 从结果图像推断编辑程序 | 推断编辑操作序列 |
-| **ProEdit** (2024) | - | 渐进式编辑推理 | 从单图推断编辑步骤 |
+# Image-to-Template Parsing — 两周可交付调研与可执行计划
 
-**关键趋势**：这是一个相对新兴的方向。现有工作多关注"执行编辑"，"逆向推断编辑"仍处于早期阶段。Live Photo 场景需要结合元数据 + 视觉双重分析。
+目标概述
+--
+在 2 周（10 个工作日）内交付一个可重复的最小可行能力（MVP）：给定一张海报/社媒卡片图像，自动识别图像中独立的素材单元（图片/标题/副标题/徽标等）、它们在画布上的位置（bbox / grid 坐标 / left/top/width/height 百分比）以及前后关系（z-order），并输出标准化的 `CompositionTemplate` JSON（可直接喂给现有的 `LayoutResolver`/executor）。
 
----
+范围与不做项
+--
+- 涵盖：静态海报/社交卡片/设计稿的单张图片解析；输出结构化模板（元素、坐标、z-index、类型标签）。
+- 不涵盖（本阶段）：复杂图层特效复原、字体/颜色完美提取、多轮编辑逆向、视频时间维度解析（Live Photo 的时间维度留到后续扩展）。
 
-## 7. 模板推荐与个性化生成
+交付物（2 周）
+--
+1. `CompositionTemplate` 规范示例与校验脚本（JSON）。
+2. 轻量级解析原型脚本 `scripts/parse_poster_to_template.py`：输入图片 → 输出 template JSON（基于现成检测器 + 简单规则）。
+3. 若干示例输入/输出（5–10 张样本海报）与短评估（定位/元素召回率、bbox IoU、z-order 精度）。
+4. 会议回报 PPT 要点（用于明早汇报）。
 
-基于解析出的模板结构，做模板推荐、个性化填充、变体生成。
+核心方法路线（MVP 优先级）
+--
+阶段化 pipeline：
+1) 预处理：高分辨率缩放、去噪、（可选）透视校正。  
+2) 元素检测与分割：优先使用已有轻量检测器/开源模型（Detr/YOLOv8/ShowUI/Qwen-VL zero-shot），输出候选 bbox +类别（image, text, logo, decorative）。  
+3) OCR 辅助：对 text bbox 运行 OCR（Tesseract 或 cloud OCR）以确认文本位置/文字块边界。  
+4) 语义合并与分组：把检测到的小元素合并为“槽位”（例如标题群、图像群），并映射到网格候选（基于 heuristic：对齐/间距聚类）。  
+5) z-order 推断：通过颜色/阴影/遮挡的像素证据 + 层次规则（文本通常在上层）估计 z-index。  
+6) 输出规范化：将 bbox 转为 `left_pct/top_pct/width_pct/height_pct`（参考 `LayoutResolver` 的 grid 120x160）并生成 `CompositionTemplate` JSON。
 
-| 论文 | 会议/arXiv | 核心方法 | 关键贡献 |
-|------|-----------|---------|---------|
-| **Neural Palette** (2023) | - | 基于颜色风格的设计推荐 | 风格特征提取+模板匹配 |
-| **TemplateRank** (2024) | - | 内容感知的模板排序 | 根据用户内容智能推荐模板 |
-| **LayoutGPT** (2023) | ACL 2024 | LLM 零样本布局规划 | 可根据描述生成布局方案 |
-| **DesignTemplate** (Canva, 2023) | - | 大规模模板匹配与推荐 | 工业级模板推荐系统 |
-| **Personalized Layout Gen** (2024) | - | 用户偏好感知的布局生成 | 结合用户历史偏好的个性化布局 |
-| **AdaptiveUI** (2024) | - | 自适应 UI 模板变体生成 | 根据设备/场景自动调整模板 |
+可选/替代方案（备选技术栈，按成本-收益排序）
+--
+- 方案 A（最快上手，MVP）：YOLOv8 / Detectron2 预训练检测器 + 简单规则聚合 + OCR。实现周期：3–5 天。优点：工程稳定、速度快；缺点：对非标准装饰元素鲁棒性弱。
+- 方案 B（更高准确率）：Qwen-VL / GPT-4V 以视觉问题提示（VQA）方式进一步确认元素类型与前后关系。实现周期：5–8 天（含 prompt 工程）。优点：处理复杂/装饰元素更好；缺点：成本/延迟高，坐标精度需后处理。
+- 方案 C（长期、最稳健）：合成数据微调（WebSight 风格）训练一个 DETR/Anchor-free 解码器直接输出模板元素与语义。实现周期：3+ 周（超出本期）。
 
----
+评估指标（简化版）
+--
+- 元素召回率/精确率（类别按 image/text/logo）。
+- bbox IoU（均值与中位数）。
+- z-order 精度（与人工标注顺序匹配的比率）。
+- 模板可用率（解析结果被 `LayoutResolver` / executor 正常接受并生成预期布置的比率）。
 
-## 8. 技术趋势与演进总结
+实现细节建议（工程级）
+--
+- 输出格式：与 `src/live_photo_agent/models.py` 中 `CompositionTemplate` 保持兼容，字段：`canvas_width/height, grid_cols/rows, slots[]`（slot 包含 `asset_id`、`slot_id`、`role`、`left_pct/top_pct/width_pct/height_pct`、`grid_x...`、`z_index`、`edit_rect`）。
+- 网格映射：先用 heuristic 对齐（将 canvas 分为 120×160 grid），将 bbox 边缘映射为最近的整网格坐标以便可逆。  
+- z-order：初版用遮挡检测（bbox 重叠像素比）+简单规则（文本优先 overlay）估计整数 z_index，留出可调整阈值。
+- 稳健性：当元素检测数量与目标模板 slot 数不一致时，提供 positional fallback（按 z_index 排序映射），参照你已有的 executor 容错策略。
 
-```
-2022-2023: 传统检测(LayoutLMv3/DocLayout-YOLO) + 早期VLM探索
-    ↓
-2024: VLM主导 — Design2Code/WebSight/OmniParser/ShowUI
-    ↓
-2025: 端侧化(1-3B) + Agent化(DetAS) + 流匹配生成
-    ↓
-2026: 空间智能(CVPR 2026 3D趋势) + 形变感知(NaviDC) + 统一Agent
-```
+两周迭代计划（日程化）
+--
+Week 1 (Day 1–5)
+- Day 1: 需求确认 & 样本采集（选定 5–10 张典型海报）；准备开发环境。  
+- Day 2: 实现基础检测 pipeline（YOLO/Detectron candidate）+ OCR 接口；定义输出 JSON schema。  
+- Day 3: 实现合并/聚类规则把候选元素分配为槽位；实现 bbox→grid 的映射函数。  
+- Day 4: 实施 z-order 推断模块；端到端流水线联调。  
+- Day 5: 生成示例输出，初步评估（IoU、召回），准备中期演示材料。
 
-### 关键技术演进
+Week 2 (Day 6–10)
+- Day 6: 修正错误与提高稳定性（处理装饰/小图标/复杂文本块）。
+- Day 7: 集成 `LayoutResolver` 做一轮校验与互操作性测试；调整输出兼容性。  
+- Day 8: 编写单元/集成测试（10 张样本），量化指标，改进规则/thresholds。  
+- Day 9: 准备演示脚本与 PPT，总结结果和未解决问题。  
+- Day 10: 交付：提交 `scripts/parse_poster_to_template.py`、样本 JSON、评估表格、会议回报要点。
 
-| 维度 | 早期 (2022-) | 当前 (2024-2026) |
-|------|-------------|-----------------|
-| **方法** | CNN/YOLO 检测 → 规则映射 | VLM 端到端理解 → 结构化输出 |
-| **训练** | 大量标注数据 | 合成数据 (WebSight) + 指令微调 |
-| **推理** | 固定流水线 | Agent 动态决策 (DetAS) |
-| **端侧** | 不现实 | 1-3B 可行 (Qwen2-VL, ShowUI) |
-| **输出** | bbox 列表 | 可编辑模板/代码/参数化结构 |
-| **泛化** | 领域特定 | 跨领域/零样本能力 |
+风险与缓解
+--
+- 风险：复杂装饰元素和非标准排版导致检测器漏检或误判。  
+  缓解：使用 VLM（Qwen/GPT-4V）做二次确认；对关键元素人工回退。  
+- 风险：z-order 推断不准影响最终可用性。  
+  缓解：采用混合规则（遮挡像素比 + 元素类别启发）并暴露可调阈值。  
 
----
+开箱即用的首版工程任务（最小实现清单）
+--
+1. `scripts/parse_poster_to_template.py`（实现 pipeline、CLI 参数、单张图片到 JSON）。
+2. `tests/test_template_parsing.py`（基于 5 张样本做断言）。
+3. `docs/template_parsing_readme.md`（运行说明 + 评估命令）。
 
-## 9. 方法对比矩阵
+参考（精选）
+--
+- Design2Code (2024), WebSight (2024), LayoutLLM (2024), ShowUI (2024), DetAS (2026) — 上文已有完整参考列表，优先看 `Design2Code` / `WebSight` 两篇以获得数据合成与评估思路。
 
-| 方法类别 | 代表工作 | 是否需要训练 | 冻结模型推理 | 端侧可行 | 精度 | 速度 |
-|---------|---------|------------|------------|---------|------|------|
-| **纯 VLM 零样本** | GPT-4V, Qwen2-VL | 否 | ✅ | 部分 (小模型) | 中-高 | 慢 |
-| **VLM + 微调** | LayoutLLM, Design2Code-18B | 是 | ✅ | 部分 | 高 | 中 |
-| **专用检测器** | DocLayout-YOLO, DINO | 是 | ✅ | ✅ | 高 (特定域) | 快 |
-| **Agent 框架** | DetAS, OmniParser | 部分 | ✅ | 中 | 高 | 慢 |
-| **合成 + 微调** | WebSight | 是 | ✅ | 中 | 高 | 中 |
-| **混合 pipeline** | PP-StructureV2, Surya | 是 | ✅ | ✅ | 高 | 快 |
+下一步（由我代劳可选项）
+--
+1. 我可以在本仓库创建 `scripts/parse_poster_to_template.py` 原型并提交 PR（3–4 天内完成 MVP）。
+2. 或者我今天先把 PPT 要点和 5 张样本的预期输出表做出来，供明早会议使用（1 天）。
 
----
-
-## 10. 对"图像→模板解析 Agent"的架构建议
-
-### 推荐架构
-
-```
-┌──────────────────────────────────────────────────────────┐
-│                Image-to-Template Agent                     │
-├──────────────────────────────────────────────────────────┤
-│                                                            │
-│  Stage 1: 场景分类 & 预处理                                │
-│  ├─ 判断输入类型 (海报/UI/文档/拼贴/Live Photo)           │
-│  └─ 形变校正 (NaviDC 思路，轻量版)                        │
-│                                                            │
-│  Stage 2: 元素检测 & 布局解析                              │
-│  ├─ 端侧: Qwen2-VL-2B / ShowUI → bbox + 类别             │
-│  └─ 云端: GPT-4o / Qwen2-VL-72B → 细粒度解析             │
-│                                                            │
-│  Stage 3: 结构化推理                                       │
-│  ├─ 层级关系推断 (遮挡、组合)                             │
-│  ├─ 样式参数提取 (字体/颜色/间距)                         │
-│  └─ Design2Code 思路 → 参数化模板表示                     │
-│                                                            │
-│  Stage 4: 模板输出                                         │
-│  ├─ 可复用模板 (JSON/DSL)                                 │
-│  ├─ 代码表示 (HTML/CSS/SwiftUI)                           │
+请告诉我你希望我现在开始做哪项（1 = 生成 prototype 脚本，2 = 产出明早演示材料），我会按你的选择立即开始。 
 │  └─ 参数化变体生成                                        │
-│                                                            │
-└──────────────────────────────────────────────────────────┘
-```
-
-### 具体建议
-
-1. **端侧优先方案**：使用 Qwen2-VL-2B 或 ShowUI (1B) 做初步布局解析，速度快、可离线
-
-2. **合成数据训练**：参考 WebSight 思路，用模板渲染引擎生成大量"模板→截图"对，反向训练解析模型
-
-3. **Agent 化设计**：参考 DetAS 的自适应思路，让模型根据图片类型动态选择解析策略
-
-4. **分层处理**：
-   - 规则元素 (文字/图片) → 传统检测 + OCR
-   - 复杂元素 (装饰/特效) → VLM 理解
-   - 编辑操作 (Live Photo) → 元数据 + 视觉推断结合
-
-5. **模板表示标准化**：设计统一的参数化模板 DSL
-
-```json
-{
-  "type": "poster",
-  "layout": {"type": "grid", "cols": 2, "rows": 3},
-  "elements": [
-    {"id": "hero_image", "bbox": [0,0,1,0.5], "type": "image", "style": {}},
-    {"id": "title", "bbox": [0.1,0.55,0.9,0.7], "type": "text", "style": {}}
-  ]
-}
-```
-
-6. **Live Photo 特殊考虑**：
-   - 结合 EXIF / 深度数据 / 运动向量等元信息
-   - 时间维度：从关键帧序列推断编辑操作
-   - 参考 Sora 逆向工程论文的 DiT 分析思路
-
----
-
-## 11. 重点关注的论文清单
-
-| 优先级 | 论文 | arXiv | 理由 |
-|-------|------|-------|------|
-| ⭐⭐⭐ | **Design2Code** | 2403.03163 | 最直接相关，提供数据集 + 评估方法 |
-| ⭐⭐⭐ | **WebSight** | 2403.09556 | 合成数据方案可复用到模板解析 |
-| ⭐⭐⭐ | **OmniParser** | 2408.00254 | 微软屏幕解析方案，工程化程度高 |
-| ⭐⭐ | **NaviDC-OCR** (2026) | - | 形变感知思路对拍摄文档解析至关重要 |
-| ⭐⭐ | **DetAS** | 2605.31174 | Agent 化检测框架，自适应策略值得借鉴 |
-| ⭐⭐ | **ShowUI** | 2411.17465 | 轻量级，端侧部署可行性高 |
-| ⭐⭐ | **Ferret-UI** | 2404.07973 | Apple 的 UI 细粒度 VLM，定位能力强 |
-| ⭐ | **LayoutLLM** | 2402.16618 | VLM + 布局理解的系统化方法 |
-| ⭐ | **LayoutGPT** | 2305.10438 | LLM 零样本布局规划，思路启发 |
-| ⭐ | **Layer Diffusion** (2024) | - | 分层图像编辑，对 Live Photo 图层解析有参考价值 |
-| ⭐ | **DocLayout-YOLO** | 2404.11845 | 工业级实时版面检测，可做 baseline |
-
----
-
-## 12. 参考文献
-
-### 图像逆向布局解析
-1. LayoutLLM: Enhancing Document Layout Analysis with Large Language Models. ACL 2024. arXiv:2402.16618
-2. LayoutGPT: Compositional Visual Planning and Generation with Large Language Models. ACL 2024. arXiv:2305.10438
-3. DocLLM: Disentangling Spatial and Semantic Representations for Layout Understanding. ACL 2024.
-4. NaviDC-OCR: Deformation-Aware Vision-Language Model for Document Parsing. 2026.
-5. Blueprint: Reverse Engineering UI Designs. Meta, CVPR 2024.
-6. PosterLayout: A New Benchmark and Approach for Poster Layout Generation. CVPR 2024. arXiv:2406.03037
-
-### 图像到代码
-7. Design2Code: How Far Are We From Automating Front-End Engineering? arXiv:2403.03163, 2024.
-8. WebSight: Towards an Open Vision-Language Dataset for Webpage Coding. arXiv:2403.09556, 2024.
-9. Screenshot2Code. Open-source project, 2024.
-10. Pix2Code: Generating Code from a Graphical User Interface Screenshot. ACM SIGCHI 2017.
-11. OmniParser: Screen Parsing model for General GUI Agent. Microsoft, arXiv:2408.00254, 2024.
-
-### 设计模板理解与生成
-12. LayoutDM: Discrete Diffusion Model for Layout Generation. CVPR 2023.
-13. PosterGen: Poster Layout and Content Joint Generation. 2024.
-14. GraphicDesignAI: Constraint-Based Design Layout Optimization. 2024.
-
-### VLM 用于布局/设计理解
-15. Qwen-VL: A Versatile Vision-Language Model. Alibaba, 2024.
-16. Ferret-UI: Grounded Mobile UI Understanding with Multimodal LLMs. Apple, arXiv:2404.07973, 2024.
-17. UGround: Benchmarking GUI Visual Grounding. Microsoft, arXiv:2405.14538, 2024.
-18. SeeClick: Harnessing Zero-shot GUI Grounding. ACL 2024.
-19. ShowUI: One Vision-Language-Action Model for GUI Visual Agent. arXiv:2411.17465, 2024.
-20. DetAS: Dynamic Detection Agent System. CVPR 2026. arXiv:2605.31174.
-
-### 文档/海报版面分析
-21. LayoutLMv3: Pre-training for Document AI with Masked Image-Language Modeling. ACM MM 2022.
-22. DocLayout-YOLO: Enhancing Document Layout Analysis with YOLO. arXiv:2404.11845, 2024.
-23. DiT: Self-supervised Pre-training for Document Image Transformer. ICCV 2023.
-24. RT-DETR: Real-time Detection Transformer. ICCV 2023.
-25. PP-StructureV2: Industrial-grade Document Analysis Pipeline. PaddlePaddle.
-26. Surya: Multilingual OCR and Layout Analysis. Open-source, 2024.
-
-### 图像编辑操作逆向工程
-27. Layer Diffusion: Layered Image Generation and Editing. 2024.
-28. InstructPix2Pix: Learning to Follow Image Editing Instructions. CVPR 2023.
-29. MagicBrush: A Manually Annotated Dataset for Instruction-Driven Image Editing. 2023.
-30. Emu Edit: Precise Image Editing via Vision-Language Models. Meta, 2023.
-31. Visual Program Inference from Edit Results. 2024.
-32. ProEdit: Progressive Edit Reasoning from Single Image. 2024.
-
-### 模板推荐与个性化生成
-33. Neural Palette: Color-Aware Design Recommendation. 2023.
-34. TemplateRank: Content-Aware Template Ranking. 2024.
-35. DesignTemplate: Large-Scale Template Matching and Recommendation. Canva, 2023.
-36. Personalized Layout Generation with User Preferences. 2024.
-
----
-
-*报告结束*
