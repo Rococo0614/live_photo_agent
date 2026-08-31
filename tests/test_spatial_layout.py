@@ -698,3 +698,58 @@ def test_concat_clips_materializes_static_video_for_jpeg(tmp_path: Path, monkeyp
     # The still was materialized into exactly one video and composed.
     assert composed.get("video_count") == 1
     assert composed.get("placements") is not None
+
+
+def test_layout_resolver_extracts_image_prompt() -> None:
+    """image_prompt from layout_context is carried through to LayoutSlot."""
+    resolver = LayoutResolver()
+    layout_context = [
+        {
+            "id": "slot_0",
+            "asset_id": "a1",
+            "grid_x": 0,
+            "grid_y": 0,
+            "grid_w": 120,
+            "grid_h": 160,
+            "z_index": 1,
+            "image_prompt": "增强色彩饱和度，暖色调风格",
+        }
+    ]
+    template = resolver.resolve(layout_context)
+    assert template.slots[0].image_prompt == "增强色彩饱和度，暖色调风格"
+
+
+def test_layout_resolver_image_prompt_defaults_empty() -> None:
+    """image_prompt defaults to empty string when not provided."""
+    resolver = LayoutResolver()
+    template = resolver.resolve(
+        [{"id": "s0", "asset_id": "a1", "grid_x": 0, "grid_y": 0, "grid_w": 60, "grid_h": 80, "z_index": 1}]
+    )
+    assert template.slots[0].image_prompt == ""
+
+
+def test_layout_resolver_pin_to_top_promotes_z_index() -> None:
+    """pin_to_top=True assigns the highest z_index regardless of original z."""
+    resolver = LayoutResolver()
+    layout_context = [
+        {"id": "bg", "asset_id": "bg1", "grid_x": 0, "grid_y": 0, "grid_w": 120, "grid_h": 160, "z_index": 5},
+        {"id": "fg", "asset_id": "fg1", "grid_x": 10, "grid_y": 90, "grid_w": 60, "grid_h": 50, "z_index": 1, "pin_to_top": True},
+    ]
+    template = resolver.resolve(layout_context)
+    pinned = next(s for s in template.slots if s.asset_id == "fg1")
+    background = next(s for s in template.slots if s.asset_id == "bg1")
+    assert pinned.pin_to_top is True
+    assert pinned.z_index > background.z_index
+
+
+def test_layout_resolver_pin_to_top_false_keeps_z_index() -> None:
+    """pin_to_top=False preserves the original z_index."""
+    resolver = LayoutResolver()
+    layout_context = [
+        {"id": "s0", "asset_id": "a1", "grid_x": 0, "grid_y": 0, "grid_w": 60, "grid_h": 80, "z_index": 3, "pin_to_top": False},
+        {"id": "s1", "asset_id": "a2", "grid_x": 60, "grid_y": 0, "grid_w": 60, "grid_h": 80, "z_index": 7},
+    ]
+    template = resolver.resolve(layout_context)
+    slot_a1 = next(s for s in template.slots if s.asset_id == "a1")
+    assert slot_a1.pin_to_top is False
+    assert slot_a1.z_index == 3

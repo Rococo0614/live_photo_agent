@@ -77,6 +77,17 @@ class LayoutSlot(BaseModel):
     # When present, the segmentation (grabCut) is constrained to this region
     # so only the framed subject is cut out and the rest becomes transparent.
     edit_rect: dict[str, float] | None = None
+    # Whether this slot is pinned to the top of the z-order stack.
+    # When True, the resolver will assign it the highest z_index at resolve
+    # time, overriding any user-set z_index. This is an explicit semantic flag
+    # distinct from manually setting z_index (which the user can also do).
+    pin_to_top: bool = False
+    # Image processing prompt for this slot. This prompt is carried through
+    # the template to the brain, which can use it to plan image editing tools
+    # (e.g. color enhancement, style transfer, inpainting) for this asset.
+    # The frontend may override this per-slot without mutating the base
+    # template definition; the value here is the resolved (overridden) one.
+    image_prompt: str = ""
 
 
 class CompositionTemplate(BaseModel):

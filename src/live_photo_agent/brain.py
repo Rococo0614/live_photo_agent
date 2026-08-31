@@ -557,6 +557,10 @@ class QwenPlanner:
                         "foreground=true/is_overlay=true or distinct z_index, a full-canvas item overlapping "
                         "background tiles is an intentional foreground (e.g. subject segmentation) over a backdrop. "
                         "Do NOT raise need_clarification for such overlap; plan the foreground extraction/overlay directly. "
+                        "There are TWO distinct prompt types in this system: "
+                        "(1) image_prompt in layout_assets — a WHOLE-IMAGE processing instruction (e.g. color enhancement, style transfer) that applies to the entire asset; "
+                        "(2) edit_prompt in edit_directives — a REGION-ONLY instruction tied to a specific edit_rect (e.g. subject segmentation, local inpainting). "
+                        "When an asset has BOTH, plan the whole-image processing FIRST, then apply the region-specific edit on the processed result. "
                         "Only ask for clarification when coordinates are genuinely missing or the spatial intent is truly ambiguous. "
                         "No prose."
                     ),
@@ -622,6 +626,8 @@ class QwenPlanner:
                         "h": item.get("grid_h"),
                     },
                     "z_index": item.get("z_index"),
+                    "pin_to_top": bool(item.get("pin_to_top", False)),
+                    "image_prompt": str(item.get("image_prompt", "")),
                 }
             )
         return assets

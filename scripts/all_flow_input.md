@@ -6,7 +6,7 @@
 cd live_photo_agent
 
 
-conda activate live-photo-agent
+conda activate live_photo_agent
 
 export DASHSCOPE_API_KEY='sk-ws-H.EDDIMHE.XPJN.MEUCIFj-bi6j3oX3ba8uOeEP9ObU9oPqmb5VwpO6WgANKkm3AiEAvDesS6EN6P51MCfDeL3skveLQT2lgk7ls181Xvia8vk'
 export DASHSCOPE_WORKSPACE_ID='ws-a6giruup05d0ztyb'

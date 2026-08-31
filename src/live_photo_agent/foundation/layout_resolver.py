@@ -77,9 +77,12 @@ class LayoutResolver:
                 y_offset=int(item.get("y_offset", 0)),
                 label=str(item.get("label", "")),
                 edit_rect=self._parse_edit_rect(item.get("edit_rect")),
+                pin_to_top=bool(item.get("pin_to_top", False)),
+                image_prompt=str(item.get("image_prompt", "")),
             )
             slots.append(slot)
 
+        self._apply_pin_to_top(slots)
         slots.sort(key=lambda s: (s.z_index, s.slot_id))
         return CompositionTemplate(
             canvas_width=canvas_width,
@@ -124,6 +127,20 @@ class LayoutResolver:
         if total <= 0:
             return 0.0
         return max(0.0, min(100.0, value / total * 100.0))
+
+    @staticmethod
+    def _apply_pin_to_top(slots: list[LayoutSlot]) -> None:
+        """Promote pin_to_top slots to the highest z_index.
+
+        If multiple slots have pin_to_top, their relative z ordering is
+        preserved by assigning max+1, max+2, ... in the order they appear.
+        """
+        pinned = [s for s in slots if s.pin_to_top]
+        if not pinned:
+            return
+        base = max((s.z_index for s in slots), default=0)
+        for i, slot in enumerate(pinned):
+            slot.z_index = base + 1 + i
 
     @staticmethod
     def _parse_edit_rect(raw: object) -> dict[str, float] | None:

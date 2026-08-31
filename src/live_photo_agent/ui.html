@@ -398,6 +398,72 @@
       pointer-events: none;
       box-sizing: border-box;
     }
+    .composition-layout-item.pin-to-top {
+      border-color: rgba(251, 191, 36, 0.7);
+      box-shadow: 0 0 0 1px rgba(251, 191, 36, 0.3);
+    }
+    .composition-layout-item.pin-to-top.active {
+      border-color: rgba(251, 191, 36, 0.95);
+      box-shadow: 0 0 0 2px rgba(251, 191, 36, 0.35);
+    }
+    .composition-prompt-badge {
+      position: absolute;
+      left: 8px;
+      top: 8px;
+      z-index: 2;
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      padding: 5px 7px;
+      border: 1px solid rgba(192, 132, 252, 0.55);
+      border-radius: 8px;
+      background: rgba(46, 16, 77, 0.82);
+      color: #ddd6fe;
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 0.02em;
+      pointer-events: none;
+      max-width: calc(100% - 16px);
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .composition-prompt-badge.shifted {
+      left: auto;
+      right: 8px;
+    }
+    .composition-prompt-badge::before {
+      content: '';
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: currentColor;
+      box-shadow: 0 0 0 2px rgba(192, 132, 252, 0.22);
+      flex-shrink: 0;
+    }
+    .composition-prompt-tooltip {
+      position: absolute;
+      left: 8px;
+      top: 30px;
+      z-index: 5;
+      padding: 6px 8px;
+      border-radius: 8px;
+      background: rgba(30, 10, 55, 0.96);
+      color: #e9d5ff;
+      font-size: 10px;
+      line-height: 1.4;
+      pointer-events: none;
+      max-width: 200px;
+      display: none;
+    }
+    .composition-prompt-badge.shifted + .composition-prompt-tooltip {
+      left: auto;
+      right: 8px;
+    }
+    .composition-layout-item.pin-to-top:hover .composition-prompt-tooltip,
+    .composition-layout-item:hover .composition-prompt-tooltip {
+      display: block;
+    }
     .resize-handle {
       position: absolute;
       z-index: 4;
@@ -445,6 +511,12 @@
       padding-bottom: 12px;
     }
     .editor-workbench > .result-card { min-width: 0; }
+    .editor-workbench > .editor-middle-col {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      min-width: 0;
+    }
     .asset-loader-bar {
       display: flex;
       align-items: center;
@@ -501,6 +573,71 @@
       border: 1px solid rgba(125, 211, 252, 0.7);
       background: rgba(56, 189, 248, 0.2);
       border-radius: 6px;
+    }
+    .template-thumb-slot.pin-to-top {
+      border-color: rgba(251, 191, 36, 0.9);
+      background: rgba(251, 191, 36, 0.28);
+      box-shadow: 0 0 0 1px rgba(251, 191, 36, 0.3);
+    }
+    .template-thumb-slot.has-prompt {
+      border-color: rgba(192, 132, 252, 0.8);
+      background: rgba(192, 132, 252, 0.22);
+    }
+    .template-thumb-slot.has-prompt.pin-to-top {
+      border-color: rgba(251, 191, 36, 0.9);
+      background: linear-gradient(135deg, rgba(251, 191, 36, 0.25), rgba(192, 132, 252, 0.25));
+    }
+    .template-thumb-prompt-icon {
+      position: absolute;
+      top: 3px;
+      left: 3px;
+      width: 14px;
+      height: 14px;
+      border-radius: 50%;
+      background: rgba(192, 132, 252, 0.9);
+      color: #1e0a3e;
+      font-size: 9px;
+      font-weight: 900;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      pointer-events: none;
+      line-height: 1;
+    }
+    .template-thumb-pin-icon {
+      position: absolute;
+      top: 3px;
+      right: 3px;
+      width: 14px;
+      height: 14px;
+      border-radius: 50%;
+      background: rgba(251, 191, 36, 0.92);
+      color: #422006;
+      font-size: 9px;
+      font-weight: 900;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      pointer-events: none;
+      line-height: 1;
+    }
+    .template-tag {
+      display: inline-flex;
+      align-items: center;
+      gap: 3px;
+      padding: 2px 6px;
+      border-radius: 999px;
+      font-size: 10px;
+      font-weight: 700;
+      margin-left: 4px;
+    }
+    .template-tag.prompt {
+      background: rgba(192, 132, 252, 0.18);
+      color: #c4b5fd;
+    }
+    .template-tag.pin {
+      background: rgba(251, 191, 36, 0.18);
+      color: #fbbf24;
     }
     .asset-loader-bar strong { display: block; margin-top: 4px; font-size: 14px; }
     .operation-card { margin-top: 14px; }
@@ -666,9 +803,11 @@
       .editor-workbench {
         grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
       }
-      .editor-workbench > .result-card:nth-child(2) {
+      .editor-workbench > .editor-middle-col {
         grid-column: 1 / -1;
+        flex-direction: row;
       }
+      .editor-workbench > .editor-middle-col > .result-card { flex: 1; }
     }
 
     @media (max-width: 1180px) {
@@ -826,17 +965,27 @@
               <div id="compositionLayoutLayer" class="composition-layout-layer"></div>
             </div>
           </div>
-          <div class="result-card">
-            <div class="micro" style="margin-bottom: 10px;">画布编辑</div>
-            <div class="canvas-editor-controls">
-              <div class="field">
-                <label for="canvasPromptInput">编辑提示</label>
-                <textarea id="canvasPromptInput" placeholder="例如：把选区中的人物改成电影感光影" style="min-height: 90px;"></textarea>
+          <div class="editor-middle-col">
+            <div class="result-card">
+              <div class="micro" style="margin-bottom: 10px;">框选区域编辑</div>
+              <div class="canvas-editor-controls">
+                <div class="field">
+                  <label for="canvasPromptInput">选区编辑提示（仅作用于框选区域）</label>
+                  <textarea id="canvasPromptInput" placeholder="例如：把选区中的人物改成电影感光影。需先在画布上框选区域。" style="min-height: 80px;"></textarea>
+                </div>
+                <div class="controls">
+                  <button id="canvasPreviewButton" class="primary" type="button">保存编辑到布局</button>
+                  <button id="canvasResetButton" type="button">清空画布</button>
+                </div>
               </div>
-              <div class="micro">当前仅保留矩形框选。</div>
-              <div class="controls">
-                <button id="canvasPreviewButton" class="primary" type="button">保存编辑到布局</button>
-                <button id="canvasResetButton" type="button">清空画布</button>
+            </div>
+            <div class="result-card">
+              <div class="micro" style="margin-bottom: 10px;">素材属性</div>
+              <div class="canvas-editor-controls">
+                <div class="field">
+                  <label for="imagePromptInput">整图处理提示（作用于整张素材）</label>
+                  <textarea id="imagePromptInput" placeholder="例如：增强色彩饱和度，暖色调风格。该 prompt 会对整张图片生效。" style="min-height: 80px;"></textarea>
+                </div>
               </div>
             </div>
           </div>
@@ -989,6 +1138,8 @@
       { id: 'live_three_stack', name: 'Live 三宫格上下', style: 'live', board: 'xhs', slots: [{ gx: 5, gy: 8, gw: 110, gh: 46 }, { gx: 5, gy: 58, gw: 110, gh: 46 }, { gx: 5, gy: 108, gw: 110, gh: 46 }] },
       { id: 'live_four_grid', name: 'Live 四宫格', style: 'live', board: 'xhs', slots: [{ gx: 6, gy: 10, gw: 52, gh: 66 }, { gx: 62, gy: 10, gw: 52, gh: 66 }, { gx: 6, gy: 84, gw: 52, gh: 66 }, { gx: 62, gy: 84, gw: 52, gh: 66 }] },
       { id: 'matrix_three_by_two', name: '3x2 材料拼板', style: 'swiss', board: 'xhs', slots: [{ gx: 6, gy: 16, gw: 34, gh: 34 }, { gx: 43, gy: 16, gw: 34, gh: 34 }, { gx: 80, gy: 16, gw: 34, gh: 34 }, { gx: 6, gy: 56, gw: 34, gh: 34 }, { gx: 43, gy: 56, gw: 34, gh: 34 }, { gx: 80, gy: 56, gw: 34, gh: 34 }] },
+      { id: 'live_overlay_top', name: 'Live 重叠置顶', style: 'live', board: 'xhs', slots: [{ gx: 0, gy: 0, gw: 120, gh: 160 }, { gx: 10, gy: 90, gw: 60, gh: 50, pin_to_top: true, image_prompt: '抠出人物主体并叠加到背景视频上方' }] },
+      { id: 'live_prompt_enhance', name: 'Live 带处理提示', style: 'live', board: 'xhs', slots: [{ gx: 5, gy: 10, gw: 110, gh: 64, image_prompt: '增强色彩饱和度，暖色调风格' }, { gx: 5, gy: 86, gw: 110, gh: 64, image_prompt: '增加动态模糊效果' }] },
     ];
 
     const els = {
@@ -1063,6 +1214,7 @@
       compositionLayoutLayer: document.getElementById('compositionLayoutLayer'),
       canvasStage: document.getElementById('canvasStage'),
       canvasPromptInput: document.getElementById('canvasPromptInput'),
+      imagePromptInput: document.getElementById('imagePromptInput'),
       canvasPreviewButton: document.getElementById('canvasPreviewButton'),
       canvasResetButton: document.getElementById('canvasResetButton'),
       interactiveCanvas: document.getElementById('interactiveCanvas'),
@@ -1588,7 +1740,12 @@
     }
 
     function loadCanvasForLayoutItem(layoutItem) {
-      if (!layoutItem || !layoutItem.asset_id) {
+      if (!layoutItem) {
+        els.imagePromptInput.value = '';
+        return;
+      }
+      els.imagePromptInput.value = layoutItem.image_prompt || '';
+      if (!layoutItem.asset_id) {
         return;
       }
       interactiveCanvasState.suspendedLayoutId = '';
@@ -1655,16 +1812,33 @@
       els.compositionLayoutLayer.innerHTML = `${gridOverlay}${sortedItems.map((item) => {
         const isActive = item.id === state.activeLayoutId;
         const edited = item.edit_rect || item.edit_prompt;
+        const hasImgPrompt = !!item.image_prompt;
+        const isPinned = !!item.pin_to_top;
+        const itemClasses = [
+          'composition-layout-item',
+          isActive ? 'active' : '',
+          isPinned ? 'pin-to-top' : '',
+        ].filter(Boolean).join(' ');
         const rect = item.edit_rect;
         const rectOverlay = rect && Number.isFinite(rect.x) && Number.isFinite(rect.y) && Number.isFinite(rect.w) && Number.isFinite(rect.h)
           ? `<div class="composition-edit-rect" style="left: ${(rect.x * 100).toFixed(2)}%; top: ${(rect.y * 100).toFixed(2)}%; width: ${(rect.w * 100).toFixed(2)}%; height: ${(rect.h * 100).toFixed(2)}%"></div>`
           : '';
+        const promptBadge = hasImgPrompt
+          ? `<span class="composition-prompt-badge${edited ? ' shifted' : ''}" title="${escapeHtml(item.image_prompt)}">P</span><div class="composition-prompt-tooltip">${escapeHtml(item.image_prompt)}</div>`
+          : '';
+        const labelSuffix = [
+          edited ? '已编辑' : '',
+          hasImgPrompt ? '提示' : '',
+          isPinned ? '置顶' : '',
+          `z${item.z_index ?? 1}`,
+        ].filter(Boolean).join(' · ');
         return `
-        <div class="composition-layout-item ${isActive ? 'active' : ''}" data-layout-id="${escapeHtml(item.id)}" style="left: ${gridToPercentX(item.grid_x)}%; top: ${gridToPercentY(item.grid_y)}%; width: ${gridToPercentX(item.grid_w)}%; height: ${gridToPercentY(item.grid_h)}%; z-index: ${item.z_index ?? 1}">
+        <div class="${itemClasses}" data-layout-id="${escapeHtml(item.id)}" style="left: ${gridToPercentX(item.grid_x)}%; top: ${gridToPercentY(item.grid_y)}%; width: ${gridToPercentX(item.grid_w)}%; height: ${gridToPercentY(item.grid_h)}%; z-index: ${item.z_index ?? 1}">
           <img src="${item.image_src || mediaUrl(item.image_path)}" alt="${escapeHtml(item.label)}" draggable="false">
           ${edited ? '<span class="composition-edit-badge">已编辑</span>' : ''}
+          ${promptBadge}
           ${rectOverlay}
-          <div class="composition-layout-label">${escapeHtml(item.label)}${edited ? ' · 已编辑' : ''} · z${item.z_index ?? 1}</div>
+          <div class="composition-layout-label">${escapeHtml(item.label)} · ${labelSuffix}</div>
           <span class="resize-handle tl" data-resize-dir="tl"></span>
           <span class="resize-handle tr" data-resize-dir="tr"></span>
           <span class="resize-handle bl" data-resize-dir="bl"></span>
@@ -1704,12 +1878,22 @@
 
       els.templateGrid.innerHTML = templateRows.map((template) => {
         const active = template.id === state.activeTemplateId ? 'active' : '';
-        const thumbSlots = template.slots.map((slot) => `
-          <div class="template-thumb-slot" style="left:${gridToPercentX(slot.gx)}%;top:${gridToPercentY(slot.gy)}%;width:${gridToPercentX(slot.gw)}%;height:${gridToPercentY(slot.gh)}%"></div>
-        `).join('');
+        const hasPrompt = template.slots.some((s) => s.image_prompt);
+        const hasPin = template.slots.some((s) => s.pin_to_top);
+        const thumbSlots = template.slots.map((slot) => {
+          const classes = ['template-thumb-slot'];
+          if (slot.pin_to_top) classes.push('pin-to-top');
+          if (slot.image_prompt) classes.push('has-prompt');
+          const pinIcon = slot.pin_to_top ? '<span class="template-thumb-pin-icon">T</span>' : '';
+          const promptIcon = slot.image_prompt ? '<span class="template-thumb-prompt-icon">P</span>' : '';
+          return `<div class="${classes.join(' ')}" style="left:${gridToPercentX(slot.gx)}%;top:${gridToPercentY(slot.gy)}%;width:${gridToPercentX(slot.gw)}%;height:${gridToPercentY(slot.gh)}%">${promptIcon}${pinIcon}</div>`;
+        }).join('');
+        const tags = [];
+        if (hasPrompt) tags.push('<span class="template-tag prompt">提示</span>');
+        if (hasPin) tags.push('<span class="template-tag pin">置顶</span>');
         return `
           <button class="template-card ${active}" data-template-id="${escapeHtml(template.id)}" type="button">
-            <div class="template-card-name">${escapeHtml(template.name)}</div>
+            <div class="template-card-name">${escapeHtml(template.name)}${tags.join('')}</div>
             <div class="template-card-meta">${escapeHtml(template.style)} · ${escapeHtml(template.board)} · ${template.slots.length} 格</div>
             <div class="template-thumb">${thumbSlots}</div>
           </button>
@@ -1791,11 +1975,9 @@
           grid_y: slot.gy,
           grid_w: slot.gw,
           grid_h: slot.gh,
-          left: gridToPercentX(slot.gx),
-          top: gridToPercentY(slot.gy),
-          width: gridToPercentX(slot.gw),
-          height: gridToPercentY(slot.gh),
           z_index: index + 1,
+          pin_to_top: !!slot.pin_to_top,
+          image_prompt: slot.image_prompt || '',
         };
       });
       state.activeLayoutId = state.layoutItems[0]?.id || '';
@@ -2475,6 +2657,8 @@
           prompt: item.prompt || '',
           edit_prompt: item.edit_prompt || '',
           edit_rect: item.edit_rect_source ?? item.edit_rect ?? null,
+          pin_to_top: item.pin_to_top ?? false,
+          image_prompt: item.image_prompt || '',
           selection_mode: item.selection_mode || '',
         });
         }),
@@ -2512,8 +2696,15 @@
     function buildGenerationIntent() {
       const edits = state.operationLog.map((operation) => operation.intent).join('；');
       const items = state.layoutItems.filter((item) => item.asset_id);
-      const assetCount = items.length;
       const editCount = items.filter((item) => item.edit_rect || item.edit_prompt).length;
+      const pinnedCount = items.filter((item) => item.pin_to_top).length;
+      const promptItems = items.filter((item) => item.image_prompt);
+      const promptClause = promptItems.length
+        ? `布局中有 ${promptItems.length} 个素材携带整图处理提示：${promptItems.map((item) => `${item.label}: "${item.image_prompt}"`).join('，')}。这些提示作用于整张图片（如 color_enhance 等全局处理工具），请在拼接前先对对应素材执行整图处理。`
+        : '';
+      const pinClause = pinnedCount
+        ? `布局中有 ${pinnedCount} 个素材被标记为置于图层顶部（pin_to_top），已自动分配最高 z_index，请在拼接时确保其覆盖在其他素材之上。`
+        : '';
       const preset = CANVAS_PRESETS[state.canvasPreset] ?? CANVAS_PRESETS.xhs;
       const template = TEMPLATE_LIBRARY.find((item) => item.id === state.activeTemplateId);
       const templateClause = template
@@ -2523,7 +2714,10 @@
       const foregroundClause = foregroundItems.length
         ? `布局中有 ${foregroundItems.length} 个前景项（foreground/is_overlay），必须先用 subject_segmentation 对其做主体分割，再用 overlay_subject_clip 叠加到拼接结果之上，按其 anchor/scale/x_offset/y_offset 定位。`
         : '本次布局无前景叠加项。';
-      return `请根据当前布局生成最终 Live Photo：固定画布为 ${preset.width}x${preset.height}（${preset.label}），布局按 ${GRID_LAYOUT.cols}x${GRID_LAYOUT.rows} 网格解析。必须做空间拼接（compose_videos_spatial / concat_clips 的空间布局模式），严格使用每个布局项的 grid_x/grid_y/grid_w/grid_h 与 z_index 确定画布上的位置、大小和层级，顶层 z-index 覆盖底层，禁止退化为首尾相接的时间轴串行拼接。${templateClause}${foregroundClause}${editCount ? `并把 ${editCount} 个画布编辑产物叠加到拼接结果上。` : ''}${edits ? `处理中间步骤：${edits}。` : ''}请保留完整的意图识别、工具使用和中间处理记录。`;
+      const editClause = editCount
+        ? `布局中有 ${editCount} 个素材携带框选区域编辑（edit_rect + edit_prompt），这些编辑仅作用于框选局部区域（如局部抠像、局部修复），请在整图处理之后、最终拼接之前执行。`
+        : '';
+      return `请根据当前布局生成最终 Live Photo：固定画布为 ${preset.width}x${preset.height}（${preset.label}），布局按 ${GRID_LAYOUT.cols}x${GRID_LAYOUT.rows} 网格解析。必须做空间拼接（compose_videos_spatial / concat_clips 的空间布局模式），严格使用每个布局项的 grid_x/grid_y/grid_w/grid_h 与 z_index 确定画布上的位置、大小和层级，顶层 z-index 覆盖底层，禁止退化为首尾相接的时间轴串行拼接。${templateClause}${foregroundClause}${pinClause}${promptClause}${editClause}${edits ? `框选编辑中间步骤：${edits}。` : ''}请保留完整的意图识别、工具使用和中间处理记录。`;
     }
 
     els.refreshButton.addEventListener('click', () => refreshBootstrap().catch((error) => { els.resultPreview.textContent = String(error); }));
@@ -2556,6 +2750,13 @@
     });
     els.canvasResetButton.addEventListener('click', resetInteractiveCanvas);
     els.canvasPreviewButton.addEventListener('click', saveCanvasEditToLayout);
+    els.imagePromptInput.addEventListener('input', () => {
+      const active = state.layoutItems.find((item) => item.id === state.activeLayoutId);
+      if (active) {
+        active.image_prompt = els.imagePromptInput.value;
+        renderCompositionDropZone();
+      }
+    });
     els.layerUpButton.addEventListener('click', () => moveActiveLayer(true));
     els.layerDownButton.addEventListener('click', () => moveActiveLayer(false));
     els.keepAspectResize.addEventListener('change', () => {
