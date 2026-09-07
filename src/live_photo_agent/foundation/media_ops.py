@@ -388,6 +388,184 @@ class MediaOps:
             else 0.0,
         }
 
+    def segment_subject_region_video(
+        self,
+        video_path: Path,
+        output_dir: Path,
+        *,
+        region: str = "bottom_third",
+        keep_region: bool = True,
+        sample_every: int = 3,
+    ) -> dict[str, object]:
+        """Extract subject from a sub-region of each video frame via grabCut.
+
+        region: "bottom_third" | "bottom_half" | "top_third" | "full"
+        keep_region: if True, the region area is always opaque (kept as-is)
+        sample_every: run grabCut every N frames (others reuse mask)
+        """
+        try:
+            import cv2
+            import numpy as np
+        except ImportError as exc:
+            raise MediaOpsError("opencv_missing") from exc
+
+        output_dir.mkdir(parents=True, exist_ok=True)
+        cap = cv2.VideoCapture(str(video_path))
+        if not cap.isOpened():
+            raise MediaOpsError(f"video_open_failed: {video_path}")
+
+        fps = cap.get(cv2.CAP_PROP_FPS)
+        total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+        width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+        height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+
+        # grabCut always runs on the full frame to find the subject everywhere
+        # The "region" parameter controls which part of the background is kept
+        if region == "bottom_third":
+            keep_y_start = height * 2 // 3
+        elif region == "bottom_half":
+            keep_y_start = height // 2
+        elif region == "top_third":
+            keep_y_start = 0
+            keep_y_end = height // 3
+        else:
+            keep_y_start = 0
+            keep_y_end = height
+
+        max_side = 512
+        scale = min(1.0, max_side / max(width, height))
+        if scale < 1.0:
+            s_w = max(1, int(width * scale))
+            s_h = max(1, int(height * scale))
+        else:
+            s_w, s_h = width, height
+
+        frame_index = 0
+        prev_mask = None
+        bg_model = np.zeros((1, 65), np.float64)
+        fg_model = np.zeros((1, 65), np.float64)
+
+        while True:
+            ok, frame = cap.read()
+            if not ok:
+                break
+
+            if scale < 1.0:
+                small = cv2.resize(frame, (s_w, s_h))
+            else:
+                small = frame
+
+            if frame_index % sample_every == 0:
+                mask = np.zeros((s_h, s_w), np.uint8)
+                # Tight grabCut rect: cat is roughly in the lower-center area
+                # For a 1080x1440 video, cat occupies roughly cols 100-900, rows 400-1200
+                # In scaled coords: ~35-320 col, ~140-427 row
+                r_margin = max(4, s_w // 10)
+                r_top = max(4, s_h // 5)
+                r_bottom = s_h - max(4, s_h // 10)
+                r_left = r_margin
+                r_right = s_w - r_margin
+                tight_rect = (r_left, r_top, r_right - r_left, r_bottom - r_top)
+                cv2.grabCut(small, mask, tight_rect, bg_model, fg_model, 4, cv2.GC_INIT_WITH_RECT)
+                prev_mask = mask
+            else:
+                mask = prev_mask
+
+            binary = np.where((mask == 1) | (mask == 3), 255, 0).astype(np.uint8)
+            if scale < 1.0:
+                binary = cv2.resize(binary, (width, height), interpolation=cv2.INTER_NEAREST)
+
+            # Find largest contour to get the subject's bounding box
+            contours, _ = cv2.findContours(binary, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+            if contours:
+                largest = max(contours, key=cv2.contourArea)
+                x, y, bw, bh = cv2.boundingRect(largest)
+                # Only keep foreground within the subject's bbox
+                subject_mask = np.zeros((height, width), dtype=np.uint8)
+                subject_mask[y:y+bh, x:x+bw] = binary[y:y+bh, x:x+bw]
+                binary = subject_mask
+
+            # Keep the region background + the subject
+            if keep_region:
+                if region == "top_third":
+                    binary[:height // 3] = 255
+                else:
+                    binary[keep_y_start:] = 255
+
+            cv2.imwrite(str(output_dir / f"frame_{frame_index:04d}.png"), binary)
+            frame_index += 1
+
+        cap.release()
+        return {
+            "frame_count": frame_index,
+            "output_dir": str(output_dir),
+            "region": region,
+            "fps": fps,
+            "sample_every": sample_every,
+        }
+
+    def export_rgba_video(
+        self,
+        video_path: Path,
+        mask_frames_dir: Path,
+        output_path: Path,
+    ) -> Path:
+        """Composite video frames with alpha masks to produce RGBA video."""
+        try:
+            import cv2
+            import numpy as np
+        except ImportError as exc:
+            raise MediaOpsError("opencv_missing") from exc
+
+        cap = cv2.VideoCapture(str(video_path))
+        fps = cap.get(cv2.CAP_PROP_FPS)
+        width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+        height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+
+        tmp_dir = Path(tempfile.mkdtemp(prefix="rgba_"))
+        fi = 0
+        while True:
+            ok, frame = cap.read()
+            if not ok:
+                break
+            mask_path = mask_frames_dir / f"frame_{fi:04d}.png"
+            alpha = cv2.imread(str(mask_path), cv2.IMREAD_GRAYSCALE) if mask_path.exists() else None
+            if alpha is None:
+                alpha = np.full((height, width), 255, dtype=np.uint8)
+            rgba = cv2.cvtColor(frame, cv2.COLOR_BGR2BGRA)
+            rgba[:, :, 3] = alpha
+            cv2.imwrite(str(tmp_dir / f"frame_{fi:04d}.png"), rgba)
+            fi += 1
+        cap.release()
+
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        # Step 1: encode to ARGB MOV (qtrle preserves alpha losslessly)
+        argb_path = tmp_dir / "_argb.mov"
+        self._run([
+            self._ffmpeg_path(),
+            "-y", "-loglevel", "error",
+            "-framerate", str(fps),
+            "-i", str(tmp_dir / "frame_%04d.png"),
+            "-c:v", "qtrle",
+            "-pix_fmt", "argb",
+            str(argb_path),
+        ])
+        # Step 2: re-encode to VP9 WebM with alpha
+        self._run([
+            self._ffmpeg_path(),
+            "-y", "-loglevel", "error",
+            "-i", str(argb_path),
+            "-c:v", "libvpx-vp9",
+            "-pix_fmt", "yuva420p",
+            "-crf", "30", "-b:v", "0",
+            str(output_path),
+        ])
+        shutil.rmtree(tmp_dir, ignore_errors=True)
+        return output_path
+
+    def _ffmpeg_path(self) -> str:
+        return shutil.which("ffmpeg") or "ffmpeg"
+
     def composite_foreground_over_background(
         self,
         background_path: Path,

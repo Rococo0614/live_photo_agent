@@ -1,0 +1,42 @@
+[
+  {
+    "gx": 0,
+    "gy": 15,
+    "gw": 12,
+    "gh": 8,
+    "role": "foreground",
+    "pin_to_top": true,
+    "image_prompt": "香ξ",
+    "z_order": 0
+  },
+  {
+    "gx": 13,
+    "gy": 16,
+    "gw": 15,
+    "gh": 16,
+    "role": "foreground",
+    "pin_to_top": true,
+    "image_prompt": "2000",
+    "z_order": 1
+  },
+  {
+    "gx": 99,
+    "gy": 92,
+    "gw": 5,
+    "gh": 6,
+    "role": "foreground",
+    "pin_to_top": true,
+    "image_prompt": "2021",
+    "z_order": 2
+  },
+  {
+    "gx": 46,
+    "gy": 148,
+    "gw": 29,
+    "gh": 3,
+    "role": "foreground",
+    "pin_to_top": true,
+    "image_prompt": "OPPO ξ15 Pro",
+    "z_order": 3
+  }
+]

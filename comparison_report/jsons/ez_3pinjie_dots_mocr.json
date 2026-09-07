@@ -1,0 +1,32 @@
+[
+  {
+    "gx": 0,
+    "gy": 0,
+    "gw": 120,
+    "gh": 52,
+    "role": "background",
+    "pin_to_top": false,
+    "image_prompt": "",
+    "z_order": 0
+  },
+  {
+    "gx": 0,
+    "gy": 52,
+    "gw": 120,
+    "gh": 54,
+    "role": "background",
+    "pin_to_top": false,
+    "image_prompt": "",
+    "z_order": 1
+  },
+  {
+    "gx": 0,
+    "gy": 106,
+    "gw": 120,
+    "gh": 52,
+    "role": "background",
+    "pin_to_top": false,
+    "image_prompt": "",
+    "z_order": 2
+  }
+]

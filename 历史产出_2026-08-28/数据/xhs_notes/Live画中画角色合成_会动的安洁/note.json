@@ -1,0 +1,118 @@
+{
+  "meta": {
+    "url": "https://www.xiaohongshu.com/explore/6a746b5100000000240253b4?xsec_token=CBYXA-UFARavphDhPBE6kw_AW4UcIa6y0AZJvi3mGHSYw&xsec_source=pc_share",
+    "note_id": "6a746b5100000000240253b4",
+    "title": "教大家如何在live照片中实现会动的安洁！",
+    "desc": "📷需要用到的工具：美图秀秀\n1️⃣点击修视频，导入官方素材中的gif\n2️⃣点击保存旁边的三个小点，选择导出为live\n3️⃣点击修live，导入你想要放入安洁的live照片\n4️⃣在拼贴中点击编辑，选择画中画，导入安洁live\n5️⃣这个时候的安洁是白底的live，因此还需要选择混合模式-正片叠底来消去白底\n然后你就得到了一张有安洁的live[萌萌哒R]\n#明日方舟[话题]# #予愿安洁莉娜[话题]# #直到大地变成一颗酸橙[话题]# #明日方舟创作者激励计划[话题]#",
+    "tags": [
+      "明日方舟",
+      "予愿安洁莉娜",
+      "直到大地变成一颗酸橙",
+      "明日方舟创作者激励计划"
+    ],
+    "interact": {
+      "liked": 2412,
+      "collected": 1386,
+      "comment": 58,
+      "shared": 490
+    },
+    "author": {
+      "nickname": "Kkk",
+      "user_id": "6113ca94000000000100204d",
+      "avatar": "https://sns-avatar-qc.xhscdn.com/avatar/1040g2jo320d4i5035k005o8jpaa0882dmcdpqio"
+    },
+    "camera_detected": null,
+    "ip_location": "江苏",
+    "post_time": 1786014545000,
+    "captured_at": "2026-08-11 11:04:58"
+  },
+  "media": [
+    {
+      "index": 0,
+      "is_live": true,
+      "width": 2560,
+      "height": 1920,
+      "cover_local": "C:\\Users\\11085203\\BlueCode\\01_live玩法洞察\\数据\\xhs_notes\\6a746b5100000000240253b4\\covers\\cover_00.jpg",
+      "cover_bytes": 40954,
+      "type": "live",
+      "video_url": "http://sns-video-v3.xhscdn.com/stream/1/10/19/01ea746b49458682010050039fd6c37bca_19.mp4?sign=3a8a0eca29e86eca2c8fa3fb69a4477d&t=6a7f2dfe",
+      "video_local": "C:\\Users\\11085203\\BlueCode\\01_live玩法洞察\\数据\\xhs_notes\\6a746b5100000000240253b4\\lives\\live_00.mp4",
+      "video_bytes": 570919,
+      "video_duration": 2.5,
+      "frames_dir": "C:\\Users\\11085203\\BlueCode\\01_live玩法洞察\\数据\\xhs_notes\\6a746b5100000000240253b4\\lives\\live_00_frames",
+      "frames_count": 13
+    },
+    {
+      "index": 1,
+      "is_live": false,
+      "width": 1320,
+      "height": 2868,
+      "cover_local": "C:\\Users\\11085203\\BlueCode\\01_live玩法洞察\\数据\\xhs_notes\\6a746b5100000000240253b4\\covers\\cover_01.jpg",
+      "cover_bytes": 215242,
+      "type": "cover"
+    },
+    {
+      "index": 2,
+      "is_live": false,
+      "width": 1320,
+      "height": 2868,
+      "cover_local": "C:\\Users\\11085203\\BlueCode\\01_live玩法洞察\\数据\\xhs_notes\\6a746b5100000000240253b4\\covers\\cover_02.jpg",
+      "cover_bytes": 90234,
+      "type": "cover"
+    },
+    {
+      "index": 3,
+      "is_live": false,
+      "width": 1320,
+      "height": 2868,
+      "cover_local": "C:\\Users\\11085203\\BlueCode\\01_live玩法洞察\\数据\\xhs_notes\\6a746b5100000000240253b4\\covers\\cover_03.jpg",
+      "cover_bytes": 64302,
+      "type": "cover"
+    },
+    {
+      "index": 4,
+      "is_live": false,
+      "width": 1320,
+      "height": 2868,
+      "cover_local": "C:\\Users\\11085203\\BlueCode\\01_live玩法洞察\\数据\\xhs_notes\\6a746b5100000000240253b4\\covers\\cover_04.jpg",
+      "cover_bytes": 214624,
+      "type": "cover"
+    },
+    {
+      "index": 5,
+      "is_live": false,
+      "width": 1320,
+      "height": 2868,
+      "cover_local": "C:\\Users\\11085203\\BlueCode\\01_live玩法洞察\\数据\\xhs_notes\\6a746b5100000000240253b4\\covers\\cover_05.jpg",
+      "cover_bytes": 92962,
+      "type": "cover"
+    },
+    {
+      "index": 6,
+      "is_live": false,
+      "width": 1320,
+      "height": 2868,
+      "cover_local": "C:\\Users\\11085203\\BlueCode\\01_live玩法洞察\\数据\\xhs_notes\\6a746b5100000000240253b4\\covers\\cover_06.jpg",
+      "cover_bytes": 54634,
+      "type": "cover"
+    },
+    {
+      "index": 7,
+      "is_live": false,
+      "width": 1320,
+      "height": 2868,
+      "cover_local": "C:\\Users\\11085203\\BlueCode\\01_live玩法洞察\\数据\\xhs_notes\\6a746b5100000000240253b4\\covers\\cover_07.jpg",
+      "cover_bytes": 73036,
+      "type": "cover"
+    },
+    {
+      "index": 8,
+      "is_live": false,
+      "width": 1320,
+      "height": 2868,
+      "cover_local": "C:\\Users\\11085203\\BlueCode\\01_live玩法洞察\\数据\\xhs_notes\\6a746b5100000000240253b4\\covers\\cover_08.jpg",
+      "cover_bytes": 90686,
+      "type": "cover"
+    }
+  ]
+}

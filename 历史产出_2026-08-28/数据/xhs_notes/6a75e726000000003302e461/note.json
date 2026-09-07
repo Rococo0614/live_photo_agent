@@ -1,0 +1,37 @@
+{
+  "meta": {
+    "url": "https://www.xiaohongshu.com/explore/6a75e726000000003302e461?xsec_token=ABaGS6jlFaTmaqK8ClSxEH3xCUwgUdWKZNtOe7ipDVfrw=&xsec_source=pc_search",
+    "note_id": "6a75e726000000003302e461",
+    "title": "",
+    "desc": "实况照片总是灰蒙蒙的都可以这样做！#实况调色[话题]#",
+    "tags": [
+      "实况调色"
+    ],
+    "interact": {
+      "liked": 64,
+      "collected": 31,
+      "comment": 2,
+      "shared": 2
+    },
+    "author": {
+      "nickname": "8ne",
+      "user_id": "684f9555000000001e00a1e7",
+      "avatar": "https://sns-avatar-qc.xhscdn.com/avatar/1040g2jo320i4kpaglm605q2filanh8f7sd5pfeg"
+    },
+    "camera_detected": null,
+    "ip_location": "山东",
+    "post_time": 1786111782000,
+    "captured_at": "2026-08-11 10:52:45"
+  },
+  "media": [
+    {
+      "index": 0,
+      "is_live": false,
+      "width": 1080,
+      "height": 1920,
+      "cover_local": "C:\\Users\\11085203\\BlueCode\\01_live玩法洞察\\数据\\xhs_notes\\6a75e726000000003302e461\\covers\\cover_00.jpg",
+      "cover_bytes": 76356,
+      "type": "cover"
+    }
+  ]
+}

@@ -15,6 +15,15 @@ from fastapi.responses import FileResponse
 from .config import settings
 from .foundation import LibraryService, OfflinePreprocessIndexer
 from .foundation.memory import MemoryService
+from .foundation.template_parser import (
+    load_custom_templates,
+    parse_image_to_template,
+    save_all_custom_templates,
+    save_custom_template,
+)
+from .foundation.dots_mocr_parser import parse_image_to_template_dots
+from .foundation.cv_parser import parse_image_to_template_cv
+from .foundation.dino_parser import parse_image_to_template_dino, parse_image_to_template_dino_base
 from .models import AgentRequest, AgentResponse
 from .orchestrator import LivePhotoAgent
 from .ui import build_ui_bootstrap, load_index_html
@@ -274,3 +283,88 @@ def memory_feedback(request: FeedbackRequest) -> dict[str, object]:
         comment=request.comment,
         asset_ids=request.asset_ids,
     )
+
+
+# ---------------------------------------------------------------------------
+# Template parsing (reverse: image -> template JSON)
+# ---------------------------------------------------------------------------
+
+class TemplateParseRequest(BaseModel):
+    image_base64: str
+    image_name: str = "uploaded_image"
+    grid_cols: int = 120
+    grid_rows: int = 160
+    backend: str = "vlm"  # "vlm" | "dots_mocr" | "cv" | "dino" | "dino_base"
+
+
+class TemplateSaveRequest(BaseModel):
+    template: dict[str, object]
+
+
+@app.post("/api/template/parse")
+def template_parse(request: TemplateParseRequest) -> dict[str, object]:
+    """Send an image to VLM and receive a template JSON matching TEMPLATE_LIBRARY format."""
+    import base64 as _b64
+
+    image_bytes = _b64.b64decode(request.image_base64)
+
+    if request.backend == "dots_mocr":
+        result = parse_image_to_template_dots(
+            image_bytes=image_bytes,
+            image_name=request.image_name,
+            grid_cols=request.grid_cols,
+            grid_rows=request.grid_rows,
+        )
+    elif request.backend == "cv":
+        result = parse_image_to_template_cv(
+            image_bytes=image_bytes,
+            image_name=request.image_name,
+            grid_cols=request.grid_cols,
+            grid_rows=request.grid_rows,
+        )
+    elif request.backend == "dino":
+        result = parse_image_to_template_dino(
+            image_bytes=image_bytes,
+            image_name=request.image_name,
+            grid_cols=request.grid_cols,
+            grid_rows=request.grid_rows,
+        )
+    elif request.backend == "dino_base":
+        result = parse_image_to_template_dino_base(
+            image_bytes=image_bytes,
+            image_name=request.image_name,
+            grid_cols=request.grid_cols,
+            grid_rows=request.grid_rows,
+        )
+    else:
+        result = parse_image_to_template(
+            image_bytes=image_bytes,
+            image_name=request.image_name,
+            grid_cols=request.grid_cols,
+            grid_rows=request.grid_rows,
+        )
+    return {"template": result}
+
+
+@app.post("/api/template/save")
+def template_save(request: TemplateSaveRequest) -> dict[str, object]:
+    """Persist a custom template to .custom_templates.json."""
+    saved = save_custom_template(request.template)
+    return {"saved": True, "template": saved}
+
+
+@app.get("/api/template/list")
+def template_list() -> dict[str, object]:
+    """Return all custom templates."""
+    return {"templates": load_custom_templates()}
+
+
+class TemplateSaveAllRequest(BaseModel):
+    templates: list[dict[str, object]]
+
+
+@app.post("/api/template/save-all")
+def template_save_all(request: TemplateSaveAllRequest) -> dict[str, object]:
+    """Batch persist custom templates (e.g. after deletion)."""
+    save_all_custom_templates(request.templates)
+    return {"saved": True, "count": len(request.templates)}

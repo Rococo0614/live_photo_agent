@@ -1,0 +1,70 @@
+[10:27:46] ============================================================
+[10:27:46] 小红书 Live 玩法洞察流水线启动  2026-08-11T10:27:46.451296
+[10:27:46]   dry_run=False  up_to_stage=discover
+[10:27:46] [P1] 运行 fetch_and_search.py 自动搜索发现...
+[10:27:46] $ python fetch_and_search.py 
+[10:27:52] [P1] fetch_and_search.py 未找到目标（143）
+[10:27:52] [P1] 运行 quick_find.py 自动搜索发现...
+[10:27:52] $ python quick_find.py 
+[10:28:07] ============================================================
+[10:28:07] 小红书 Live 玩法洞察流水线启动  2026-08-11T10:28:07.653934
+[10:28:07]   dry_run=False  up_to_stage=fetch
+[10:28:07] [P1] 使用给定 URL: https://www.xiaohongshu.com/explore/6a585a5b000000001c00c16f?xsec_token=ABRyjmtlAoFICGP2nexUYLiBhUnNtKNkdJxbADYPbmx0A=&xsec_source=pc_search&source=web_explore_feed
+[10:28:07] [P2] 6a585a5b000000001c00c16f 已抓取过，跳过（幂等）
+[10:33:15] ============================================================
+[10:33:15] 小红书 Live 玩法洞察流水线启动  2026-08-11T10:33:15.029743
+[10:33:15]   dry_run=False  up_to_stage=viz
+[10:33:15] [URL] 新增收集: 6a585a5b000000001c00c16f
+[10:33:15] [P1] 使用给定 URL: https://www.xiaohongshu.com/explore/6a585a5b000000001c00c16f?xsec_token=ABRyjmtlAoFICGP2nexUYLiBhUnNtKNkdJxbADYPbmx0A=&xsec_source=pc_search&source=web_explore_feed
+[10:33:15] [P2] 6a585a5b000000001c00c16f 已抓取过，投票 +1（共 2 票），跳过本次抓取
+[10:33:15] $ python observe_batch.py 6a585a5b000000001c00c16f 3
+[10:36:00] ============================================================
+[10:36:00] 小红书 Live 玩法洞察流水线启动  2026-08-11T10:36:00.950315
+[10:36:00]   dry_run=False  up_to_stage=viz
+[10:36:00] [URL] 6a585a5b000000001c00c16f 已收集过，投票 +1（共 3 票）
+[10:36:00] [P1] 使用给定 URL: https://www.xiaohongshu.com/explore/6a585a5b000000001c00c16f?xsec_token=ABRyjmtlAoFICGP2nexUYLiBhUnNtKNkdJxbADYPbmx0A=&xsec_source=pc_search&source=web_explore_feed
+[10:36:00] [P2] 6a585a5b000000001c00c16f 已抓取过，投票 +1（共 4 票），跳过本次抓取
+[10:36:00] [去重] 6a585a5b000000001c00c16f 已抓取过，仅投票，跳过本次下游分析
+[10:36:39] ============================================================
+[10:36:39] 小红书 Live 玩法洞察流水线启动  2026-08-11T10:36:39.907370
+[10:36:39]   dry_run=False  up_to_stage=viz
+[10:36:39] [URL] 6a585a5b000000001c00c16f 已收集过（更新时间），本次未计票
+[10:36:39] [P1] 使用给定 URL: https://www.xiaohongshu.com/explore/6a585a5b000000001c00c16f?xsec_token=ABRyjmtlAoFICGP2nexUYLiBhUnNtKNkdJxbADYPbmx0A=&xsec_source=pc_search&source=web_explore_feed
+[10:36:39] [P2] 6a585a5b000000001c00c16f 已抓取过，投票 +1（共 5 票），跳过本次抓取
+[10:36:39] [去重] 6a585a5b000000001c00c16f 已抓取过，仅投票，跳过本次下游分析
+[10:36:48] ============================================================
+[10:36:48] 小红书 Live 玩法洞察流水线启动  2026-08-11T10:36:48.379223
+[10:36:48]   dry_run=False  up_to_stage=viz
+[10:36:48] [URL] 6a585a5b000000001c00c16f 已收集过（更新时间），本次未计票
+[10:36:48] [P1] 使用给定 URL: https://www.xiaohongshu.com/explore/6a585a5b000000001c00c16f?xsec_token=ABRyjmtlAoFICGP2nexUYLiBhUnNtKNkdJxbADYPbmx0A=&xsec_source=pc_search&source=web_explore_feed
+[10:36:48] [P2] 6a585a5b000000001c00c16f 已抓取过，投票 +1（共 6 票），跳过本次抓取
+[10:36:48] [去重] 6a585a5b000000001c00c16f 已抓取过，仅投票，跳过本次下游分析
+[10:38:52] ============================================================
+[10:38:52] 小红书 Live 玩法洞察流水线启动  2026-08-11T10:38:52.053871
+[10:38:52]   dry_run=False  up_to_stage=discover
+[10:38:52] [P1] 运行 fetch_and_search.py 自动搜索发现...
+[10:38:52] $ python fetch_and_search.py 
+[10:41:41] [P1] fetch_and_search.py 未找到目标（143）
+[10:41:41] [P1] 运行 quick_find.py 自动搜索发现...
+[10:41:41] $ python quick_find.py 
+[10:52:24] ============================================================
+[10:52:24] 小红书 Live 玩法洞察流水线启动  2026-08-11T10:52:24.315857
+[10:52:24]   dry_run=False  up_to_stage=fetch
+[10:52:24] [URL] 新增收集: 6a75e726000000003302e461
+[10:52:24] [P1] 使用给定 URL: https://www.xiaohongshu.com/explore/6a75e726000000003302e461?xsec_token=ABaGS6jlFaTmaqK8ClSxEH3xCUwgUdWKZNtOe7ipDVfrw=&xsec_source=pc_search
+[10:52:24] $ python fetch_xhs.py https://www.xiaohongshu.com/explore/6a75e726000000003302e461?xsec_token=ABaGS6jlFaTmaqK8ClSxEH3xCUwgUdWKZNtOe7ipDVfrw=&xsec_source=pc_search
+[10:52:46] [P2] 抓取完成: 6a75e726000000003302e461
+[10:53:40] ============================================================
+[10:53:40] 小红书 Live 玩法洞察流水线启动  2026-08-11T10:53:40.129911
+[10:53:40]   dry_run=False  up_to_stage=viz
+[10:53:40] [URL] 6a75e726000000003302e461 已收集过（更新时间），本次未计票
+[10:53:40] [P1] 使用给定 URL: https://www.xiaohongshu.com/explore/6a75e726000000003302e461?xsec_token=ABaGS6jlFaTmaqK8ClSxEH3xCUwgUdWKZNtOe7ipDVfrw=&xsec_source=pc_search
+[10:53:40] [P2] 6a75e726000000003302e461 已抓取过，投票 +1（共 2 票），跳过本次抓取
+[10:53:40] [去重] 6a75e726000000003302e461 已抓取过，仅投票，跳过本次下游分析
+[11:02:20] ============================================================
+[11:02:20] 小红书 Live 玩法洞察流水线启动  2026-08-11T11:02:20.085638
+[11:02:20]   dry_run=False  up_to_stage=fetch
+[11:02:20] [URL] 新增收集: 6a746b5100000000240253b4
+[11:02:20] [P1] 使用给定 URL: https://www.xiaohongshu.com/explore/6a746b5100000000240253b4?xsec_token=CBYXA-UFARavphDhPBE6kw_AW4UcIa6y0AZJvi3mGHSYw&xsec_source=pc_share
+[11:02:20] $ python fetch_xhs.py https://www.xiaohongshu.com/explore/6a746b5100000000240253b4?xsec_token=CBYXA-UFARavphDhPBE6kw_AW4UcIa6y0AZJvi3mGHSYw&xsec_source=pc_share
+[11:02:47] [P2] 抓取完成: 6a746b5100000000240253b4

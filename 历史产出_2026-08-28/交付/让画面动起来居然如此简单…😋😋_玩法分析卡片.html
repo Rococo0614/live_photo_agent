@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>让画面动起来居然如此简单…😋😋 - 玩法分析卡片</title>
+<style>
+:root {
+    --ink: #2E2A38; --ink2: #3D3844; --muted: #7A748A; --pale: #ADA8B8;
+    --bg: #F8F6FA; --card-bg: rgba(255,255,255,.75); --border: rgba(180,160,200,.2);
+    --grad-accent: linear-gradient(135deg,#7B6B8C,#5A7B8C);
+}
+* { margin:0; padding:0; box-sizing:border-box; }
+body { font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif; background:var(--bg); color:var(--ink); line-height:1.7; }
+.container { max-width:960px; margin:0 auto; padding:0 20px; }
+@keyframes fadeUp { 0%{opacity:0;transform:translateY(24px);} 100%{opacity:1;transform:translateY(0);} }
+.hv { opacity:0; } .hv.vis { animation:fadeUp .7s cubic-bezier(.16,1,.3,1) forwards; }
+.sm { font-size:10px; letter-spacing:.12em; text-transform:uppercase; color:var(--pale); margin-bottom:8px; }
+.ki { font-size:15px; color:var(--ink); line-height:1.8; margin-bottom:12px; }
+.ki b { font-weight:600; color:var(--ink2); }
+.vd { font-size:17px; font-weight:600; color:var(--ink2); margin:16px 0 8px; }
+.st { font-size:12.5px; color:var(--muted); line-height:1.7; }
+.card { background:var(--card-bg); border:1px solid var(--border); border-radius:16px; padding:32px; margin-bottom:24px; backdrop-filter:blur(12px); }
+.hero { background:linear-gradient(135deg,#F2EDF5,#EAF0F5,#EEF3EC); border-radius:20px; padding:48px 40px; margin-bottom:32px; text-align:center; }
+.hero h1 { font-size:26px; font-weight:700; color:var(--ink2); margin-bottom:12px; }
+.hero .subtitle { font-size:15px; color:var(--ink); max-width:620px; margin:0 auto; line-height:1.8; }
+.hero .meta-row { display:flex; justify-content:center; gap:24px; margin-top:20px; flex-wrap:wrap; }
+.hero .meta-item { text-align:center; }
+.hero .meta-num { font-size:22px; font-weight:700; color:var(--ink2); }
+.hero .meta-label { font-size:11px; color:var(--muted); margin-top:2px; }
+.video-wrap { width:100%; aspect-ratio:3/4; overflow:hidden; background:#2A2430; position:relative; border-radius:10px; max-width:320px; margin:0 auto; }
+.video-wrap video { position:absolute; top:0; left:0; width:100%; height:100%; object-fit:contain; }
+.data-grid { display:grid; grid-template-columns:repeat(4,1fr); gap:16px; margin-top:16px; }
+@media (max-width:680px){ .data-grid{grid-template-columns:repeat(2,1fr);} }
+.data-card { text-align:center; padding:20px; background:var(--card-bg); border-radius:14px; border:1px solid var(--border); }
+.data-card .dc-num { font-size:32px; font-weight:700; color:var(--ink2); }
+.data-card .dc-label { font-size:11px; color:var(--muted); margin-top:4px; }
+.tag-row { display:flex; flex-wrap:wrap; gap:8px; margin-top:16px; }
+.tag-pill { padding:6px 16px; border-radius:20px; font-size:12px; background:rgba(180,160,200,.15); color:var(--ink2); }
+.footer { text-align:center; padding:40px 20px; color:var(--pale); font-size:11px; }
+.footer a { color:var(--muted); }
+</style>
+</head>
+<body>
+<div class="container">
+
+<div class="hero hv"><div class="sm">Playbook Analysis Card</div>
+<h1>让画面动起来居然如此简单…😋😋</h1>
+<div class="subtitle">做了一个超简单的手机也能做的仿live2d 教程～
+画面动动起来太萌萌了好喜欢！
+#第五人格[话题]# #园医[话题]# #园医园[话题]# #仿live2d[话题]# #教程[话题]##简单教程[话题]#  #两眼一睁就是第五人格[话题]</div>
+<div class="meta-row">
+<div class="meta-item"><div class="meta-num">1</div><div class="meta-label">Live Photos</div></div>
+<div class="meta-item"><div class="meta-num">15000</div><div class="meta-label">点赞</div></div>
+<div class="meta-item"><div class="meta-num">6218</div><div class="meta-label">收藏</div></div>
+<div class="meta-item"><div class="meta-num">84</div><div class="meta-label">评论</div></div>
+<div class="meta-item"><div class="meta-num">460</div><div class="meta-label">分享</div></div>
+</div></div>
+<div class="card hv"><div class="sm">01 / 原帖 Live 展示</div>
+<div class="ki">原帖共 <b>1 张 Live Photo</b>，作者 <b>肥肥美丽珑</b>。</div>
+<div class="video-wrap"><video preload="metadata" controls playsinline><source src="video_00.mp4" type="video/mp4"></video></div>
+</div>
+<div class="card hv" style="background:#FAFAF8;"><div class="sm">02 / 互动数据</div>
+<div class="data-grid">
+<div class="data-card"><div class="dc-num">6218</div><div class="dc-label">收藏</div></div>
+<div class="data-card"><div class="dc-num">15000</div><div class="dc-label">点赞</div></div>
+<div class="data-card"><div class="dc-num">84</div><div class="dc-label">评论</div></div>
+<div class="data-card"><div class="dc-num">41%</div><div class="dc-label">收藏/点赞比</div></div>
+</div>
+<div class="ki" style="margin-top:16px;">收藏/点赞比 <b>41%</b>，用户收藏意愿较强。</div>
+</div>
+<div class="card hv" style="background:linear-gradient(160deg,#F5F0F8,#EEF5F2);"><div class="sm">03 / 标签</div>
+<div class="tag-row">
+<span class="tag-pill">#第五人格</span>
+<span class="tag-pill">#园医</span>
+<span class="tag-pill">#园医园</span>
+<span class="tag-pill">#仿live2d</span>
+<span class="tag-pill">#教程</span>
+<span class="tag-pill">#简单教程</span>
+<span class="tag-pill">#两眼一睁就是第五人格</span>
+</div></div>
+<div class="footer">
+<p>Generated by MOSS · 1786616640 · 小红书 Live Photo 玩法洞察</p>
+<p>原帖: <a href="https://www.xiaohongshu.com/explore/6a784931000000002c0030ce?xsec_token=ABptiTU8EnXk07LACCTyQc819GzF7KtQ5WyPLEq2w5mOs=&xsec_source=pc_search">让画面动起来居然如此简单…😋😋</a></p>
+</div>
+<script>const o=new IntersectionObserver(es=>{es.forEach(e=>{if(e.isIntersecting)e.target.classList.add("vis");});},{threshold:0.08});document.querySelectorAll(".hv").forEach(el=>o.observe(el));</script>
+</div></body></html>

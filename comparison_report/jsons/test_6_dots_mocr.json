@@ -1,0 +1,42 @@
+[
+  {
+    "gx": 11,
+    "gy": 19,
+    "gw": 99,
+    "gh": 31,
+    "role": "background",
+    "pin_to_top": false,
+    "image_prompt": "",
+    "z_order": 0
+  },
+  {
+    "gx": 38,
+    "gy": 60,
+    "gw": 50,
+    "gh": 18,
+    "role": "foreground",
+    "pin_to_top": true,
+    "image_prompt": "The Art of Bathing in Nature's Embrace\nImmerse yourself in the serene rhythm of\nNordic bathing—where water, light, and air\nmove in quiet harmony.\nInspired by the untouched landscapes of\nthe North, this ritual celebrates simplicity,\npurity, and the gentle flow of nature.",
+    "z_order": 1
+  },
+  {
+    "gx": 41,
+    "gy": 87,
+    "gw": 38,
+    "gh": 33,
+    "role": "background",
+    "pin_to_top": false,
+    "image_prompt": "",
+    "z_order": 2
+  },
+  {
+    "gx": 35,
+    "gy": 133,
+    "gw": 53,
+    "gh": 4,
+    "role": "foreground",
+    "pin_to_top": true,
+    "image_prompt": "Go With the Nordic Flow",
+    "z_order": 3
+  }
+]

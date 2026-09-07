@@ -1,0 +1,112 @@
+[
+  {
+    "gx": 71,
+    "gy": 19,
+    "gw": 41,
+    "gh": 5,
+    "role": "foreground",
+    "pin_to_top": true,
+    "image_prompt": "When we arrived at the",
+    "z_order": 0
+  },
+  {
+    "gx": 71,
+    "gy": 23,
+    "gw": 40,
+    "gh": 5,
+    "role": "foreground",
+    "pin_to_top": true,
+    "image_prompt": "southernmost tip of the",
+    "z_order": 1
+  },
+  {
+    "gx": 71,
+    "gy": 28,
+    "gw": 49,
+    "gh": 5,
+    "role": "foreground",
+    "pin_to_top": true,
+    "image_prompt": "African continent, Cape Town",
+    "z_order": 2
+  },
+  {
+    "gx": 71,
+    "gy": 33,
+    "gw": 42,
+    "gh": 5,
+    "role": "foreground",
+    "pin_to_top": true,
+    "image_prompt": "was right in front of us",
+    "z_order": 3
+  },
+  {
+    "gx": 71,
+    "gy": 38,
+    "gw": 41,
+    "gh": 5,
+    "role": "foreground",
+    "pin_to_top": true,
+    "image_prompt": "an unforgettable journey.",
+    "z_order": 4
+  },
+  {
+    "gx": 13,
+    "gy": 123,
+    "gw": 24,
+    "gh": 4,
+    "role": "foreground",
+    "pin_to_top": true,
+    "image_prompt": "Summer is a blue sea",
+    "z_order": 5
+  },
+  {
+    "gx": 13,
+    "gy": 128,
+    "gw": 13,
+    "gh": 5,
+    "role": "foreground",
+    "pin_to_top": true,
+    "image_prompt": "a free breeze",
+    "z_order": 6
+  },
+  {
+    "gx": 13,
+    "gy": 133,
+    "gw": 34,
+    "gh": 5,
+    "role": "foreground",
+    "pin_to_top": true,
+    "image_prompt": "a passionate and romantic season",
+    "z_order": 7
+  },
+  {
+    "gx": 86,
+    "gy": 134,
+    "gw": 12,
+    "gh": 3,
+    "role": "foreground",
+    "pin_to_top": true,
+    "image_prompt": "Emergency Entrance",
+    "z_order": 8
+  },
+  {
+    "gx": 86,
+    "gy": 135,
+    "gw": 12,
+    "gh": 3,
+    "role": "foreground",
+    "pin_to_top": true,
+    "image_prompt": "No Parking Between",
+    "z_order": 9
+  },
+  {
+    "gx": 88,
+    "gy": 137,
+    "gw": 8,
+    "gh": 2,
+    "role": "foreground",
+    "pin_to_top": true,
+    "image_prompt": "Yellow Lines",
+    "z_order": 10
+  }
+]

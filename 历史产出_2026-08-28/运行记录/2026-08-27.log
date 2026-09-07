@@ -1,0 +1,12 @@
+[11:00:41] ============================================================
+[11:00:41] 小红书 Live 玩法洞察流水线启动  2026-08-27T11:00:41.270116
+[11:00:41]   dry_run=False  up_to_stage=viz
+[11:00:41] [P1] 运行 fetch_and_search.py 自动搜索发现...
+[11:00:41] $ python fetch_and_search.py 
+[11:00:57] [P1] fetch_and_search.py 未找到目标（1）
+[11:00:57] [P1] 运行 quick_find.py 自动搜索发现...
+[11:00:57] $ python quick_find.py 
+[11:04:09] [P1] 发现目标: https://www.xiaohongshu.com/explore/6a8828f100000000160224db?xsec_token=ABmzhObYk1NEHR51oW5MyjW2h4pD88u_PRdhkAZAYHU3s=&xsec_source=pc_search
+[11:04:09] [URL] 6a8828f100000000160224db 已收集过（更新时间），本次未计票
+[11:04:09] [P2] 6a8828f100000000160224db 已抓取过，投票 +1（共 5 票），跳过本次抓取
+[11:04:09] [去重] 6a8828f100000000160224db 已抓取过，仅投票，跳过本次下游分析

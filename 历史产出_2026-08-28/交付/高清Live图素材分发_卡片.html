@@ -1,0 +1,351 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>18张爆款Live图素材分发 - 玩法分析卡片</title>
+<style>
+:root {
+    --ink: #2E2A38;
+    --ink2: #3D3844;
+    --muted: #7A748A;
+    --pale: #ADA8B8;
+    --bg: #F8F6FA;
+    --card-bg: rgba(255,255,255,.75);
+    --border: rgba(180,160,200,.2);
+    --grad-accent: linear-gradient(135deg,#7B6B8C,#5A7B8C);
+}
+* { margin:0; padding:0; box-sizing:border-box; }
+body { font-family: -apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif; background:var(--bg); color:var(--ink); line-height:1.7; }
+.container { max-width:960px; margin:0 auto; padding:0 20px; }
+
+/* Animation */
+@keyframes fadeUp {
+    0% { opacity:0; transform:translateY(24px); }
+    100% { opacity:1; transform:translateY(0); }
+}
+.hv { opacity:0; }
+.hv.vis { animation: fadeUp .7s cubic-bezier(.16,1,.3,1) forwards; }
+
+/* Section marker */
+.sm { font-size:10px; letter-spacing:.12em; text-transform:uppercase; color:var(--pale); margin-bottom:8px; }
+
+/* Key insight */
+.ki { font-size:15px; color:var(--ink); line-height:1.8; margin-bottom:12px; }
+.ki b { font-weight:600; color:var(--ink2); }
+
+/* Verdict */
+.vd { font-size:17px; font-weight:600; color:var(--ink2); margin:16px 0 8px; }
+
+/* Support text */
+.st { font-size:12.5px; color:var(--muted); line-height:1.7; }
+
+/* Cards */
+.card { background:var(--card-bg); border:1px solid var(--border); border-radius:16px; padding:32px; margin-bottom:24px; backdrop-filter:blur(12px); }
+
+/* Hero */
+.hero { background:linear-gradient(135deg,#F2EDF5,#EAF0F5,#EEF3EC); border-radius:20px; padding:48px 40px; margin-bottom:32px; text-align:center; }
+.hero h1 { font-size:28px; font-weight:700; color:var(--ink2); margin-bottom:12px; }
+.hero .subtitle { font-size:16px; color:var(--ink); max-width:600px; margin:0 auto; line-height:1.8; }
+.hero .meta-row { display:flex; justify-content:center; gap:24px; margin-top:20px; flex-wrap:wrap; }
+.hero .meta-item { text-align:center; }
+.hero .meta-num { font-size:22px; font-weight:700; color:var(--ink2); }
+.hero .meta-label { font-size:11px; color:var(--muted); margin-top:2px; }
+
+/* Video grid */
+.video-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:12px; margin-top:16px; }
+.vc-video-wrap { width:100%; aspect-ratio:3/4; overflow:hidden; background:#2A2430; position:relative; border-radius:10px; }
+.vc-video-wrap video { position:absolute; top:0; left:0; width:100%; height:100%; object-fit:contain; }
+.vc-label { font-size:10px; color:var(--muted); text-align:center; margin-top:4px; }
+
+/* Dual column */
+.dual { display:grid; grid-template-columns:1fr 1fr; gap:20px; }
+@media (max-width:680px) { .dual { grid-template-columns:1fr; } }
+
+/* Score cards */
+.sc-grid { display:grid; grid-template-columns:repeat(2,1fr); gap:16px; margin-top:16px; }
+@media (max-width:680px) { .sc-grid { grid-template-columns:1fr; } }
+.sc { border-radius:14px; padding:24px; border:1px solid var(--border); }
+.sc.c1 { background:linear-gradient(135deg,#EDE6F3,#E2EDF4); }
+.sc.c2 { background:linear-gradient(135deg,#E6F0EC,#EBE6F2); }
+.sc.c3 { background:linear-gradient(135deg,#F2EAE7,#EBE8F2); }
+.sc.c4 { background:linear-gradient(135deg,#E8EFF2,#EAE8F0); }
+.sc h3 { font-size:15px; font-weight:600; color:var(--ink2); margin-bottom:8px; }
+.sc .score-bar { height:6px; background:rgba(0,0,0,.08); border-radius:3px; margin:12px 0; overflow:hidden; }
+.sc .score-fill { height:100%; border-radius:3px; background:var(--grad-accent); width:0; transition:width 1.2s cubic-bezier(.16,1,.3,1); }
+.sc .score-num { font-size:28px; font-weight:700; color:var(--ink2); }
+
+/* Capability tags */
+.cap-tag { display:inline-block; padding:4px 14px; border-radius:20px; font-size:12px; margin:3px 6px 3px 0; }
+.cap-tag.has { background:linear-gradient(135deg,#E8E2F0,#DCE8F0); color:var(--ink2); font-weight:500; }
+.cap-tag.need { background:rgba(0,0,0,.04); color:var(--muted); }
+
+/* Phase flow */
+.phase-flow { display:flex; gap:12px; margin:16px 0; flex-wrap:wrap; }
+.phase-step { flex:1; min-width:140px; background:var(--card-bg); border:1px solid var(--border); border-radius:12px; padding:16px; text-align:center; }
+.phase-step .ph-num { font-size:24px; font-weight:700; color:var(--pale); }
+.phase-step .ph-title { font-size:13px; font-weight:600; color:var(--ink2); margin:4px 0; }
+.phase-step .ph-desc { font-size:11px; color:var(--muted); }
+
+/* Tag row */
+.tag-row { display:flex; flex-wrap:wrap; gap:8px; }
+.tag-pill { padding:6px 16px; border-radius:20px; font-size:12px; background:rgba(180,160,200,.15); color:var(--ink2); }
+
+/* Footer */
+.footer { text-align:center; padding:40px 20px; color:var(--pale); font-size:11px; }
+.footer a { color:var(--muted); }
+
+/* Data highlight */
+.data-grid { display:grid; grid-template-columns:repeat(4,1fr); gap:16px; margin-top:16px; }
+@media (max-width:680px) { .data-grid { grid-template-columns:repeat(2,1fr); } }
+.data-card { text-align:center; padding:20px; background:var(--card-bg); border-radius:14px; border:1px solid var(--border); }
+.data-card .dc-num { font-size:32px; font-weight:700; color:var(--ink2); }
+.data-card .dc-label { font-size:11px; color:var(--muted); margin-top:4px; }
+</style>
+</head>
+<body>
+<div class="container">
+
+<div class="hero hv">
+<div class="sm">Playbook Analysis Card</div>
+<h1>高清Live图素材分发</h1>
+<div class="subtitle">通过持续发布高质量免费Live Photo素材，利用"收藏即拥有"心理驱动用户互动，以素材资产积累构建账号壁垒的玩法范式</div>
+<div class="meta-row">
+<div class="meta-item"><div class="meta-num">18</div><div class="meta-label">Live Photos</div></div>
+<div class="meta-item"><div class="meta-num">33</div><div class="meta-label">点赞</div></div>
+<div class="meta-item"><div class="meta-num">14</div><div class="meta-label">收藏</div></div>
+<div class="meta-item"><div class="meta-num">17</div><div class="meta-label">评论</div></div>
+<div class="meta-item"><div class="meta-num">3</div><div class="meta-label">分享</div></div>
+</div>
+</div>
+
+<div class="card hv"><div class="sm">01 / 原帖 Live 素材展示</div>
+<div class="ki">原帖包含 <b>18 张 Live Photo</b>，涵盖海滩日落、城市街景、窗景建筑、露营篝火、雨天街拍等多样化场景，均为作者原创高清素材。</div>
+<div class="video-grid">
+<div>
+<div class="vc-video-wrap"><video preload="metadata" controls playsinline><source src="live_00.mp4" type="video/mp4"></video></div>
+<div class="vc-label">Live 00</div>
+</div>
+<div>
+<div class="vc-video-wrap"><video preload="metadata" controls playsinline><source src="live_01.mp4" type="video/mp4"></video></div>
+<div class="vc-label">Live 01</div>
+</div>
+<div>
+<div class="vc-video-wrap"><video preload="metadata" controls playsinline><source src="live_02.mp4" type="video/mp4"></video></div>
+<div class="vc-label">Live 02</div>
+</div>
+<div>
+<div class="vc-video-wrap"><video preload="metadata" controls playsinline><source src="live_03.mp4" type="video/mp4"></video></div>
+<div class="vc-label">Live 03</div>
+</div>
+<div>
+<div class="vc-video-wrap"><video preload="metadata" controls playsinline><source src="live_04.mp4" type="video/mp4"></video></div>
+<div class="vc-label">Live 04</div>
+</div>
+<div>
+<div class="vc-video-wrap"><video preload="metadata" controls playsinline><source src="live_05.mp4" type="video/mp4"></video></div>
+<div class="vc-label">Live 05</div>
+</div>
+<div>
+<div class="vc-video-wrap"><video preload="metadata" controls playsinline><source src="live_06.mp4" type="video/mp4"></video></div>
+<div class="vc-label">Live 06</div>
+</div>
+<div>
+<div class="vc-video-wrap"><video preload="metadata" controls playsinline><source src="live_07.mp4" type="video/mp4"></video></div>
+<div class="vc-label">Live 07</div>
+</div>
+<div>
+<div class="vc-video-wrap"><video preload="metadata" controls playsinline><source src="live_08.mp4" type="video/mp4"></video></div>
+<div class="vc-label">Live 08</div>
+</div>
+<div>
+<div class="vc-video-wrap"><video preload="metadata" controls playsinline><source src="live_09.mp4" type="video/mp4"></video></div>
+<div class="vc-label">Live 09</div>
+</div>
+<div>
+<div class="vc-video-wrap"><video preload="metadata" controls playsinline><source src="live_10.mp4" type="video/mp4"></video></div>
+<div class="vc-label">Live 10</div>
+</div>
+<div>
+<div class="vc-video-wrap"><video preload="metadata" controls playsinline><source src="live_11.mp4" type="video/mp4"></video></div>
+<div class="vc-label">Live 11</div>
+</div>
+<div>
+<div class="vc-video-wrap"><video preload="metadata" controls playsinline><source src="live_12.mp4" type="video/mp4"></video></div>
+<div class="vc-label">Live 12</div>
+</div>
+<div>
+<div class="vc-video-wrap"><video preload="metadata" controls playsinline><source src="live_13.mp4" type="video/mp4"></video></div>
+<div class="vc-label">Live 13</div>
+</div>
+<div>
+<div class="vc-video-wrap"><video preload="metadata" controls playsinline><source src="live_14.mp4" type="video/mp4"></video></div>
+<div class="vc-label">Live 14</div>
+</div>
+<div>
+<div class="vc-video-wrap"><video preload="metadata" controls playsinline><source src="live_15.mp4" type="video/mp4"></video></div>
+<div class="vc-label">Live 15</div>
+</div>
+<div>
+<div class="vc-video-wrap"><video preload="metadata" controls playsinline><source src="live_16.mp4" type="video/mp4"></video></div>
+<div class="vc-label">Live 16</div>
+</div>
+<div>
+<div class="vc-video-wrap"><video preload="metadata" controls playsinline><source src="live_17.mp4" type="video/mp4"></video></div>
+<div class="vc-label">Live 17</div>
+</div>
+</div>
+</div>
+<div class="card hv" style="background:#FAFAF8;"><div class="sm">02 / 玩法判断依据 + 技术痕迹</div>
+<div class="dual">
+<div>
+<div class="vd">素材分发型账号</div>
+<div class="ki">账号定位为"每日分享免费素材"，标题含"高清未使用 喜欢拿"，描述引导"礼貌拿图""拿图私"，属于典型的<b>素材资产驱动型</b>内容策略。</div>
+<div class="st">作者昵称"樂安（原创素材）"，标签含"原创素材""爆款素材""高清素材""氛围感素材"，身份即品牌。</div>
+</div>
+<div>
+<div class="vd">技术痕迹</div>
+<div class="ki">所有 Live Photo 时长在 <b>2.5-3.0s</b> 之间，画面稳定、无明显抖动。部分场景可见手持手机拍摄（画面中出现手指/手机边框），表明为<b>手机原生相机直出</b>，未使用第三方工具。</div>
+<div class="st">视频格式为 EF4 编码流，分辨率 3024x4032（竖屏 3:4），帧率 5fps 抽帧后仍保持高清细节。</div>
+</div>
+</div></div>
+<div class="card hv" style="background:#FAFAF8;"><div class="sm">03 / 互动数据分析</div>
+<div class="data-grid">
+<div class="data-card"><div class="dc-num">14</div><div class="dc-label">收藏</div></div>
+<div class="data-card"><div class="dc-num">33</div><div class="dc-label">点赞</div></div>
+<div class="data-card"><div class="dc-num">17</div><div class="dc-label">评论</div></div>
+<div class="data-card"><div class="dc-num">42%</div><div class="dc-label">收藏/点赞比</div></div>
+</div>
+<div class="ki" style="margin-top:16px;"><b>收藏/点赞比 42%</b> 远超普通内容（通常 10-20%），说明用户收藏意愿强烈——"素材"定位精准触达了"先收藏以后用"的需求。</div>
+<div class="st">评论 17 条中预计多数为"求图""拿图"等索取型互动，进一步验证素材分发模式的有效性。帖子发布仅 1 天，数据仍在增长中。</div>
+</div>
+<div class="card hv" style="background:linear-gradient(160deg,#F5F0F8,#EFF5F2);">
+<div class="sm">04 / 破圈四要素评估</div>
+<div class="sc-grid">
+<div class="sc c1 hv">
+<h3>情绪共鸣</h3>
+<div class="score-num">7.5<span style="font-size:14px;color:var(--muted);">/10</span></div>
+<div class="score-bar"><div class="score-fill" data-width="75"></div></div>
+<div class="ki"><b>核心情绪：占有欲 + 审美满足</b></div>
+<div class="st">18张高清Live图覆盖海滩日落、城市街景、露营篝火等场景，画面精美、氛围感强。用户看到精美素材产生"想拥有"的冲动，收藏=免费获取。</div>
+<div class="st" style="margin-top:4px;">减分：场景之间缺乏叙事连贯性，更像"素材目录"而非"故事"，难以形成强烈情感记忆点。</div>
+</div>
+<div class="sc c2 hv">
+<h3>实用价值</h3>
+<div class="score-num">8.5<span style="font-size:14px;color:var(--muted);">/10</span></div>
+<div class="score-bar"><div class="score-fill" data-width="85"></div></div>
+<div class="ki"><b>核心价值：免费高清素材库</b></div>
+<div class="st">Live Photo作为壁纸、朋友圈背景、创作素材具有直接使用价值。"高清未使用""喜欢拿"降低获取心理门槛。18张的批量规模满足"一站式"需求。</div>
+<div class="st" style="margin-top:4px;">加分：素材定位稀缺（"高清""原创""未使用"），与普通搬运号形成差异化。</div>
+</div>
+<div class="sc c3 hv">
+<h3>社交货币</h3>
+<div class="score-num">5.5<span style="font-size:14px;color:var(--muted);">/10</span></div>
+<div class="score-bar"><div class="score-fill" data-width="55"></div></div>
+<div class="ki"><b>分享动机偏弱，但收藏行为即社交信号</b></div>
+<div class="st">收藏行为在小红书是半公开的（可在个人主页查看），批量收藏高颜值素材本身是一种"品位展示"。但用户分享给他人的动机较弱——素材是"自用"而非"转发"。</div>
+<div class="st" style="margin-top:4px;">评论区的"求图"互动形成微型社区感，但尚未形成分享裂变机制。</div>
+</div>
+<div class="sc c4 hv">
+<h3>传播效率</h3>
+<div class="score-num">6.5<span style="font-size:14px;color:var(--muted);">/10</span></div>
+<div class="score-bar"><div class="score-fill" data-width="65"></div></div>
+<div class="ki"><b>Live Photo 格式本身具有传播优势</b></div>
+<div class="st">Live Photo在信息流中自动播放，3秒动态画面比静态图片更能吸引停留。@我的年度live图 标签自带话题热度。但18张连续Live造成加载压力，可能影响完播率。</div>
+<div class="st" style="margin-top:4px;">优化方向：首图选最强画面（海滩日落），中间穿插场景切换保持新鲜感。</div>
+</div>
+</div></div>
+<div class="card hv" style="background:#FAFAF8;">
+<div class="sm">05 / 涉及的原子能力</div>
+<div class="ki" style="margin-bottom:20px;"><b>已有能力</b>（手机端已原生支持） vs <b>待增强能力</b>（产品化方向）</div>
+<div style="margin-bottom:20px;">
+<div class="vd" style="font-size:14px;">已具备</div>
+<span class="cap-tag has">Live Photo 拍摄</span>
+<span class="cap-tag has">原生相机直出</span>
+<span class="cap-tag has">竖屏构图 (3:4)</span>
+<span class="cap-tag has">自动曝光/白平衡</span>
+<span class="cap-tag has">场景自动识别</span>
+<span class="cap-tag has">批量选择/发布</span>
+</div>
+<div>
+<div class="vd" style="font-size:14px;">产品化机会</div>
+<span class="cap-tag need">一键素材水印</span>
+<span class="cap-tag need">Live Photo 编辑（调色/裁剪）</span>
+<span class="cap-tag need">批量导出为 GIF/视频</span>
+<span class="cap-tag need">素材打包分享</span>
+<span class="cap-tag need">智能场景分类</span>
+<span class="cap-tag need">一键去隐私信息</span>
+<span class="cap-tag need">素材使用授权声明</span>
+</div>
+</div>
+<div class="card hv" style="background:linear-gradient(160deg,#EEF2F6,#F3EEF5);">
+<div class="sm">06 / 产品化可能性分析</div>
+<div class="vd">手机厂商可打造"素材创作"模式，降低Live Photo使用门槛</div>
+<div class="phase-flow">
+<div class="phase-step"><div class="ph-num">1</div><div class="ph-title">拍摄增强</div><div class="ph-desc">AI场景识别 + 构图建议，提升素人拍出高质感Live Photo的成功率</div></div>
+<div class="phase-step"><div class="ph-num">2</div><div class="ph-title">素材管理</div><div class="ph-desc">自动分类（风景/街拍/美食），标记"可分享"状态，一键去隐私</div></div>
+<div class="phase-step"><div class="ph-num">3</div><div class="ph-title">社区分发</div><div class="ph-desc">内置素材广场，用户可发布/下载Live Photo素材，形成UGC生态</div></div>
+<div class="phase-step"><div class="ph-num">4</div><div class="ph-title">品牌联动</div><div class="ph-desc">与小红书API打通，一键发布18张Live Photo，自动生成素材标签</div></div>
+</div>
+<div class="ki">核心逻辑：<b>降低"拍出好Live Photo"的门槛 → 提升素材供给量 → 形成素材社区 → 手机成为"Live Photo创作工具"</b>，差异化于iPhone的"只是记录"定位。</div>
+</div>
+<div class="card hv" style="background:linear-gradient(160deg,#F5F0F8,#EEF5F2);">
+<div class="sm">07 / 迁移场景</div>
+<div class="tag-row">
+<span class="tag-pill">壁纸分享社区</span>
+<span class="tag-pill">朋友圈背景素材</span>
+<span class="tag-pill">短视频创作素材</span>
+<span class="tag-pill">品牌视觉营销</span>
+<span class="tag-pill">旅游打卡攻略</span>
+<span class="tag-pill">摄影教学案例</span>
+<span class="tag-pill">AI训练数据集</span>
+</div>
+</div>
+<div class="card hv" style="background:#FAFAF8;">
+<div class="dual">
+<div>
+<div class="sm">08 / 关键词入库</div>
+<div class="ki">#Live图素材 #高清壁纸 #氛围感素材 #原创素材 #摄影素材 #免费素材 #LivePhoto #实况照片 #素材分享 #手机摄影</div>
+</div>
+<div>
+<div class="sm">待补充数据</div>
+<div class="st">- 作者主页其他帖子数据（验证持续性）<br>- 评论内容分析（"求图"占比）<br>- 收藏后实际使用率（需调研）<br>- 同类素材号对比（粉丝量/增速）<br>- 18张中单张最高互动</div>
+</div>
+</div></div>
+<div class="footer">
+<p>Generated by MOSS · 2026-07-30 · 小红书 Live Photo 玩法洞察</p>
+<p>原帖: <a href="https://www.xiaohongshu.com/explore/6a6984ca000000002201bf75">18张爆款live 图 | 高清未使用 喜欢拿</a> · 作者: 樂安（原创素材）</p>
+</div>
+<script>
+// Scroll animations
+const observer = new IntersectionObserver((entries) => {
+    entries.forEach(e => {
+        if (e.isIntersecting) {
+            e.target.classList.add('vis');
+            // Score bars
+            const bars = e.target.querySelectorAll('.score-fill');
+            bars.forEach(b => {
+                setTimeout(() => { b.style.width = b.dataset.width + '%'; }, 180);
+            });
+        }
+    });
+}, { threshold: 0.08 });
+
+document.querySelectorAll('.hv').forEach(el => observer.observe(el));
+
+// Also observe score bars within already-visible sections
+const scoreObserver = new IntersectionObserver((entries) => {
+    entries.forEach(e => {
+        if (e.isIntersecting) {
+            const bars = e.target.querySelectorAll('.score-fill');
+            bars.forEach(b => {
+                setTimeout(() => { b.style.width = b.dataset.width + '%'; }, 180);
+            });
+        }
+    });
+}, { threshold: 0.4 });
+
+document.querySelectorAll('.sc').forEach(el => scoreObserver.observe(el));
+</script>
+
+</div></body></html>

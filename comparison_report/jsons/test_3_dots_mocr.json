@@ -1,0 +1,242 @@
+[
+  {
+    "gx": 52,
+    "gy": 30,
+    "gw": 8,
+    "gh": 3,
+    "role": "foreground",
+    "pin_to_top": true,
+    "image_prompt": "东巴谷",
+    "z_order": 0
+  },
+  {
+    "gx": 50,
+    "gy": 5,
+    "gw": 19,
+    "gh": 24,
+    "role": "background",
+    "pin_to_top": false,
+    "image_prompt": "",
+    "z_order": 1
+  },
+  {
+    "gx": 20,
+    "gy": 43,
+    "gw": 6,
+    "gh": 3,
+    "role": "foreground",
+    "pin_to_top": true,
+    "image_prompt": "pingu",
+    "z_order": 2
+  },
+  {
+    "gx": 11,
+    "gy": 11,
+    "gw": 23,
+    "gh": 31,
+    "role": "background",
+    "pin_to_top": false,
+    "image_prompt": "",
+    "z_order": 3
+  },
+  {
+    "gx": 102,
+    "gy": 55,
+    "gw": 6,
+    "gh": 3,
+    "role": "foreground",
+    "pin_to_top": true,
+    "image_prompt": "樱花",
+    "z_order": 4
+  },
+  {
+    "gx": 86,
+    "gy": 28,
+    "gw": 20,
+    "gh": 26,
+    "role": "background",
+    "pin_to_top": false,
+    "image_prompt": "",
+    "z_order": 5
+  },
+  {
+    "gx": 49,
+    "gy": 67,
+    "gw": 23,
+    "gh": 9,
+    "role": "foreground",
+    "pin_to_top": true,
+    "image_prompt": "SYSTEM 7 RELEASE 7.1",
+    "z_order": 6
+  },
+  {
+    "gx": 70,
+    "gy": 51,
+    "gw": 16,
+    "gh": 18,
+    "role": "background",
+    "pin_to_top": false,
+    "image_prompt": "",
+    "z_order": 7
+  },
+  {
+    "gx": 51,
+    "gy": 86,
+    "gw": 18,
+    "gh": 6,
+    "role": "foreground",
+    "pin_to_top": true,
+    "image_prompt": "THE BETA RELEASE",
+    "z_order": 8
+  },
+  {
+    "gx": 75,
+    "gy": 76,
+    "gw": 15,
+    "gh": 5,
+    "role": "background",
+    "pin_to_top": false,
+    "image_prompt": "",
+    "z_order": 9
+  },
+  {
+    "gx": 100,
+    "gy": 98,
+    "gw": 6,
+    "gh": 3,
+    "role": "foreground",
+    "pin_to_top": true,
+    "image_prompt": "洱海",
+    "z_order": 10
+  },
+  {
+    "gx": 90,
+    "gy": 67,
+    "gw": 23,
+    "gh": 30,
+    "role": "background",
+    "pin_to_top": false,
+    "image_prompt": "",
+    "z_order": 11
+  },
+  {
+    "gx": 10,
+    "gy": 90,
+    "gw": 8,
+    "gh": 3,
+    "role": "foreground",
+    "pin_to_top": true,
+    "image_prompt": "牦牛坪",
+    "z_order": 12
+  },
+  {
+    "gx": 6,
+    "gy": 58,
+    "gw": 23,
+    "gh": 31,
+    "role": "background",
+    "pin_to_top": false,
+    "image_prompt": "",
+    "z_order": 13
+  },
+  {
+    "gx": 30,
+    "gy": 77,
+    "gw": 16,
+    "gh": 4,
+    "role": "background",
+    "pin_to_top": false,
+    "image_prompt": "",
+    "z_order": 14
+  },
+  {
+    "gx": 25,
+    "gy": 134,
+    "gw": 8,
+    "gh": 3,
+    "role": "foreground",
+    "pin_to_top": true,
+    "image_prompt": "蓝月谷",
+    "z_order": 15
+  },
+  {
+    "gx": 14,
+    "gy": 103,
+    "gw": 22,
+    "gh": 29,
+    "role": "background",
+    "pin_to_top": false,
+    "image_prompt": "",
+    "z_order": 16
+  },
+  {
+    "gx": 36,
+    "gy": 89,
+    "gw": 13,
+    "gh": 14,
+    "role": "background",
+    "pin_to_top": false,
+    "image_prompt": "",
+    "z_order": 17
+  },
+  {
+    "gx": 50,
+    "gy": 94,
+    "gw": 9,
+    "gh": 34,
+    "role": "background",
+    "pin_to_top": false,
+    "image_prompt": "",
+    "z_order": 18
+  },
+  {
+    "gx": 63,
+    "gy": 152,
+    "gw": 11,
+    "gh": 3,
+    "role": "foreground",
+    "pin_to_top": true,
+    "image_prompt": "玉龙雪山",
+    "z_order": 19
+  },
+  {
+    "gx": 46,
+    "gy": 131,
+    "gw": 20,
+    "gh": 25,
+    "role": "background",
+    "pin_to_top": false,
+    "image_prompt": "",
+    "z_order": 20
+  },
+  {
+    "gx": 69,
+    "gy": 91,
+    "gw": 16,
+    "gh": 21,
+    "role": "background",
+    "pin_to_top": false,
+    "image_prompt": "",
+    "z_order": 21
+  },
+  {
+    "gx": 96,
+    "gy": 141,
+    "gw": 6,
+    "gh": 3,
+    "role": "foreground",
+    "pin_to_top": true,
+    "image_prompt": "大理",
+    "z_order": 22
+  },
+  {
+    "gx": 86,
+    "gy": 113,
+    "gw": 21,
+    "gh": 27,
+    "role": "background",
+    "pin_to_top": false,
+    "image_prompt": "",
+    "z_order": 23
+  }
+]

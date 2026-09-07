@@ -1,0 +1,22 @@
+[
+  {
+    "gx": 38,
+    "gy": 19,
+    "gw": 64,
+    "gh": 106,
+    "role": "background",
+    "pin_to_top": false,
+    "image_prompt": "",
+    "z_order": 0
+  },
+  {
+    "gx": 44,
+    "gy": 126,
+    "gw": 34,
+    "gh": 19,
+    "role": "foreground",
+    "pin_to_top": true,
+    "image_prompt": "THERE IS A CRACK IN EVERYTHING THAT'S HOW THE LIGHT GETS IN.",
+    "z_order": 1
+  }
+]

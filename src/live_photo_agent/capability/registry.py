@@ -41,6 +41,7 @@ class ToolRegistry:
             ToolName.SET_DISPLAY_FRAME: self.l0.set_display_frame,
             ToolName.EXTRACT_SUBJECT_MATTE: self.l0.extract_subject_matte,
             ToolName.OVERLAY_SUBJECT_CLIP: self.l0.overlay_subject_clip,
+            ToolName.EXTRACT_REGION_MATTE: self.l0.extract_region_matte,
         }
 
     def execute(self, call: ToolCall, context: dict[str, object]) -> ToolResult:

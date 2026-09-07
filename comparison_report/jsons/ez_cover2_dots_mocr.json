@@ -1,0 +1,32 @@
+[
+  {
+    "gx": 34,
+    "gy": 49,
+    "gw": 37,
+    "gh": 4,
+    "role": "foreground",
+    "pin_to_top": true,
+    "image_prompt": "HEALING THE CORNER OF",
+    "z_order": 0
+  },
+  {
+    "gx": 40,
+    "gy": 54,
+    "gw": 27,
+    "gh": 4,
+    "role": "foreground",
+    "pin_to_top": true,
+    "image_prompt": "THE EMPTY ROOM",
+    "z_order": 1
+  },
+  {
+    "gx": 38,
+    "gy": 59,
+    "gw": 29,
+    "gh": 4,
+    "role": "foreground",
+    "pin_to_top": true,
+    "image_prompt": "IN THE COURTYARD.",
+    "z_order": 2
+  }
+]

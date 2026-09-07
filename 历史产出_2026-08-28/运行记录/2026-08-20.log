@@ -1,0 +1,34 @@
+[11:00:44] ============================================================
+[11:00:44] 小红书 Live 玩法洞察流水线启动  2026-08-20T11:00:44.653503
+[11:00:44]   dry_run=False  up_to_stage=viz
+[11:00:44] [P1] 运行 fetch_and_search.py 自动搜索发现...
+[11:00:44] $ python fetch_and_search.py 
+[11:05:23] [P1] fetch_and_search.py 未找到目标（1）
+[11:05:23] [P1] 运行 quick_find.py 自动搜索发现...
+[11:05:23] $ python quick_find.py 
+[11:08:48] [P1] 发现目标: https://www.xiaohongshu.com/explore/6a83bfe400000000250106ae?xsec_token=ABhMESZdHuu3vQZcma9P_hjVbG6xvPbgAaCxUY70Adsn8=&xsec_source=pc_search
+[11:08:48] [URL] 新增收集: 6a83bfe400000000250106ae
+[11:08:48] $ python fetch_xhs.py https://www.xiaohongshu.com/explore/6a83bfe400000000250106ae?xsec_token=ABhMESZdHuu3vQZcma9P_hjVbG6xvPbgAaCxUY70Adsn8=&xsec_source=pc_search
+[11:09:26] [P2] 抓取完成: 6a83bfe400000000250106ae
+[11:09:26] $ python observe_batch.py 6a83bfe400000000250106ae 3
+[11:11:40] [P3] 云端观察完成 rc=0
+[11:11:44] [P3] 本地 Ollama 未运行，跳过本地通道（降级为纯云端）
+[11:11:44] $ python gen_card_dual.py 6a83bfe400000000250106ae 0
+[11:13:44] $ python gen_card_generic.py 6a83bfe400000000250106ae 0
+[11:13:45] [P5] HTML 生成 rc=0
+[11:13:45] ============================================================
+[11:13:45] 流水线完成
+[11:13:45] 状态: D:\My Documents\11085203\Documents\小红书收集\01_live玩法洞察\运行记录\state.json
+[11:13:45] 日志: D:\My Documents\11085203\Documents\小红书收集\01_live玩法洞察\运行记录\2026-08-20.log
+[11:14:55] ============================================================
+[11:14:55] 小红书 Live 玩法洞察流水线启动  2026-08-20T11:14:55.909650
+[11:14:55]   dry_run=False  up_to_stage=viz
+[11:14:55] [P1] 运行 fetch_and_search.py 自动搜索发现...
+[11:14:55] $ python fetch_and_search.py 
+[11:19:48] [P1] fetch_and_search.py 未找到目标（1）
+[11:19:48] [P1] 运行 quick_find.py 自动搜索发现...
+[11:19:48] $ python quick_find.py 
+[11:22:40] [P1] 发现目标: https://www.xiaohongshu.com/explore/6a83bfe400000000250106ae?xsec_token=ABhMESZdHuu3vQZcma9P_hjVbG6xvPbgAaCxUY70Adsn8=&xsec_source=pc_search
+[11:22:40] [URL] 6a83bfe400000000250106ae 已收集过（更新时间），本次未计票
+[11:22:41] [P2] 6a83bfe400000000250106ae 已抓取过，投票 +1（共 2 票），跳过本次抓取
+[11:22:41] [去重] 6a83bfe400000000250106ae 已抓取过，仅投票，跳过本次下游分析

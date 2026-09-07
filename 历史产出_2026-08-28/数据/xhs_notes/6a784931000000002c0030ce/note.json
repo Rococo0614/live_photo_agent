@@ -1,0 +1,49 @@
+{
+  "meta": {
+    "url": "https://www.xiaohongshu.com/explore/6a784931000000002c0030ce?xsec_token=ABptiTU8EnXk07LACCTyQc819GzF7KtQ5WyPLEq2w5mOs=&xsec_source=pc_search",
+    "note_id": "6a784931000000002c0030ce",
+    "title": "让画面动起来居然如此简单…😋😋",
+    "desc": "做了一个超简单的手机也能做的仿live2d 教程～\n画面动动起来太萌萌了好喜欢！\n#第五人格[话题]# #园医[话题]# #园医园[话题]# #仿live2d[话题]# #教程[话题]##简单教程[话题]#  #两眼一睁就是第五人格[话题]#",
+    "tags": [
+      "第五人格",
+      "园医",
+      "园医园",
+      "仿live2d",
+      "教程",
+      "简单教程",
+      "两眼一睁就是第五人格"
+    ],
+    "interact": {
+      "liked": 15000,
+      "collected": 6218,
+      "comment": 84,
+      "shared": 460
+    },
+    "author": {
+      "nickname": "肥肥美丽珑",
+      "user_id": "62675503000000002102a3fe",
+      "avatar": "https://sns-avatar-qc.xhscdn.com/avatar/1040g2jo31dr3nabqh26g5oj7ak1od8vuehcn338"
+    },
+    "camera_detected": null,
+    "ip_location": "湖北",
+    "post_time": 1786267953000,
+    "captured_at": "2026-08-13 18:24:56"
+  },
+  "media": [
+    {
+      "index": 0,
+      "is_live": false,
+      "width": 1080,
+      "height": 1440,
+      "cover_local": "D:\\My Documents\\11085203\\Documents\\小红书收集\\01_live玩法洞察\\数据\\xhs_notes\\6a784931000000002c0030ce\\covers\\cover_00.jpg",
+      "cover_bytes": 103646,
+      "type": "video",
+      "video_url": "http://sns-video-v3.xhscdn.com/stream/79/110/259/01ea78492146f65c010370039fe5de3ba9_259.mp4?sign=dfe5028b8e37926d9e6850cfcbbf7df9&t=6a823824",
+      "video_local": "D:\\My Documents\\11085203\\Documents\\小红书收集\\01_live玩法洞察\\数据\\xhs_notes\\6a784931000000002c0030ce\\lives\\video_00.mp4",
+      "video_bytes": 4696061,
+      "video_duration": 58.61,
+      "frames_dir": "D:\\My Documents\\11085203\\Documents\\小红书收集\\01_live玩法洞察\\数据\\xhs_notes\\6a784931000000002c0030ce\\lives\\video_00_frames",
+      "frames_count": 293
+    }
+  ]
+}

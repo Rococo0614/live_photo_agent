@@ -1,0 +1,22 @@
+[
+  {
+    "gx": 0,
+    "gy": 0,
+    "gw": 120,
+    "gh": 159,
+    "role": "background",
+    "pin_to_top": false,
+    "image_prompt": "",
+    "z_order": 0
+  },
+  {
+    "gx": 117,
+    "gy": 156,
+    "gw": 3,
+    "gh": 1,
+    "role": "background",
+    "pin_to_top": false,
+    "image_prompt": "小红书",
+    "z_order": 1
+  }
+]

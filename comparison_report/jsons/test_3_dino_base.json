@@ -1,0 +1,152 @@
+[
+  {
+    "gx": 11,
+    "gy": 11,
+    "gw": 23,
+    "gh": 31,
+    "role": "foreground",
+    "pin_to_top": true,
+    "image_prompt": "",
+    "z_order": 0
+  },
+  {
+    "gx": 49,
+    "gy": 5,
+    "gw": 19,
+    "gh": 25,
+    "role": "foreground",
+    "pin_to_top": true,
+    "image_prompt": "",
+    "z_order": 1
+  },
+  {
+    "gx": 85,
+    "gy": 28,
+    "gw": 20,
+    "gh": 27,
+    "role": "foreground",
+    "pin_to_top": true,
+    "image_prompt": "",
+    "z_order": 2
+  },
+  {
+    "gx": 45,
+    "gy": 66,
+    "gw": 29,
+    "gh": 28,
+    "role": "foreground",
+    "pin_to_top": true,
+    "image_prompt": "",
+    "z_order": 3
+  },
+  {
+    "gx": 88,
+    "gy": 67,
+    "gw": 23,
+    "gh": 30,
+    "role": "foreground",
+    "pin_to_top": true,
+    "image_prompt": "",
+    "z_order": 4
+  },
+  {
+    "gx": 46,
+    "gy": 132,
+    "gw": 19,
+    "gh": 26,
+    "role": "foreground",
+    "pin_to_top": true,
+    "image_prompt": "",
+    "z_order": 5
+  },
+  {
+    "gx": 85,
+    "gy": 114,
+    "gw": 20,
+    "gh": 27,
+    "role": "foreground",
+    "pin_to_top": true,
+    "image_prompt": "",
+    "z_order": 6
+  },
+  {
+    "gx": 14,
+    "gy": 104,
+    "gw": 22,
+    "gh": 30,
+    "role": "foreground",
+    "pin_to_top": true,
+    "image_prompt": "",
+    "z_order": 7
+  },
+  {
+    "gx": 6,
+    "gy": 58,
+    "gw": 23,
+    "gh": 31,
+    "role": "foreground",
+    "pin_to_top": true,
+    "image_prompt": "",
+    "z_order": 8
+  },
+  {
+    "gx": 32,
+    "gy": 33,
+    "gw": 56,
+    "gh": 99,
+    "role": "foreground",
+    "pin_to_top": true,
+    "image_prompt": "",
+    "z_order": 9
+  },
+  {
+    "gx": 49,
+    "gy": 70,
+    "gw": 20,
+    "gh": 20,
+    "role": "foreground",
+    "pin_to_top": true,
+    "image_prompt": "",
+    "z_order": 10
+  },
+  {
+    "gx": 26,
+    "gy": 39,
+    "gw": 63,
+    "gh": 121,
+    "role": "foreground",
+    "pin_to_top": true,
+    "image_prompt": "",
+    "z_order": 11
+  },
+  {
+    "gx": 15,
+    "gy": 42,
+    "gw": 88,
+    "gh": 97,
+    "role": "foreground",
+    "pin_to_top": true,
+    "image_prompt": "",
+    "z_order": 12
+  },
+  {
+    "gx": 89,
+    "gy": 36,
+    "gw": 11,
+    "gh": 19,
+    "role": "foreground",
+    "pin_to_top": true,
+    "image_prompt": "",
+    "z_order": 13
+  },
+  {
+    "gx": 8,
+    "gy": 52,
+    "gw": 103,
+    "gh": 105,
+    "role": "background",
+    "pin_to_top": false,
+    "image_prompt": "",
+    "z_order": 14
+  }
+]

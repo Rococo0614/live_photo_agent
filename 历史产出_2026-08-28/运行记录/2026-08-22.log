@@ -1,0 +1,22 @@
+[11:00:39] ============================================================
+[11:00:39] 小红书 Live 玩法洞察流水线启动  2026-08-22T11:00:39.300045
+[11:00:39]   dry_run=False  up_to_stage=viz
+[11:00:39] [P1] 运行 fetch_and_search.py 自动搜索发现...
+[11:00:39] $ python fetch_and_search.py 
+[11:05:04] [P1] fetch_and_search.py 未找到目标（1）
+[11:05:04] [P1] 运行 quick_find.py 自动搜索发现...
+[11:05:04] $ python quick_find.py 
+[11:07:55] [P1] 发现目标: https://www.xiaohongshu.com/explore/6a8828f100000000160224db?xsec_token=ABmzhObYk1NEHR51oW5MyjW0eYHqxZ2muBKwr6EU37xSI=&xsec_source=pc_search
+[11:07:55] [URL] 新增收集: 6a8828f100000000160224db
+[11:07:55] $ python fetch_xhs.py https://www.xiaohongshu.com/explore/6a8828f100000000160224db?xsec_token=ABmzhObYk1NEHR51oW5MyjW0eYHqxZ2muBKwr6EU37xSI=&xsec_source=pc_search
+[11:08:28] [P2] 抓取完成: 6a8828f100000000160224db
+[11:08:28] $ python observe_batch.py 6a8828f100000000160224db 3
+[11:09:52] [P3] 云端观察完成 rc=0
+[11:09:57] [P3] 本地 Ollama 未运行，跳过本地通道（降级为纯云端）
+[11:09:57] $ python gen_card_dual.py 6a8828f100000000160224db 0
+[11:14:13] $ python gen_card_generic.py 6a8828f100000000160224db 0
+[11:14:14] [P5] HTML 生成 rc=0
+[11:14:14] ============================================================
+[11:14:14] 流水线完成
+[11:14:14] 状态: D:\My Documents\11085203\Documents\小红书收集\01_live玩法洞察\运行记录\state.json
+[11:14:14] 日志: D:\My Documents\11085203\Documents\小红书收集\01_live玩法洞察\运行记录\2026-08-22.log

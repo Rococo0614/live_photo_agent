@@ -1,0 +1,178 @@
+[local-vlm] Loading model from /home/vivo/models/Qwen2.5-VL-7B-Instruct ...
+Loading weights:   0%|          | 0/729 [00:00<?, ?it/s]Loading weights:   0%|          | 2/729 [00:00<01:27,  8.35it/s]Loading weights:   1%|          | 6/729 [00:00<00:36, 19.83it/s]Loading weights:   6%|▌         | 41/729 [00:00<00:05, 130.27it/s]Loading weights:   8%|▊         | 58/729 [00:00<00:04, 134.65it/s]Loading weights:  11%|█         | 82/729 [00:00<00:04, 151.13it/s]Loading weights:  15%|█▍        | 106/729 [00:00<00:03, 158.16it/s]Loading weights:  19%|█▉        | 138/729 [00:00<00:02, 200.05it/s]Loading weights:  22%|██▏       | 160/729 [00:01<00:02, 200.58it/s]Loading weights:  25%|██▌       | 184/729 [00:01<00:02, 203.46it/s]Loading weights:  28%|██▊       | 206/729 [00:01<00:02, 179.73it/s]Loading weights:  31%|███       | 225/729 [00:01<00:02, 178.99it/s]Loading weights:  34%|███▍      | 248/729 [00:01<00:02, 171.72it/s]Loading weights:  38%|███▊      | 278/729 [00:01<00:02, 198.49it/s]Loading weights:  42%|████▏     | 303/729 [00:01<00:02, 175.11it/s]Loading weights:  52%|█████▏    | 382/729 [00:01<00:01, 318.01it/s]Loading weights:  82%|████████▏ | 595/729 [00:02<00:00, 770.65it/s]Loading weights: 100%|██████████| 729/729 [00:02<00:00, 339.33it/s]
+INFO:     Started server process [79426]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://127.0.0.1:8100 (Press CTRL+C to quit)
+[local-vlm] Model loaded. Starting server on 127.0.0.1:8100
+INFO:     127.0.0.1:52524 - "GET /health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:46466 - "POST /v1/chat/completions HTTP/1.1" 500 Internal Server Error
+ERROR:    Exception in ASGI application
+Traceback (most recent call last):
+  File "/home/vivo/miniconda3/envs/live_photo_agent/lib/python3.11/site-packages/uvicorn/protocols/http/httptools_impl.py", line 422, in run_asgi
+    result = await app(  # type: ignore[func-returns-value]
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/vivo/miniconda3/envs/live_photo_agent/lib/python3.11/site-packages/uvicorn/middleware/proxy_headers.py", line 63, in __call__
+    return await self.app(scope, receive, send)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/vivo/miniconda3/envs/live_photo_agent/lib/python3.11/site-packages/fastapi/applications.py", line 1159, in __call__
+    await super().__call__(scope, receive, send)
+  File "/home/vivo/miniconda3/envs/live_photo_agent/lib/python3.11/site-packages/starlette/applications.py", line 96, in __call__
+    await self.middleware_stack(scope, receive, send)
+  File "/home/vivo/miniconda3/envs/live_photo_agent/lib/python3.11/site-packages/starlette/middleware/errors.py", line 186, in __call__
+    raise exc
+  File "/home/vivo/miniconda3/envs/live_photo_agent/lib/python3.11/site-packages/starlette/middleware/errors.py", line 164, in __call__
+    await self.app(scope, receive, _send)
+  File "/home/vivo/miniconda3/envs/live_photo_agent/lib/python3.11/site-packages/starlette/middleware/exceptions.py", line 63, in __call__
+    await wrap_app_handling_exceptions(self.app, conn)(scope, receive, send)
+  File "/home/vivo/miniconda3/envs/live_photo_agent/lib/python3.11/site-packages/starlette/_exception_handler.py", line 53, in wrapped_app
+    raise exc
+  File "/home/vivo/miniconda3/envs/live_photo_agent/lib/python3.11/site-packages/starlette/_exception_handler.py", line 42, in wrapped_app
+    await app(scope, receive, sender)
+  File "/home/vivo/miniconda3/envs/live_photo_agent/lib/python3.11/site-packages/fastapi/middleware/asyncexitstack.py", line 18, in __call__
+    await self.app(scope, receive, send)
+  File "/home/vivo/miniconda3/envs/live_photo_agent/lib/python3.11/site-packages/starlette/routing.py", line 670, in __call__
+    await self.middleware_stack(scope, receive, send)
+  File "/home/vivo/miniconda3/envs/live_photo_agent/lib/python3.11/site-packages/starlette/routing.py", line 690, in app
+    await route.handle(scope, receive, send)
+  File "/home/vivo/miniconda3/envs/live_photo_agent/lib/python3.11/site-packages/starlette/routing.py", line 280, in handle
+    await self.app(scope, receive, send)
+  File "/home/vivo/miniconda3/envs/live_photo_agent/lib/python3.11/site-packages/fastapi/routing.py", line 134, in app
+    await wrap_app_handling_exceptions(app, request)(scope, receive, send)
+  File "/home/vivo/miniconda3/envs/live_photo_agent/lib/python3.11/site-packages/starlette/_exception_handler.py", line 53, in wrapped_app
+    raise exc
+  File "/home/vivo/miniconda3/envs/live_photo_agent/lib/python3.11/site-packages/starlette/_exception_handler.py", line 42, in wrapped_app
+    await app(scope, receive, sender)
+  File "/home/vivo/miniconda3/envs/live_photo_agent/lib/python3.11/site-packages/fastapi/routing.py", line 120, in app
+    response = await f(request)
+               ^^^^^^^^^^^^^^^^
+  File "/home/vivo/miniconda3/envs/live_photo_agent/lib/python3.11/site-packages/fastapi/routing.py", line 674, in app
+    raw_response = await run_endpoint_function(
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/vivo/miniconda3/envs/live_photo_agent/lib/python3.11/site-packages/fastapi/routing.py", line 328, in run_endpoint_function
+    return await dependant.call(**values)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/vivo/live_photo_agent/scripts/local_vlm.py", line 150, in chat_completions
+    payload = await request.json()
+              ^^^^^^^^^^^^^^^^^^^^
+  File "/home/vivo/miniconda3/envs/live_photo_agent/lib/python3.11/site-packages/starlette/requests.py", line 265, in json
+    self._json = json.loads(body)
+                 ^^^^^^^^^^^^^^^^
+  File "/home/vivo/miniconda3/envs/live_photo_agent/lib/python3.11/json/__init__.py", line 346, in loads
+    return _default_decoder.decode(s)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/vivo/miniconda3/envs/live_photo_agent/lib/python3.11/json/decoder.py", line 337, in decode
+    obj, end = self.raw_decode(s, idx=_w(s, 0).end())
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/vivo/miniconda3/envs/live_photo_agent/lib/python3.11/json/decoder.py", line 353, in raw_decode
+    obj, end = self.scan_once(s, idx)
+               ^^^^^^^^^^^^^^^^^^^^^^
+json.decoder.JSONDecodeError: Expecting ',' delimiter: line 1 column 58 (char 57)
+INFO:     127.0.0.1:53742 - "POST /v1/chat/completions HTTP/1.1" 200 OK
+INFO:     127.0.0.1:36348 - "POST /v1/chat/completions HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53294 - "GET / HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:53294 - "GET /favicon.ico HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:47694 - "POST /v1/chat/completions HTTP/1.1" 200 OK
+INFO:     127.0.0.1:42528 - "POST /v1/chat/completions HTTP/1.1" 200 OK
+INFO:     127.0.0.1:32790 - "POST /v1/chat/completions HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55240 - "POST /v1/chat/completions HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50184 - "POST /v1/chat/completions HTTP/1.1" 200 OK
+INFO:     127.0.0.1:33428 - "POST /v1/chat/completions HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51560 - "POST /v1/chat/completions HTTP/1.1" 200 OK
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.
+INFO:     Finished server process [79426]
+[local-vlm] Loading model from /home/vivo/models/Qwen2.5-VL-7B-Instruct ...
+Loading weights:   0%|          | 0/729 [00:00<?, ?it/s]Loading weights:   0%|          | 1/729 [00:00<01:18,  9.28it/s]Loading weights:   0%|          | 2/729 [00:00<01:31,  7.97it/s]Loading weights:   2%|▏         | 14/729 [00:00<00:13, 51.10it/s]Loading weights:   6%|▌         | 41/729 [00:00<00:05, 124.14it/s]Loading weights:   7%|▋         | 54/729 [00:00<00:05, 124.17it/s]Loading weights:  11%|█         | 78/729 [00:00<00:04, 152.97it/s]Loading weights:  15%|█▌        | 112/729 [00:00<00:03, 162.73it/s]Loading weights:  19%|█▉        | 138/729 [00:01<00:03, 162.15it/s]Loading weights:  25%|██▌       | 184/729 [00:01<00:02, 224.79it/s]Loading weights:  29%|██▊       | 208/729 [00:01<00:02, 198.76it/s]Loading weights:  32%|███▏      | 230/729 [00:01<00:02, 193.01it/s]Loading weights:  35%|███▍      | 252/729 [00:01<00:02, 188.55it/s]Loading weights:  39%|███▊      | 281/729 [00:01<00:02, 210.80it/s]Loading weights:  42%|████▏     | 305/729 [00:01<00:02, 207.99it/s]Loading weights:  45%|████▍     | 327/729 [00:01<00:02, 193.91it/s]Loading weights:  72%|███████▏  | 523/729 [00:02<00:00, 636.03it/s]Loading weights: 100%|██████████| 729/729 [00:02<00:00, 344.10it/s]
+INFO:     Started server process [347056]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://127.0.0.1:8100 (Press CTRL+C to quit)
+[local-vlm] Model loaded. Starting server on 127.0.0.1:8100
+INFO:     127.0.0.1:50960 - "GET /health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52378 - "POST /v1/chat/completions HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53960 - "POST /v1/chat/completions HTTP/1.1" 200 OK
+INFO:     127.0.0.1:39890 - "POST /v1/chat/completions HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55494 - "POST /v1/chat/completions HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55508 - "POST /v1/chat/completions HTTP/1.1" 200 OK
+INFO:     127.0.0.1:42756 - "POST /v1/chat/completions HTTP/1.1" 200 OK
+INFO:     127.0.0.1:42764 - "POST /v1/chat/completions HTTP/1.1" 200 OK
+INFO:     127.0.0.1:42774 - "POST /v1/chat/completions HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58512 - "POST /v1/chat/completions HTTP/1.1" 200 OK
+INFO:     127.0.0.1:37212 - "POST /v1/chat/completions HTTP/1.1" 200 OK
+[transformers] The following generation flags are not valid and may be ignored: ['temperature', 'top_p']. Set `TRANSFORMERS_VERBOSITY=info` for more details.
+INFO:     127.0.0.1:40172 - "POST /v1/chat/completions HTTP/1.1" 200 OK
+INFO:     127.0.0.1:40178 - "POST /v1/chat/completions HTTP/1.1" 200 OK
+INFO:     127.0.0.1:39546 - "POST /v1/chat/completions HTTP/1.1" 200 OK
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.
+INFO:     Finished server process [347056]
+[local-vlm] Loading model from /home/vivo/models/Qwen2.5-VL-7B-Instruct ...
+Loading weights:   0%|          | 0/729 [00:00<?, ?it/s]Loading weights:   0%|          | 1/729 [00:00<04:10,  2.91it/s]Loading weights:   0%|          | 2/729 [00:00<04:22,  2.77it/s]Loading weights:   2%|▏         | 17/729 [00:00<00:24, 28.74it/s]Loading weights:   4%|▍         | 28/729 [00:00<00:16, 43.19it/s]Loading weights:   5%|▍         | 35/729 [00:01<00:14, 47.58it/s]Loading weights:   6%|▌         | 42/729 [00:01<00:13, 50.27it/s]Loading weights:   7%|▋         | 53/729 [00:01<00:11, 60.26it/s]Loading weights:   9%|▉         | 64/729 [00:01<00:09, 68.42it/s]Loading weights:  10%|▉         | 72/729 [00:01<00:11, 58.39it/s]Loading weights:  11%|█         | 79/729 [00:01<00:10, 59.89it/s]Loading weights:  12%|█▏        | 89/729 [00:01<00:10, 62.51it/s]Loading weights:  13%|█▎        | 96/729 [00:02<00:11, 53.67it/s]Loading weights:  15%|█▌        | 112/729 [00:02<00:08, 70.52it/s]Loading weights:  16%|█▋        | 120/729 [00:02<00:08, 68.46it/s]Loading weights:  18%|█▊        | 131/729 [00:02<00:07, 76.96it/s]Loading weights:  21%|██        | 154/729 [00:02<00:05, 114.47it/s]Loading weights:  23%|██▎       | 167/729 [00:02<00:05, 101.51it/s]Loading weights:  25%|██▍       | 179/729 [00:02<00:06, 86.87it/s] Loading weights:  26%|██▌       | 189/729 [00:03<00:07, 73.47it/s]Loading weights:  27%|██▋       | 198/729 [00:03<00:07, 68.75it/s]Loading weights:  28%|██▊       | 206/729 [00:03<00:08, 62.28it/s]Loading weights:  30%|███       | 221/729 [00:03<00:06, 73.37it/s]Loading weights:  32%|███▏      | 232/729 [00:03<00:06, 80.21it/s]Loading weights:  33%|███▎      | 241/729 [00:03<00:06, 74.74it/s]Loading weights:  35%|███▌      | 257/729 [00:03<00:05, 92.27it/s]Loading weights:  37%|███▋      | 268/729 [00:04<00:05, 89.50it/s]Loading weights:  38%|███▊      | 278/729 [00:04<00:05, 87.61it/s]Loading weights:  40%|███▉      | 288/729 [00:04<00:05, 74.05it/s]Loading weights:  41%|████      | 296/729 [00:04<00:06, 66.52it/s]Loading weights:  42%|████▏     | 305/729 [00:04<00:06, 67.64it/s]Loading weights:  43%|████▎     | 316/729 [00:04<00:05, 71.06it/s]Loading weights:  44%|████▍     | 324/729 [00:04<00:05, 67.98it/s]Loading weights:  45%|████▌     | 331/729 [00:05<00:06, 61.47it/s]Loading weights:  54%|█████▎    | 391/729 [00:05<00:01, 186.19it/s]Loading weights:  65%|██████▌   | 475/729 [00:05<00:00, 344.53it/s]Loading weights:  75%|███████▍  | 545/729 [00:05<00:00, 435.41it/s]Loading weights:  85%|████████▌ | 621/729 [00:05<00:00, 522.37it/s]Loading weights:  95%|█████████▍| 689/729 [00:05<00:00, 566.03it/s]Loading weights: 100%|██████████| 729/729 [00:05<00:00, 128.12it/s]
+INFO:     Started server process [520237]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://127.0.0.1:8100 (Press CTRL+C to quit)
+[local-vlm] Model loaded. Starting server on 127.0.0.1:8100
+INFO:     127.0.0.1:57812 - "GET /health HTTP/1.1" 200 OK
+[transformers] The following generation flags are not valid and may be ignored: ['temperature', 'top_p']. Set `TRANSFORMERS_VERBOSITY=info` for more details.
+INFO:     127.0.0.1:39096 - "POST /v1/chat/completions HTTP/1.1" 200 OK
+INFO:     127.0.0.1:33922 - "POST /v1/chat/completions HTTP/1.1" 200 OK
+INFO:     127.0.0.1:44162 - "POST /v1/chat/completions HTTP/1.1" 200 OK
+INFO:     127.0.0.1:44176 - "POST /v1/chat/completions HTTP/1.1" 200 OK
+INFO:     127.0.0.1:44184 - "POST /v1/chat/completions HTTP/1.1" 200 OK
+INFO:     127.0.0.1:36140 - "POST /v1/chat/completions HTTP/1.1" 200 OK
+INFO:     127.0.0.1:36144 - "POST /v1/chat/completions HTTP/1.1" 200 OK
+INFO:     127.0.0.1:36148 - "POST /v1/chat/completions HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57608 - "POST /v1/chat/completions HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57624 - "POST /v1/chat/completions HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57626 - "POST /v1/chat/completions HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57642 - "POST /v1/chat/completions HTTP/1.1" 200 OK
+INFO:     127.0.0.1:44112 - "POST /v1/chat/completions HTTP/1.1" 200 OK
+INFO:     127.0.0.1:44126 - "POST /v1/chat/completions HTTP/1.1" 200 OK
+INFO:     127.0.0.1:44142 - "POST /v1/chat/completions HTTP/1.1" 200 OK
+INFO:     127.0.0.1:45182 - "POST /v1/chat/completions HTTP/1.1" 200 OK
+INFO:     127.0.0.1:46592 - "POST /v1/chat/completions HTTP/1.1" 200 OK
+INFO:     127.0.0.1:46600 - "POST /v1/chat/completions HTTP/1.1" 200 OK
+INFO:     127.0.0.1:46610 - "POST /v1/chat/completions HTTP/1.1" 200 OK
+INFO:     127.0.0.1:46618 - "POST /v1/chat/completions HTTP/1.1" 200 OK
+INFO:     127.0.0.1:46620 - "POST /v1/chat/completions HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51870 - "POST /v1/chat/completions HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51884 - "POST /v1/chat/completions HTTP/1.1" 200 OK
+INFO:     127.0.0.1:39546 - "POST /v1/chat/completions HTTP/1.1" 200 OK
+INFO:     127.0.0.1:39554 - "POST /v1/chat/completions HTTP/1.1" 200 OK
+INFO:     127.0.0.1:39566 - "POST /v1/chat/completions HTTP/1.1" 200 OK
+INFO:     127.0.0.1:39568 - "POST /v1/chat/completions HTTP/1.1" 200 OK
+INFO:     127.0.0.1:39574 - "POST /v1/chat/completions HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53642 - "POST /v1/chat/completions HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53654 - "POST /v1/chat/completions HTTP/1.1" 200 OK
+INFO:     127.0.0.1:48312 - "POST /v1/chat/completions HTTP/1.1" 200 OK
+INFO:     127.0.0.1:48322 - "POST /v1/chat/completions HTTP/1.1" 200 OK
+INFO:     127.0.0.1:48334 - "POST /v1/chat/completions HTTP/1.1" 200 OK
+INFO:     127.0.0.1:48350 - "POST /v1/chat/completions HTTP/1.1" 200 OK
+INFO:     127.0.0.1:48154 - "POST /v1/chat/completions HTTP/1.1" 200 OK
+INFO:     127.0.0.1:48156 - "POST /v1/chat/completions HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49868 - "POST /v1/chat/completions HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49872 - "POST /v1/chat/completions HTTP/1.1" 200 OK
+INFO:     127.0.0.1:46546 - "POST /v1/chat/completions HTTP/1.1" 200 OK
+INFO:     127.0.0.1:46552 - "POST /v1/chat/completions HTTP/1.1" 200 OK
+INFO:     127.0.0.1:46554 - "POST /v1/chat/completions HTTP/1.1" 200 OK
+INFO:     127.0.0.1:39950 - "POST /v1/chat/completions HTTP/1.1" 200 OK
+INFO:     127.0.0.1:39954 - "POST /v1/chat/completions HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60144 - "POST /v1/chat/completions HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60150 - "POST /v1/chat/completions HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60154 - "POST /v1/chat/completions HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60164 - "POST /v1/chat/completions HTTP/1.1" 200 OK
+INFO:     127.0.0.1:38264 - "POST /v1/chat/completions HTTP/1.1" 200 OK
+INFO:     127.0.0.1:38266 - "POST /v1/chat/completions HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58970 - "POST /v1/chat/completions HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58980 - "POST /v1/chat/completions HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58996 - "POST /v1/chat/completions HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54776 - "POST /v1/chat/completions HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54780 - "POST /v1/chat/completions HTTP/1.1" 200 OK
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.
+INFO:     Finished server process [520237]

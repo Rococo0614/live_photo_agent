@@ -1,0 +1,37 @@
+{
+  "meta": {
+    "url": "https://www.xiaohongshu.com/explore/6a758a3f000000003301fd60?xsec_token=ABaGS6jlFaTmaqK8ClSxEH31FYWNoNibRHTiqVikDiwMg=&xsec_source=pc_search",
+    "note_id": "6a758a3f000000003301fd60",
+    "title": "",
+    "desc": "#全自动修图[话题]#",
+    "tags": [
+      "全自动修图"
+    ],
+    "interact": {
+      "liked": 36000,
+      "collected": 39000,
+      "comment": 187,
+      "shared": 1190
+    },
+    "author": {
+      "nickname": "邪修p图",
+      "user_id": "643fa5bf0000000029017944",
+      "avatar": "https://sns-avatar-qc.xhscdn.com/avatar/1040g2jo31uhktr78iq005p1vkmvqaua43l3n6h0"
+    },
+    "camera_detected": null,
+    "ip_location": "山东",
+    "post_time": 1786087999000,
+    "captured_at": "2026-08-13 11:19:04"
+  },
+  "media": [
+    {
+      "index": 0,
+      "is_live": false,
+      "width": 1080,
+      "height": 1920,
+      "cover_local": "C:\\Users\\11085203\\BlueCode\\01_live玩法洞察\\数据\\xhs_notes\\6a758a3f000000003301fd60\\covers\\cover_00.jpg",
+      "cover_bytes": 69430,
+      "type": "cover"
+    }
+  ]
+}

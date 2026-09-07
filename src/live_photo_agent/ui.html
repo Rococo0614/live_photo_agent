@@ -539,6 +539,34 @@
       background: rgba(255, 255, 255, 0.03);
     }
     .template-toolbar .controls { grid-column: 1 / -1; }
+    .view-tab {
+      padding: 8px 24px;
+      border: 1px solid rgba(125, 211, 252, 0.25);
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.03);
+      color: var(--muted);
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.15s ease;
+    }
+    .view-tab:hover { border-color: rgba(125, 211, 252, 0.5); color: var(--text); }
+    .view-tab.active {
+      border-color: var(--accent);
+      background: rgba(56, 189, 248, 0.12);
+      color: var(--accent);
+    }
+    .parse-upload-area {
+      border: 2px dashed rgba(125, 211, 252, 0.3);
+      border-radius: 14px;
+      padding: 40px 20px;
+      text-align: center;
+      cursor: pointer;
+      transition: border-color 0.15s ease;
+    }
+    .parse-upload-area:hover { border-color: rgba(125, 211, 252, 0.5); }
+    .parse-upload-placeholder { color: var(--muted); }
+    .parse-upload-placeholder p { margin: 4px 0; }
     .template-gallery {
       display: grid;
       grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -856,7 +884,12 @@
       </div>
     </section>
 
-    <section class="workspace">
+    <div class="view-switcher" style="display: flex; gap: 8px; justify-content: center; margin: 12px 0;">
+      <button id="viewGenerateBtn" class="view-tab active" type="button">正向生成</button>
+      <button id="viewParseBtn" class="view-tab" type="button">模板解析</button>
+    </div>
+
+    <section class="workspace" id="viewGenerate">
       <aside class="panel sidebar">
         <h2 class="section-title">资产概览</h2>
         <div class="field">
@@ -1026,6 +1059,87 @@
           </div>
         </div>
       </section>
+    </section>
+
+    <section class="workspace" id="viewParse" style="display: none;">
+      <div class="panel" style="grid-column: 1 / -1; display: flex; flex-direction: column; gap: 16px;">
+        <h2 class="section-title">模板解析 — 从图片提取布局模板</h2>
+
+        <div class="result-card">
+          <div class="micro" style="margin-bottom: 10px;">上传图片</div>
+          <div class="parse-upload-area" id="parseUploadArea">
+            <input type="file" id="parseFileInput" accept="image/*" style="display: none;">
+            <div id="parseUploadPlaceholder" class="parse-upload-placeholder">
+              <p>点击或拖拽上传一张成品图片</p>
+              <p class="micro">VLM 将分析其版面结构并生成可复用的模板</p>
+            </div>
+            <img id="parseUploadPreview" style="display: none; max-width: 100%; max-height: 300px; border-radius: 12px;">
+          </div>
+          <div class="controls" style="margin-top: 12px; display: flex; gap: 8px; align-items: center;">
+            <select id="parseBackendSelect" style="padding: 8px 12px; border-radius: 8px; border: 1px solid var(--line-color); background: var(--card-bg); color: var(--text);">
+              <option value="dino_base">Grounding DINO Base (精准)</option>
+              <option value="dino">Grounding DINO Tiny (快速)</option>
+              <option value="cv">CV (快速版面检测)</option>
+              <option value="dots_mocr">dots.mocr (版面检测)</option>
+              <option value="vlm">Qwen2.5-VL (通用)</option>
+            </select>
+            <button id="parseAnalyzeBtn" class="primary" type="button" disabled>解析版面</button>
+          </div>
+          <div id="parseStatus" class="micro" style="margin-top: 8px;"></div>
+        </div>
+
+        <div class="editor-workbench" id="parseWorkbench" style="display: none;">
+          <div class="result-card">
+            <div class="micro">解析结果布局</div>
+            <div id="parseDropZone" class="composition-drop-zone">
+              <div id="parseLayoutLayer" class="composition-layout-layer"></div>
+            </div>
+          </div>
+          <div class="editor-middle-col">
+            <div class="result-card">
+              <div class="micro" style="margin-bottom: 10px;">区域操作</div>
+              <div class="controls" style="display: flex; gap: 6px; flex-wrap: wrap;">
+                <button id="parseSplitH" type="button" class="small" style="flex: 1; min-width: 60px;">水平分割</button>
+                <button id="parseSplitV" type="button" class="small" style="flex: 1; min-width: 60px;">垂直分割</button>
+                <button id="parseMergeBtn" type="button" class="small" style="flex: 1; min-width: 60px;">合并相邻</button>
+                <button id="parseDeleteSlot" type="button" class="small danger" style="flex: 1; min-width: 60px;">删除区域</button>
+              </div>
+              <div class="micro" style="margin-top: 8px; color: var(--secondary);">选中区域后可拖拽移动、分割或合并</div>
+            </div>
+            <div class="result-card">
+              <div class="micro" style="margin-bottom: 10px;">模板属性</div>
+              <div class="canvas-editor-controls">
+                <div class="field">
+                  <label for="parseTemplateName">模板名称</label>
+                  <input id="parseTemplateName" placeholder="例如：从图片提取的模板">
+                </div>
+                <div class="field">
+                  <label for="parseSlotPrompt">选中区域处理提示</label>
+                  <textarea id="parseSlotPrompt" placeholder="例如：增强色彩饱和度" style="min-height: 60px;"></textarea>
+                </div>
+              </div>
+            </div>
+            <div class="result-card">
+              <div class="micro" style="margin-bottom: 10px;">JSON 预览</div>
+              <pre id="parseJsonPreview" style="font-size: 10px; max-height: 200px; overflow: auto;"></pre>
+            </div>
+          </div>
+          <div class="result-card">
+            <div class="micro" style="margin-bottom: 10px;">原图预览</div>
+            <img id="parseOriginalImage" style="width: 100%; border-radius: 12px;">
+          </div>
+        </div>
+
+        <div class="controls" id="parseSaveControls" style="display: none;">
+          <button id="parseSaveBtn" class="primary" type="button">保存为自定义模板</button>
+          <button id="parseResetBtn" type="button">重新解析</button>
+        </div>
+
+        <div class="result-card">
+          <div class="micro" style="margin-bottom: 10px;">已保存的自定义模板</div>
+          <div id="customTemplateList" class="template-gallery"></div>
+        </div>
+      </div>
     </section>
   </div>
 
@@ -1222,7 +1336,38 @@
       layerDownButton: document.getElementById('layerDownButton'),
       generateButton: document.getElementById('generateButton'),
       clearButton: document.getElementById('clearButton'),
+      viewGenerateBtn: document.getElementById('viewGenerateBtn'),
+      viewParseBtn: document.getElementById('viewParseBtn'),
+      viewGenerate: document.getElementById('viewGenerate'),
+      viewParse: document.getElementById('viewParse'),
+      parseFileInput: document.getElementById('parseFileInput'),
+      parseUploadArea: document.getElementById('parseUploadArea'),
+      parseUploadPreview: document.getElementById('parseUploadPreview'),
+      parseUploadPlaceholder: document.getElementById('parseUploadPlaceholder'),
+      parseAnalyzeBtn: document.getElementById('parseAnalyzeBtn'),
+      parseBackendSelect: document.getElementById('parseBackendSelect'),
+      parseStatus: document.getElementById('parseStatus'),
+      parseWorkbench: document.getElementById('parseWorkbench'),
+      parseDropZone: document.getElementById('parseDropZone'),
+      parseLayoutLayer: document.getElementById('parseLayoutLayer'),
+      parseTemplateName: document.getElementById('parseTemplateName'),
+      parseSlotPrompt: document.getElementById('parseSlotPrompt'),
+      parseJsonPreview: document.getElementById('parseJsonPreview'),
+      parseOriginalImage: document.getElementById('parseOriginalImage'),
+      parseSaveBtn: document.getElementById('parseSaveBtn'),
+      parseSplitH: document.getElementById('parseSplitH'),
+      parseSplitV: document.getElementById('parseSplitV'),
+      parseMergeBtn: document.getElementById('parseMergeBtn'),
+      parseDeleteSlot: document.getElementById('parseDeleteSlot'),
+      parseSaveControls: document.getElementById('parseSaveControls'),
+      parseResetBtn: document.getElementById('parseResetBtn'),
+      customTemplateList: document.getElementById('customTemplateList'),
     };
+
+    let customTemplates = [];
+    let parseImageBase64 = '';
+    let parseLayoutItems = [];
+    let parseActiveSlotId = '';
 
     function clamp(value, min, max) {
       return Math.max(min, Math.min(max, value));
@@ -1612,7 +1757,7 @@
       const selectedCount = getLayoutAssetIds().length;
       const tools = Array.from(state.selectedToolNames).sort();
       const preset = CANVAS_PRESETS[state.canvasPreset] ?? CANVAS_PRESETS.xhs;
-      const template = TEMPLATE_LIBRARY.find((item) => item.id === state.activeTemplateId);
+      const template = getAllTemplates().find((item) => item.id === state.activeTemplateId);
       const templateLabel = template ? template.name : '自由布局';
       els.selectedAssetPreview.textContent = `布局素材 ${selectedCount} 项 · 画布 ${preset.width}x${preset.height} · 网格 ${GRID_LAYOUT.cols}x${GRID_LAYOUT.rows} · 模板 ${templateLabel} · ${tools.length ? `工具 guidance：${tools.join('、')}` : '未指定工具 guidance'}`;
       els.gallerySelectionSummary.textContent = `已选择 ${getSelectedAssetIds().length} 张`;
@@ -1865,10 +2010,15 @@
       loadCanvasForActiveLayout();
     }
 
+    function getAllTemplates() {
+      return [...TEMPLATE_LIBRARY, ...customTemplates];
+    }
+
     function renderTemplateControls() {
       const selectedCount = getSelectedAssetIds().length;
-      const candidates = TEMPLATE_LIBRARY.filter((template) => template.slots.length === selectedCount);
-      const templateRows = candidates.length > 0 ? candidates : TEMPLATE_LIBRARY;
+      const allTemplates = getAllTemplates();
+      const candidates = allTemplates.filter((template) => template.slots.length === selectedCount);
+      const templateRows = candidates.length > 0 ? candidates : allTemplates;
       const strict = candidates.length > 0;
       state.pendingTemplateId = state.activeTemplateId || templateRows[0]?.id || '';
 
@@ -1901,13 +2051,13 @@
       }).join('');
 
       els.templateSelectionSummary.textContent = state.pendingTemplateId
-        ? `待应用模板：${TEMPLATE_LIBRARY.find((item) => item.id === state.pendingTemplateId)?.name || '-'}`
+        ? `待应用模板：${getAllTemplates().find((item) => item.id === state.pendingTemplateId)?.name || '-'}`
         : '尚未选择模板';
 
       els.templateGrid.querySelectorAll('[data-template-id]').forEach((node) => {
         node.addEventListener('click', () => {
           const templateId = node.dataset.templateId;
-          const template = TEMPLATE_LIBRARY.find((item) => item.id === templateId);
+          const template = getAllTemplates().find((item) => item.id === templateId);
           if (!template) return;
           state.pendingTemplateId = template.id;
           state.activeTemplateId = template.id;
@@ -1946,7 +2096,7 @@
 
     function applyActiveTemplateToLayout(templateId) {
       const targetTemplateId = templateId || state.activeTemplateId;
-      const template = TEMPLATE_LIBRARY.find((item) => item.id === targetTemplateId);
+      const template = getAllTemplates().find((item) => item.id === targetTemplateId);
       if (!template) {
         els.resultPreview.textContent = '模板不存在，请重新选择。';
         return;
@@ -2706,7 +2856,7 @@
         ? `布局中有 ${pinnedCount} 个素材被标记为置于图层顶部（pin_to_top），已自动分配最高 z_index，请在拼接时确保其覆盖在其他素材之上。`
         : '';
       const preset = CANVAS_PRESETS[state.canvasPreset] ?? CANVAS_PRESETS.xhs;
-      const template = TEMPLATE_LIBRARY.find((item) => item.id === state.activeTemplateId);
+      const template = getAllTemplates().find((item) => item.id === state.activeTemplateId);
       const templateClause = template
         ? `本次使用模板 ${template.name}（${template.slots.length} 格）。`
         : '本次为自由拖拽布局。';
@@ -2819,6 +2969,390 @@
 
     renderToolGuidance();
     renderToolCatalog();
+
+    loadCustomTemplatesAsync();
+    async function loadCustomTemplatesAsync() {
+      try {
+        const resp = await fetch('/api/template/list');
+        if (resp.ok) {
+          const data = await resp.json();
+          customTemplates = data.templates || [];
+        }
+      } catch (e) {
+        customTemplates = [];
+      }
+    }
+
+    // --- View switching ---
+    function switchView(view) {
+      if (view === 'parse') {
+        els.viewGenerate.style.display = 'none';
+        els.viewParse.style.display = '';
+        els.viewGenerateBtn.classList.remove('active');
+        els.viewParseBtn.classList.add('active');
+        loadCustomTemplates();
+      } else {
+        els.viewGenerate.style.display = '';
+        els.viewParse.style.display = 'none';
+        els.viewGenerateBtn.classList.add('active');
+        els.viewParseBtn.classList.remove('active');
+      }
+    }
+    els.viewGenerateBtn.addEventListener('click', () => switchView('generate'));
+    els.viewParseBtn.addEventListener('click', () => switchView('parse'));
+
+    // --- Template parsing ---
+    function loadCustomTemplates() {
+      fetch('/api/template/list').then(r => r.json()).then(data => {
+        customTemplates = data.templates || [];
+        renderCustomTemplateList();
+      }).catch(() => {
+        customTemplates = [];
+        renderCustomTemplateList();
+      });
+    }
+
+    function renderCustomTemplateList() {
+      if (!customTemplates.length) {
+        els.customTemplateList.innerHTML = '<div class="micro" style="padding: 12px;">暂无自定义模板</div>';
+        return;
+      }
+      els.customTemplateList.innerHTML = customTemplates.map(t => `
+        <div class="template-card" style="margin-bottom: 8px;">
+          <div class="template-card-name">${escapeHtml(t.name)} <span class="template-tag prompt">${t.slots.length} 格</span></div>
+          <div class="template-card-meta">${escapeHtml(t.style || 'custom')} · ${escapeHtml(t.board || 'xhs')}</div>
+        </div>
+      `).join('');
+    }
+
+    els.parseUploadArea.addEventListener('click', () => {
+      els.parseFileInput.click();
+    });
+
+    els.parseFileInput.addEventListener('change', () => {
+      const file = els.parseFileInput.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const dataUrl = e.target.result;
+        parseImageBase64 = dataUrl.split(',')[1];
+        els.parseUploadPreview.src = dataUrl;
+        els.parseUploadPreview.style.display = 'block';
+        els.parseUploadPlaceholder.style.display = 'none';
+        els.parseAnalyzeBtn.disabled = false;
+      };
+      reader.readAsDataURL(file);
+    });
+
+    els.parseAnalyzeBtn.addEventListener('click', async () => {
+      if (!parseImageBase64) return;
+      els.parseAnalyzeBtn.disabled = true;
+      els.parseStatus.textContent = '正在调用 VLM 解析版面...';
+      try {
+        const backend = els.parseBackendSelect.value;
+        const resp = await fetch('/api/template/parse', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            image_base64: parseImageBase64,
+            image_name: els.parseFileInput.files[0]?.name || 'uploaded',
+            backend: backend,
+          }),
+        });
+        if (!resp.ok) throw new Error(await resp.text());
+        const data = await resp.json();
+        const tmpl = data.template;
+        els.parseStatus.textContent = `解析完成：${tmpl.slots.length} 个区域`;
+        els.parseTemplateName.value = tmpl.name || '从图片提取的模板';
+        renderParseLayout(tmpl);
+        els.parseOriginalImage.src = `data:image/jpeg;base64,${parseImageBase64}`;
+        els.parseWorkbench.style.display = '';
+        els.parseSaveControls.style.display = '';
+        updateParseJsonPreview();
+      } catch (err) {
+        els.parseStatus.textContent = `解析失败：${err}`;
+      } finally {
+        els.parseAnalyzeBtn.disabled = false;
+      }
+    });
+
+    function renderParseLayout(tmpl) {
+      parseLayoutItems = tmpl.slots.map((slot, i) => ({
+        id: `parse_slot_${i}`,
+        label: slot.label || `区域 ${i + 1}`,
+        grid_x: slot.gx,
+        grid_y: slot.gy,
+        grid_w: slot.gw,
+        grid_h: slot.gh,
+        image_prompt: slot.image_prompt || '',
+        pin_to_top: !!slot.pin_to_top,
+        z_index: i + 1,
+      }));
+      parseActiveSlotId = parseLayoutItems[0]?.id || '';
+      renderParseDropZone();
+    }
+
+    function renderParseDropZone() {
+      const sorted = parseLayoutItems.slice().sort((a, b) => (a.z_index ?? 0) - (b.z_index ?? 0));
+      els.parseLayoutLayer.innerHTML = sorted.map((item) => {
+        const isActive = item.id === parseActiveSlotId;
+        const hasPrompt = !!item.image_prompt;
+        const isPinned = item.pin_to_top;
+        const classes = ['composition-layout-item', isActive ? 'active' : '', isPinned ? 'pin-to-top' : ''].filter(Boolean).join(' ');
+        const promptBadge = hasPrompt ? `<span class="composition-prompt-badge" title="${escapeHtml(item.image_prompt)}">P</span>` : '';
+        return `
+        <div class="${classes}" data-parse-slot-id="${escapeHtml(item.id)}" style="left: ${gridToPercentX(item.grid_x)}%; top: ${gridToPercentY(item.grid_y)}%; width: ${gridToPercentX(item.grid_w)}%; height: ${gridToPercentY(item.grid_h)}%; z-index: ${item.z_index ?? 1}; border-style: dashed; background: rgba(192, 132, 252, 0.12);">
+          <div class="composition-layout-label">${escapeHtml(item.label)}${hasPrompt ? ' · 提示' : ''}${isPinned ? ' · 置顶' : ''} · z${item.z_index ?? 1}</div>
+        </div>`;
+      }).join('');
+      // Load prompt for active slot
+      const active = parseLayoutItems.find(it => it.id === parseActiveSlotId);
+      els.parseSlotPrompt.value = active?.image_prompt || '';
+      updateParseJsonPreview();
+    }
+
+    function updateParseJsonPreview() {
+      const active = parseLayoutItems.find(it => it.id === parseActiveSlotId);
+      if (active) {
+        active.image_prompt = els.parseSlotPrompt.value;
+      }
+      const tmpl = buildParseTemplate();
+      els.parseJsonPreview.textContent = JSON.stringify(tmpl, null, 2);
+    }
+
+    function buildParseTemplate() {
+      const name = els.parseTemplateName.value || '从图片提取的模板';
+      return {
+        id: `custom_${Date.now()}`,
+        name,
+        style: 'custom',
+        board: 'xhs',
+        slots: parseLayoutItems.map((item, i) => ({
+          gx: item.grid_x,
+          gy: item.grid_y,
+          gw: item.grid_w,
+          gh: item.grid_h,
+          label: item.label,
+          image_prompt: item.image_prompt || '',
+          pin_to_top: !!item.pin_to_top,
+        })),
+      };
+    }
+
+    els.parseSlotPrompt.addEventListener('input', () => {
+      const active = parseLayoutItems.find(it => it.id === parseActiveSlotId);
+      if (active) {
+        active.image_prompt = els.parseSlotPrompt.value;
+      }
+      updateParseJsonPreview();
+    });
+
+    els.parseLayoutLayer.addEventListener('click', (e) => {
+      const slotEl = e.target.closest('[data-parse-slot-id]');
+      if (!slotEl) return;
+      parseActiveSlotId = slotEl.dataset.parseSlotId;
+      renderParseDropZone();
+    });
+
+    els.parseSaveBtn.addEventListener('click', async () => {
+      const tmpl = buildParseTemplate();
+      els.parseStatus.textContent = '保存中...';
+      try {
+        const resp = await fetch('/api/template/save', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ template: tmpl }),
+        });
+        if (!resp.ok) throw new Error(await resp.text());
+        const data = await resp.json();
+        customTemplates.push(data.template);
+        renderCustomTemplateList();
+        els.parseStatus.textContent = `已保存：${data.template.id}`;
+      } catch (err) {
+        els.parseStatus.textContent = `保存失败：${err}`;
+      }
+    });
+
+    els.parseResetBtn.addEventListener('click', () => {
+      parseImageBase64 = '';
+      parseLayoutItems = [];
+      parseActiveSlotId = '';
+      els.parseUploadPreview.style.display = 'none';
+      els.parseUploadPlaceholder.style.display = '';
+      els.parseWorkbench.style.display = 'none';
+      els.parseSaveControls.style.display = 'none';
+      els.parseStatus.textContent = '';
+      els.parseFileInput.value = '';
+    });
+
+    // --- 分割 / 合并 / 删除区域 ---
+    function getActiveSlot() {
+      return parseLayoutItems.find(it => it.id === parseActiveSlotId);
+    }
+
+    function splitSlot(direction) {
+      const slot = getActiveSlot();
+      if (!slot) return;
+      const idx = parseLayoutItems.indexOf(slot);
+      if (direction === 'h') {
+        const half = slot.grid_h / 2;
+        slot.grid_h = half;
+        parseLayoutItems.splice(idx + 1, 0, {
+          ...slot,
+          id: `parse_slot_${Date.now()}`,
+          label: `${slot.label} 下半`,
+          grid_y: slot.grid_y + half,
+          grid_h: half,
+          image_prompt: '',
+          z_index: (parseLayoutItems.length + 1),
+        });
+      } else {
+        const half = slot.grid_w / 2;
+        slot.grid_w = half;
+        parseLayoutItems.splice(idx + 1, 0, {
+          ...slot,
+          id: `parse_slot_${Date.now()}`,
+          label: `${slot.label} 右半`,
+          grid_x: slot.grid_x + half,
+          grid_w: half,
+          image_prompt: '',
+          z_index: (parseLayoutItems.length + 1),
+        });
+      }
+      parseActiveSlotId = slot.id;
+      renderParseDropZone();
+      updateParseJsonPreview();
+    }
+
+    els.parseSplitH.addEventListener('click', () => splitSlot('h'));
+    els.parseSplitV.addEventListener('click', () => splitSlot('v'));
+
+    els.parseMergeBtn.addEventListener('click', () => {
+      const slot = getActiveSlot();
+      if (!slot) return;
+      // 找与当前 slot 相邻（水平或垂直）且同 z_index 的 slot
+      const candidates = parseLayoutItems.filter(s => s !== slot && s.z_index === slot.z_index);
+      let best = null;
+      let bestDist = Infinity;
+      for (const c of candidates) {
+        const hOverlap = Math.max(0, Math.min(slot.grid_x + slot.grid_w, c.grid_x + c.grid_w) - Math.max(slot.grid_x, c.grid_x));
+        const vOverlap = Math.max(0, Math.min(slot.grid_y + slot.grid_h, c.grid_y + c.grid_h) - Math.max(slot.grid_y, c.grid_y));
+        const hAdjacent = (Math.abs(slot.grid_x + slot.grid_w - c.grid_x) < 0.5 || Math.abs(c.grid_x + c.grid_w - slot.grid_x) < 0.5) && vOverlap > 0.5;
+        const vAdjacent = (Math.abs(slot.grid_y + slot.grid_h - c.grid_y) < 0.5 || Math.abs(c.grid_y + c.grid_h - slot.grid_y) < 0.5) && hOverlap > 0.5;
+        if (hAdjacent || vAdjacent) {
+          const dist = Math.abs(slot.grid_x - c.grid_x) + Math.abs(slot.grid_y - c.grid_y);
+          if (dist < bestDist) { best = c; bestDist = dist; }
+        }
+      }
+      if (!best) {
+        els.parseStatus.textContent = '未找到相邻区域可合并';
+        return;
+      }
+      const newX = Math.min(slot.grid_x, best.grid_x);
+      const newY = Math.min(slot.grid_y, best.grid_y);
+      const newW = Math.max(slot.grid_x + slot.grid_w, best.grid_x + best.grid_w) - newX;
+      const newH = Math.max(slot.grid_y + slot.grid_h, best.grid_y + best.grid_h) - newY;
+      slot.grid_x = newX;
+      slot.grid_y = newY;
+      slot.grid_w = newW;
+      slot.grid_h = newH;
+      slot.label = `${slot.label}+${best.label}`;
+      parseLayoutItems = parseLayoutItems.filter(s => s !== best);
+      renderParseDropZone();
+      updateParseJsonPreview();
+      els.parseStatus.textContent = `已合并：${slot.label}`;
+    });
+
+    els.parseDeleteSlot.addEventListener('click', () => {
+      const slot = getActiveSlot();
+      if (!slot) return;
+      parseLayoutItems = parseLayoutItems.filter(s => s !== slot);
+      parseActiveSlotId = parseLayoutItems[0]?.id || '';
+      renderParseDropZone();
+      updateParseJsonPreview();
+      els.parseStatus.textContent = `已删除：${slot.label}`;
+    });
+
+    // --- 解析布局拖拽 ---
+    function setupParseDrag() {
+      const drag = { active: false, moved: false, pointerId: null, offsetX: 0, offsetY: 0 };
+      els.parseLayoutLayer.addEventListener('pointerdown', (event) => {
+        const node = event.target.closest('[data-parse-slot-id]');
+        if (!node) return;
+        drag.active = true;
+        drag.moved = false;
+        drag.pointerId = event.pointerId;
+        const rect = node.getBoundingClientRect();
+        drag.offsetX = event.clientX - rect.left;
+        drag.offsetY = event.clientY - rect.top;
+        node.classList.add('dragging');
+        node.setPointerCapture(event.pointerId);
+        event.preventDefault();
+      });
+      els.parseLayoutLayer.addEventListener('pointermove', (event) => {
+        if (!drag.active) return;
+        const node = document.querySelector(`[data-parse-slot-id="${parseActiveSlotId}"]`);
+        if (!node) return;
+        const zone = els.parseDropZone.getBoundingClientRect();
+        const nextPxX = event.clientX - zone.left - drag.offsetX;
+        const nextPxY = event.clientY - zone.top - drag.offsetY;
+        const slot = getActiveSlot();
+        if (!slot) return;
+        const nextX = (nextPxX / zone.width) * GRID_LAYOUT.cols;
+        const nextY = (nextPxY / zone.height) * GRID_LAYOUT.rows;
+        const currentX = slot.grid_x;
+        const currentY = slot.grid_y;
+        if (Math.abs(nextX - currentX) > 0.5 || Math.abs(nextY - currentY) > 0.5) drag.moved = true;
+        slot.grid_x = Math.round(clamp(nextX, 0, GRID_LAYOUT.cols));
+        slot.grid_y = Math.round(clamp(nextY, 0, GRID_LAYOUT.rows));
+        node.style.left = `${gridToPercentX(slot.grid_x)}%`;
+        node.style.top = `${gridToPercentY(slot.grid_y)}%`;
+      });
+      els.parseLayoutLayer.addEventListener('pointerup', (event) => {
+        drag.active = false;
+        const node = document.querySelector(`[data-parse-slot-id="${parseActiveSlotId}"]`);
+        if (node) node.classList.remove('dragging');
+        if (drag.moved) updateParseJsonPreview();
+      });
+      els.parseLayoutLayer.addEventListener('pointercancel', () => {
+        drag.active = false;
+      });
+    }
+    setupParseDrag();
+
+    // --- 自定义模板列表渲染 ---
+    function renderCustomTemplateList() {
+      if (customTemplates.length === 0) {
+        els.customTemplateList.textContent = '暂无自定义模板';
+        return;
+      }
+      els.customTemplateList.innerHTML = customTemplates.map((tmpl, idx) => {
+        const thumbSlots = (tmpl.slots || []).map(slot => {
+          const classes = ['template-thumb-slot'];
+          if (slot.pin_to_top) classes.push('pin-to-top');
+          if (slot.image_prompt) classes.push('has-prompt');
+          return `<div class="${classes.join(' ')}" style="left:${gridToPercentX(slot.gx)}%;top:${gridToPercentY(slot.gy)}%;width:${gridToPercentX(slot.gw)}%;height:${gridToPercentY(slot.gh)}%"></div>`;
+        }).join('');
+        return `
+          <div class="template-card" style="position: relative;">
+            <button class="template-card-delete" onclick="deleteCustomTemplate(${idx})" style="position: absolute; top: 4px; right: 4px; background: var(--danger); color: #fff; border: none; border-radius: 4px; cursor: pointer; font-size: 10px; padding: 2px 6px;">删除</button>
+            <div class="template-card-name">${escapeHtml(tmpl.name || '未命名')}</div>
+            <div class="template-card-meta">${escapeHtml(tmpl.style || '')} · ${escapeHtml(tmpl.board || '')} · ${(tmpl.slots || []).length} 格</div>
+            <div class="template-thumb">${thumbSlots}</div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    window.deleteCustomTemplate = async function (idx) {
+      customTemplates.splice(idx, 1);
+      await fetch('/api/template/save-all', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ templates: customTemplates }),
+      });
+      renderCustomTemplateList();
+    };
   </script>
 </body>
 </html>

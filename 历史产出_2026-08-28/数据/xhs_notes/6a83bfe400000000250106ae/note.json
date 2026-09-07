@@ -1,0 +1,46 @@
+{
+  "meta": {
+    "url": "https://www.xiaohongshu.com/explore/6a83bfe400000000250106ae?xsec_token=ABhMESZdHuu3vQZcma9P_hjVbG6xvPbgAaCxUY70Adsn8=&xsec_source=pc_search",
+    "note_id": "6a83bfe400000000250106ae",
+    "title": "",
+    "desc": "一堆人留下小猫咪的猎奇丑照就走了，剩我一个人笑得好崩溃... #实况照片[话题]#  #万万没想到[话题]#  #老铁娱乐观察站[话题]#   #丑照[话题]#",
+    "tags": [
+      "实况照片",
+      "万万没想到",
+      "老铁娱乐观察站",
+      "丑照"
+    ],
+    "interact": {
+      "liked": 28000,
+      "collected": 8135,
+      "comment": 582,
+      "shared": 3073
+    },
+    "author": {
+      "nickname": "孤岛候鸟",
+      "user_id": "6a6c51b10000000013002c00",
+      "avatar": "https://sns-avatar-qc.xhscdn.com/avatar/1040g2jo323d8eg74n0605qjca6okob0085begvo"
+    },
+    "camera_detected": null,
+    "ip_location": "上海",
+    "post_time": 1787019236000,
+    "captured_at": "2026-08-20 11:09:12"
+  },
+  "media": [
+    {
+      "index": 0,
+      "is_live": false,
+      "width": 720,
+      "height": 1280,
+      "cover_local": "D:\\My Documents\\11085203\\Documents\\小红书收集\\01_live玩法洞察\\数据\\xhs_notes\\6a83bfe400000000250106ae\\covers\\cover_00.jpg",
+      "cover_bytes": 268624,
+      "type": "video",
+      "video_url": "http://sns-video-v6.xhscdn.com/stream/1/110/259/01ea83bfe0d18b4001037003a012a689b4_259.mp4?sign=93f4926454442300b0b2e77c878b1723&t=6a8b0d02",
+      "video_local": "D:\\My Documents\\11085203\\Documents\\小红书收集\\01_live玩法洞察\\数据\\xhs_notes\\6a83bfe400000000250106ae\\lives\\video_00.mp4",
+      "video_bytes": 14149853,
+      "video_duration": 64.74,
+      "frames_dir": "D:\\My Documents\\11085203\\Documents\\小红书收集\\01_live玩法洞察\\数据\\xhs_notes\\6a83bfe400000000250106ae\\lives\\video_00_frames",
+      "frames_count": 322
+    }
+  ]
+}

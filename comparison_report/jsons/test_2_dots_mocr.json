@@ -1,0 +1,52 @@
+[
+  {
+    "gx": 15,
+    "gy": 5,
+    "gw": 79,
+    "gh": 85,
+    "role": "background",
+    "pin_to_top": false,
+    "image_prompt": "",
+    "z_order": 0
+  },
+  {
+    "gx": 0,
+    "gy": 51,
+    "gw": 120,
+    "gh": 58,
+    "role": "background",
+    "pin_to_top": false,
+    "image_prompt": "",
+    "z_order": 1
+  },
+  {
+    "gx": 66,
+    "gy": 107,
+    "gw": 48,
+    "gh": 19,
+    "role": "foreground",
+    "pin_to_top": true,
+    "image_prompt": "may the flowers remind us\nwhy the rain was so\nnecessary",
+    "z_order": 2
+  },
+  {
+    "gx": 6,
+    "gy": 112,
+    "gw": 56,
+    "gh": 41,
+    "role": "background",
+    "pin_to_top": false,
+    "image_prompt": "",
+    "z_order": 3
+  },
+  {
+    "gx": 65,
+    "gy": 119,
+    "gw": 55,
+    "gh": 36,
+    "role": "background",
+    "pin_to_top": false,
+    "image_prompt": "",
+    "z_order": 4
+  }
+]

@@ -1,0 +1,48 @@
+{
+  "meta": {
+    "url": "https://www.xiaohongshu.com/explore/6a8828f100000000160224db?xsec_token=ABmzhObYk1NEHR51oW5MyjW0eYHqxZ2muBKwr6EU37xSI=&xsec_source=pc_search",
+    "note_id": "6a8828f100000000160224db",
+    "title": "闺蜜你定制的网感实况p图教程来了",
+    "desc": "#p图教程[话题]# #爆改[话题]# #cos后期[话题]# #好视频扶持计划[话题]#   #世P一[话题]# #二次元生活存档[话题]#",
+    "tags": [
+      "p图教程",
+      "爆改",
+      "cos后期",
+      "好视频扶持计划",
+      "世P一",
+      "二次元生活存档"
+    ],
+    "interact": {
+      "liked": 1724,
+      "collected": 855,
+      "comment": 15,
+      "shared": 67
+    },
+    "author": {
+      "nickname": "屁股着火了",
+      "user_id": "62a82ffd0000000019023829",
+      "avatar": "https://sns-avatar-qc.xhscdn.com/avatar/1040g2jo31a3u7ab4n2e05ol85vumce19a3qnfio"
+    },
+    "camera_detected": null,
+    "ip_location": "北京",
+    "post_time": 1787308273000,
+    "captured_at": "2026-08-22 11:08:17"
+  },
+  "media": [
+    {
+      "index": 0,
+      "is_live": false,
+      "width": 1260,
+      "height": 1680,
+      "cover_local": "D:\\My Documents\\11085203\\Documents\\小红书收集\\01_live玩法洞察\\数据\\xhs_notes\\6a8828f100000000160224db\\covers\\cover_00.jpg",
+      "cover_bytes": 180980,
+      "type": "video",
+      "video_url": "http://sns-video-v6.xhscdn.com/stream/79/110/259/01ea8828f1b4db6401037003a023e9bb87_259.mp4?sign=4a385091471132c0e36a64fa7d305539&t=6a8dafce",
+      "video_local": "D:\\My Documents\\11085203\\Documents\\小红书收集\\01_live玩法洞察\\数据\\xhs_notes\\6a8828f100000000160224db\\lives\\video_00.mp4",
+      "video_bytes": 4798455,
+      "video_duration": 122.72,
+      "frames_dir": "D:\\My Documents\\11085203\\Documents\\小红书收集\\01_live玩法洞察\\数据\\xhs_notes\\6a8828f100000000160224db\\lives\\video_00_frames",
+      "frames_count": 614
+    }
+  ]
+}

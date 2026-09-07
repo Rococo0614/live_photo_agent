@@ -1,0 +1,92 @@
+[
+  {
+    "gx": 4,
+    "gy": 24,
+    "gw": 21,
+    "gh": 16,
+    "role": "foreground",
+    "pin_to_top": true,
+    "image_prompt": "路",
+    "z_order": 0
+  },
+  {
+    "gx": 53,
+    "gy": 27,
+    "gw": 12,
+    "gh": 12,
+    "role": "foreground",
+    "pin_to_top": true,
+    "image_prompt": "落",
+    "z_order": 1
+  },
+  {
+    "gx": 91,
+    "gy": 21,
+    "gw": 19,
+    "gh": 27,
+    "role": "foreground",
+    "pin_to_top": true,
+    "image_prompt": "花",
+    "z_order": 2
+  },
+  {
+    "gx": 46,
+    "gy": 60,
+    "gw": 19,
+    "gh": 18,
+    "role": "foreground",
+    "pin_to_top": true,
+    "image_prompt": "猫",
+    "z_order": 3
+  },
+  {
+    "gx": 90,
+    "gy": 66,
+    "gw": 23,
+    "gh": 21,
+    "role": "foreground",
+    "pin_to_top": true,
+    "image_prompt": "光",
+    "z_order": 4
+  },
+  {
+    "gx": 14,
+    "gy": 81,
+    "gw": 15,
+    "gh": 4,
+    "role": "foreground",
+    "pin_to_top": true,
+    "image_prompt": "moon",
+    "z_order": 5
+  },
+  {
+    "gx": 4,
+    "gy": 125,
+    "gw": 21,
+    "gh": 17,
+    "role": "foreground",
+    "pin_to_top": true,
+    "image_prompt": "灯",
+    "z_order": 6
+  },
+  {
+    "gx": 63,
+    "gy": 130,
+    "gw": 11,
+    "gh": 16,
+    "role": "foreground",
+    "pin_to_top": true,
+    "image_prompt": "曷",
+    "z_order": 7
+  },
+  {
+    "gx": 89,
+    "gy": 119,
+    "gw": 21,
+    "gh": 18,
+    "role": "foreground",
+    "pin_to_top": true,
+    "image_prompt": "飞",
+    "z_order": 8
+  }
+]

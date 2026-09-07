@@ -128,6 +128,7 @@ class ToolName(str, Enum):
     SET_DISPLAY_FRAME = "set_display_frame"
     EXTRACT_SUBJECT_MATTE = "extract_subject_matte"
     OVERLAY_SUBJECT_CLIP = "overlay_subject_clip"
+    EXTRACT_REGION_MATTE = "extract_region_matte"
 
 
 class ToolCall(BaseModel):

@@ -1,0 +1,34 @@
+[11:00:25] ============================================================
+[11:00:25] 小红书 Live 玩法洞察流水线启动  2026-08-12T11:00:25.457238
+[11:00:25]   dry_run=False  up_to_stage=viz
+[11:00:25] [P1] 运行 fetch_and_search.py 自动搜索发现...
+[11:00:25] $ python fetch_and_search.py 
+[11:06:23] [P1] fetch_and_search.py 未找到目标（0）
+[11:06:23] [P1] 运行 quick_find.py 自动搜索发现...
+[11:06:23] $ python quick_find.py 
+[11:09:01] [P1] 发现目标: https://www.xiaohongshu.com/explore/6a746b5100000000240253b4?xsec_token=ABJox07r3r7auw2mP_KJ_aeMx3ONnMvrSkW-czc-CdOSc=&xsec_source=pc_search
+[11:09:01] [URL] 6a746b5100000000240253b4 已收集过（更新时间），本次未计票
+[11:09:01] $ python fetch_xhs.py https://www.xiaohongshu.com/explore/6a746b5100000000240253b4?xsec_token=ABJox07r3r7auw2mP_KJ_aeMx3ONnMvrSkW-czc-CdOSc=&xsec_source=pc_search
+[11:09:31] [P2] 抓取完成: 6a746b5100000000240253b4
+[11:09:31] $ python observe_batch.py 6a746b5100000000240253b4 3
+[11:10:28] [P3] 云端观察完成 rc=0
+[11:10:33] [P3] 本地 Ollama 未运行，跳过本地通道（降级为纯云端）
+[11:10:33] $ python gen_card_dual.py 6a746b5100000000240253b4 0
+[11:11:24] $ python gen_card_generic.py 6a746b5100000000240253b4 0
+[11:11:24] [P5] HTML 生成 rc=0
+[11:11:24] ============================================================
+[11:11:24] 流水线完成
+[11:11:24] 状态: C:\Users\11085203\BlueCode\01_live玩法洞察\运行记录\state.json
+[11:11:24] 日志: C:\Users\11085203\BlueCode\01_live玩法洞察\运行记录\2026-08-12.log
+[11:16:27] ============================================================
+[11:16:27] 小红书 Live 玩法洞察流水线启动  2026-08-12T11:16:27.081922
+[11:16:27]   dry_run=False  up_to_stage=viz
+[11:16:27] [P1] 运行 fetch_and_search.py 自动搜索发现...
+[11:16:27] $ python fetch_and_search.py 
+[11:22:28] [P1] fetch_and_search.py 未找到目标（0）
+[11:22:28] [P1] 运行 quick_find.py 自动搜索发现...
+[11:22:28] $ python quick_find.py 
+[11:25:11] [P1] 发现目标: https://www.xiaohongshu.com/explore/6a746b5100000000240253b4?xsec_token=ABJox07r3r7auw2mP_KJ_aeMx3ONnMvrSkW-czc-CdOSc=&xsec_source=pc_search
+[11:25:11] [URL] 6a746b5100000000240253b4 已收集过（更新时间），本次未计票
+[11:25:11] [P2] 6a746b5100000000240253b4 已抓取过，投票 +1（共 3 票），跳过本次抓取
+[11:25:11] [去重] 6a746b5100000000240253b4 已抓取过，仅投票，跳过本次下游分析

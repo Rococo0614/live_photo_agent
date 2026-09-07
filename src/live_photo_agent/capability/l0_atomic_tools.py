@@ -481,6 +481,70 @@ class L0AtomicTools:
             payload={"overlay_applied": True, "output_path": str(result_path)},
         )
 
+    def extract_region_matte(self, call: ToolCall, context: dict[str, object]) -> ToolResult:
+        """Extract foreground subject from a sub-region of each video frame via grabCut.
+
+        Arguments:
+            asset_id: required, the asset to process
+            region: "bottom_third" (default) | "bottom_half" | "top_third"
+            keep_region: bool, keep region area fully opaque (default True)
+            sample_every: int, run grabCut every N frames (default 3)
+        """
+        asset_id = str(call.arguments.get("asset_id", "")).strip()
+        region = str(call.arguments.get("region", "bottom_third")).strip()
+        keep_region = bool(call.arguments.get("keep_region", True))
+        sample_every = int(call.arguments.get("sample_every", 3))
+
+        asset = self._asset_by_id(asset_id, context)
+        if not asset:
+            return ToolResult(tool=call.tool, success=False,
+                              payload={"error": f"asset_not_found: {asset_id}"})
+
+        motion_path = self._asset_motion_path(asset)
+        if not motion_path or not motion_path.exists():
+            return ToolResult(tool=call.tool, success=False,
+                              payload={"error": f"no_motion_video: {asset_id}"})
+
+        workspace = self._segmentation_workspace_dir()
+        output_dir = workspace / "region_mattes" / asset_id
+        try:
+            result = self.media_ops.segment_subject_region_video(
+                motion_path, output_dir, region=region,
+                keep_region=keep_region, sample_every=sample_every,
+            )
+        except Exception as exc:
+            return ToolResult(tool=call.tool, success=False,
+                              payload={"error": str(exc), "error_code": "region_matte_failed"})
+
+        # Export RGBA video
+        output_path = workspace / "region_exports" / f"{asset_id}.webm"
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        try:
+            self.media_ops.export_rgba_video(
+                motion_path, output_dir, output_path,
+            )
+        except Exception as exc:
+            output_path = None
+
+        context["region_matte"] = {
+            "asset_id": asset_id,
+            "region": region,
+            "frames_dir": str(output_dir),
+            "frame_count": result["frame_count"],
+            "rgba_video": str(output_path) if output_path else None,
+        }
+
+        return ToolResult(
+            tool=call.tool,
+            success=True,
+            payload={
+                "frame_count": result["frame_count"],
+                "region": region,
+                "frames_dir": str(output_dir),
+                "rgba_video": str(output_path) if output_path else None,
+            },
+        )
+
     def _foreground_placement_from_template(
         self,
         context: dict[str, object],

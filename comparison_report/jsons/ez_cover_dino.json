@@ -1,0 +1,42 @@
+[
+  {
+    "gx": 34,
+    "gy": 57,
+    "gw": 58,
+    "gh": 40,
+    "role": "foreground",
+    "pin_to_top": true,
+    "image_prompt": "",
+    "z_order": 0
+  },
+  {
+    "gx": 52,
+    "gy": 107,
+    "gw": 57,
+    "gh": 38,
+    "role": "foreground",
+    "pin_to_top": true,
+    "image_prompt": "",
+    "z_order": 1
+  },
+  {
+    "gx": 45,
+    "gy": 102,
+    "gw": 15,
+    "gh": 16,
+    "role": "foreground",
+    "pin_to_top": true,
+    "image_prompt": "",
+    "z_order": 2
+  },
+  {
+    "gx": 12,
+    "gy": 12,
+    "gw": 56,
+    "gh": 37,
+    "role": "foreground",
+    "pin_to_top": true,
+    "image_prompt": "",
+    "z_order": 3
+  }
+]

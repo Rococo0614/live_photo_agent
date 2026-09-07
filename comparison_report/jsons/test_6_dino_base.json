@@ -1,0 +1,82 @@
+[
+  {
+    "gx": 79,
+    "gy": 20,
+    "gw": 30,
+    "gh": 31,
+    "role": "foreground",
+    "pin_to_top": true,
+    "image_prompt": "",
+    "z_order": 0
+  },
+  {
+    "gx": 45,
+    "gy": 20,
+    "gw": 31,
+    "gh": 31,
+    "role": "foreground",
+    "pin_to_top": true,
+    "image_prompt": "",
+    "z_order": 1
+  },
+  {
+    "gx": 1,
+    "gy": 110,
+    "gw": 119,
+    "gh": 50,
+    "role": "background",
+    "pin_to_top": false,
+    "image_prompt": "",
+    "z_order": 2
+  },
+  {
+    "gx": 11,
+    "gy": 20,
+    "gw": 32,
+    "gh": 32,
+    "role": "foreground",
+    "pin_to_top": true,
+    "image_prompt": "",
+    "z_order": 3
+  },
+  {
+    "gx": 44,
+    "gy": 87,
+    "gw": 32,
+    "gh": 22,
+    "role": "foreground",
+    "pin_to_top": true,
+    "image_prompt": "",
+    "z_order": 4
+  },
+  {
+    "gx": 9,
+    "gy": 19,
+    "gw": 102,
+    "gh": 31,
+    "role": "foreground",
+    "pin_to_top": true,
+    "image_prompt": "",
+    "z_order": 5
+  },
+  {
+    "gx": 1,
+    "gy": 1,
+    "gw": 118,
+    "gh": 109,
+    "role": "background",
+    "pin_to_top": false,
+    "image_prompt": "",
+    "z_order": 6
+  },
+  {
+    "gx": 55,
+    "gy": 88,
+    "gw": 13,
+    "gh": 22,
+    "role": "foreground",
+    "pin_to_top": true,
+    "image_prompt": "",
+    "z_order": 7
+  }
+]
