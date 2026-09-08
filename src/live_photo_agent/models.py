@@ -130,6 +130,9 @@ class ToolName(str, Enum):
     OVERLAY_SUBJECT_CLIP = "overlay_subject_clip"
     EXTRACT_REGION_MATTE = "extract_region_matte"
 
+    # L2 vertical tool: live photo collage (segmentation + free layout + composition)
+    LIVE_PHOTO_COLLAGE = "live_photo_collage"
+
 
 class ToolCall(BaseModel):
     tool: ToolName

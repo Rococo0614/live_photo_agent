@@ -292,6 +292,33 @@ TOOL_CONTRACTS: dict[ToolName, ToolContract] = {
         idempotent=False,
         security_scope="local_media_readwrite_temp",
     ),
+    ToolName.LIVE_PHOTO_COLLAGE: ToolContract(
+        level="L2",
+        purpose=(
+            "Live photo collage: detect subjects via Mask2Former, segment+track via Cutie, "
+            "plan free layout (subjects don't overlap, each spans >=2 backgrounds), "
+            "split into bg+subject+alpha, compose final 1440x1920 video. "
+            "Outputs per-phase observable MP4s for debugging."
+        ),
+        allowed_arguments=("asset_paths", "output_dir", "canvas_width", "canvas_height", "span_ratio"),
+        output_fields=("final_video", "manifest", "layout_plan", "phase_videos"),
+        preconditions=("assets are live photos (jpg+embedded mp4) or mp4",),
+        side_effects=(
+            "writes manifest.json, layout_plan.json",
+            "writes phase1-5 MP4 files",
+            "writes final.mp4",
+        ),
+        failure_modes=(
+            "mask2former_load_failed",
+            "cutie_tracking_failed",
+            "no_subject_detected",
+            "composition_failed",
+        ),
+        timeout_budget_ms=600000,
+        quality_metrics=("subject_coverage", "layout_fill_ratio", "crossing_count"),
+        idempotent=True,
+        security_scope="local_media_readwrite_temp",
+    ),
 }
 
 
@@ -385,6 +412,13 @@ class CapabilityLayer:
                 "y_offset": "int(default=0)",
                 "fit_mode": "string(default=loop, options=loop|trim)",
             },
+            ToolName.LIVE_PHOTO_COLLAGE: {
+                "asset_paths": "string[]",
+                "output_dir": "string(path)",
+                "canvas_width": "int(default=1440)",
+                "canvas_height": "int(default=1920)",
+                "span_ratio": "float(default=0.25)",
+            },
         }
         return schemas.get(tool, {})
 
@@ -429,6 +463,12 @@ class CapabilityLayer:
                 "average_foreground_ratios": "object<string,float>",
             },
             ToolName.OVERLAY_SUBJECT_CLIP: {"overlay_applied": "bool", "output_path": "string(path)"},
+            ToolName.LIVE_PHOTO_COLLAGE: {
+                "final_video": "string(path)",
+                "manifest": "object",
+                "layout_plan": "object",
+                "phase_videos": "string[]",
+            },
         }
         return schemas.get(tool, {})
 

@@ -42,6 +42,7 @@ class ToolRegistry:
             ToolName.EXTRACT_SUBJECT_MATTE: self.l0.extract_subject_matte,
             ToolName.OVERLAY_SUBJECT_CLIP: self.l0.overlay_subject_clip,
             ToolName.EXTRACT_REGION_MATTE: self.l0.extract_region_matte,
+            ToolName.LIVE_PHOTO_COLLAGE: self.l2.live_photo_collage,
         }
 
     def execute(self, call: ToolCall, context: dict[str, object]) -> ToolResult:

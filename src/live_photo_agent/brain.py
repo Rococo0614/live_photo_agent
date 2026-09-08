@@ -310,6 +310,34 @@ TOOL_SPECS: tuple[ToolSpec, ...] = (
         },
         output_schema={"overlay_applied": "bool", "output_path": "string(path)"},
     ),
+    ToolSpec(
+        name=ToolName.LIVE_PHOTO_COLLAGE,
+        level="L2",
+        purpose=(
+            "Live photo collage: detect subjects via Mask2Former, segment+track via Cutie, "
+            "plan free layout (subjects don't overlap, each spans >=2 backgrounds), "
+            "split into bg+subject+alpha, compose final 1440x1920 video."
+        ),
+        when_to_use=(
+            "Use when the user wants to combine multiple live photos into a single collage video, "
+            "e.g. '拼贴', 'collage', '组合多个live', '拼接素材', '分割主体拼接'. "
+            "Automatically handles live photo container unpacking, subject detection, "
+            "free layout planning, and final composition."
+        ),
+        arguments={
+            "asset_paths": "List of asset file paths (live photo jpg containers or mp4 files).",
+            "output_dir": "Output directory for all generated files.",
+            "canvas_width": "Canvas width in pixels (default 1440).",
+            "canvas_height": "Canvas height in pixels (default 1920).",
+            "span_ratio": "Subject crossing ratio (default 0.25).",
+        },
+        output_schema={
+            "final_video": "string(path)",
+            "manifest": "object",
+            "layout_plan": "object",
+            "phase_videos": "string[]",
+        },
+    ),
 )
 
 

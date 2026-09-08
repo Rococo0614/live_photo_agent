@@ -72,11 +72,12 @@ scenery_scale = W / img3_tmp.shape[1]  # 景色图水平缩放到1440px
 
 h_top = c1
 h_mid = H_TOTAL // 3
-h_bot = H_TOTAL - c2
+cup_keep_start = H_TOTAL * 2 // 3  # 1280, 杯子背景保留区起点
+h_bot = H_TOTAL - cup_keep_start
 total_h = h_top + h_mid + h_bot
 print(f"\n上层(瓶子帧): [0:{c1}] h={h_top}")
 print(f"中层(景色图+跨越): 1/3 h={h_mid}")
-print(f"下层(杯子帧): [{c2}:{H_TOTAL}] h={h_bot}")
+print(f"下层(杯子帧): [{cup_keep_start}:{H_TOTAL}] h={h_bot}")
 print(f"总高度: {total_h}")
 
 # 3. 读取素材帧
@@ -89,41 +90,59 @@ ret2, frame2 = cap2.read()
 img3 = cv2.imread(IMG3)
 
 # 4. 上下层 = 原始视频帧(主体自然包含, 不缩放)
+#    上层 = 瓶子背景保留区 [0:c1]
+#    下层 = 杯子背景保留区 [cup_keep_start:1920]
 top_layer = frame1[0:c1, :]
-bot_layer = frame2[c2:, :]
+bot_layer = frame2[cup_keep_start:, :]
 
 # 5. 中层 z-order: 杯子跨越(底) → 景色图(中) → 瓶子跨越(顶)
 #    关键修正: 中层视频跨越部分也用原始像素(不缩放), 与上下层一致
 #    景色图 cover-crop 到 1440x640 (缩放比例独立, 因为是不同素材)
 mid_h_actual = h_mid
 
-# 杯子跨越到中层(底部): 用原始像素, 不缩放
-cup_mask_raw = cv2.imread(str(masks2[10]), cv2.IMREAD_GRAYSCALE)
-cup_y = y2_min
-cup_span = 0
-for y in range(y2_min, min(c2, y2_min + mid_h_actual)):
-    row_cov = np.count_nonzero(cup_mask_raw[y] > 127) / W
-    if row_cov > 0.5 and cup_span > 10:
-        break
-    cup_span = y - y2_min + 1
-cup_span = max(cup_span, 30)
-cup_in_mid = frame2[y2_min:y2_min + cup_span, :]
-cup_mask_in_mid = feather_mask(cup_mask_raw[y2_min:y2_min + cup_span, :], 21)
+# 分离 subject 区域 (去掉背景保留区)
+# seg_1 (瓶子): subject在上半部分, 背景保留区在 [0:c1] → subject在 [c1:y1_max]
+# seg_2 (杯子): subject在上1/3, 背景保留区在 [1280:1920] → subject在 [y2_min:640]
+# 但需要动态检测 subject 真正范围
+def find_subject_range(mask, keep_y_start, keep_y_end):
+    """找出 subject 区域 (去掉背景保留区后的 mask 范围)"""
+    subject_mask = mask.copy()
+    subject_mask[keep_y_start:keep_y_end] = 0  # 去掉背景保留区
+    ys = np.where(subject_mask > 127)[0]
+    if len(ys) > 0:
+        return ys.min(), ys.max()
+    return 0, 0
 
-# 瓶子跨越到中层(顶部): 用原始像素, 不缩放
+# 瓶子 subject 范围 (背景保留区在 [0:c1])
+b1_min, b1_max = find_subject_range(
+    cv2.imread(str(masks1[10]), cv2.IMREAD_GRAYSCALE), 0, c1
+)
+print(f"瓶子 subject 范围: [{b1_min}, {b1_max}]")
+
+# 杯子 subject 范围 (背景保留区在 [1280:1920], 即 h*2//3)
+cup_keep_start = H_TOTAL * 2 // 3  # 1280
+b2_min, b2_max = find_subject_range(
+    cv2.imread(str(masks2[10]), cv2.IMREAD_GRAYSCALE), cup_keep_start, H_TOTAL
+)
+print(f"杯子 subject 范围: [{b2_min}, {b2_max}]")
+
+# 杯子跨越到中层(底部): 只取 subject 边缘
+cup_mask_raw = cv2.imread(str(masks2[10]), cv2.IMREAD_GRAYSCALE)
+cup_subject_h = b2_max - b2_min
+cup_span = max(30, min(cup_subject_h, mid_h_actual // 3))
+# 从 subject 底部往上取 cup_span px (杯子顶部探入中层)
+cup_in_mid = frame2[b2_min:b2_min + cup_span, :]
+cup_mask_in_mid = feather_mask(cup_mask_raw[b2_min:b2_min + cup_span, :], 21)
+
+# 瓶子跨越到中层(顶部): 只取 subject 边缘
 bottle_mask_raw = cv2.imread(str(masks1[10]), cv2.IMREAD_GRAYSCALE)
-bottle_y = y1_max
-bottle_span = 0
-for y in range(y1_max, c1, -1):
-    row_cov = np.count_nonzero(bottle_mask_raw[y] > 127) / W
-    if row_cov > 0.5 and bottle_span > 10:
-        break
-    bottle_span = y1_max - y + 1
-bottle_span = max(bottle_span, 30)
-bottle_in_mid = frame1[y1_max - bottle_span:y1_max, :]
-bottle_mask_in_mid = feather_mask(bottle_mask_raw[y1_max - bottle_span:y1_max, :], 21)
-print(f"瓶子跨越: {bottle_span}px (原始像素)")
-print(f"杯子跨越: {cup_span}px (原始像素)")
+bottle_subject_h = b1_max - b1_min
+bottle_span = max(30, min(bottle_subject_h, mid_h_actual // 3))
+# 从 subject 底部往上取 bottle_span px (瓶子底部探入中层)
+bottle_in_mid = frame1[b1_max - bottle_span:b1_max, :]
+bottle_mask_in_mid = feather_mask(bottle_mask_raw[b1_max - bottle_span:b1_max, :], 21)
+print(f"瓶子跨越: {bottle_span}px (subject边缘)")
+print(f"杯子跨越: {cup_span}px (subject边缘)")
 
 # 景色图(中间层)
 mid_bg = resize_crop_center(img3, W, mid_h_actual)
