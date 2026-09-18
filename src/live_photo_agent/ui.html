@@ -556,6 +556,122 @@
       background: rgba(56, 189, 248, 0.12);
       color: var(--accent);
     }
+    /* Smart Collage Chat */
+    .chat-container {
+      grid-column: 1 / -1;
+      display: flex;
+      flex-direction: column;
+      gap: 0;
+      min-height: 600px;
+      max-height: 75vh;
+      background: var(--card-bg);
+      border-radius: 16px;
+      border: 1px solid var(--line-color);
+      overflow: hidden;
+    }
+    .chat-messages {
+      flex: 1;
+      overflow-y: auto;
+      padding: 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+    .chat-message {
+      max-width: 80%;
+      padding: 12px 16px;
+      border-radius: 16px;
+      font-size: 14px;
+      line-height: 1.6;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+    .chat-message.user {
+      align-self: flex-end;
+      background: rgba(56, 189, 248, 0.15);
+      border: 1px solid rgba(56, 189, 248, 0.3);
+      color: var(--text);
+    }
+    .chat-message.assistant {
+      align-self: flex-start;
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid var(--line-color);
+      color: var(--text);
+    }
+    .chat-message.thinking {
+      align-self: flex-start;
+      background: rgba(168, 85, 247, 0.08);
+      border: 1px solid rgba(168, 85, 247, 0.2);
+      color: var(--muted);
+      font-size: 13px;
+      font-family: 'SF Mono', 'Fira Code', monospace;
+    }
+    .chat-message.result {
+      align-self: flex-start;
+      background: rgba(34, 197, 94, 0.08);
+      border: 1px solid rgba(34, 197, 94, 0.25);
+      color: var(--text);
+    }
+    .chat-message.result video {
+      max-width: 100%;
+      border-radius: 12px;
+      margin-top: 8px;
+    }
+    .chat-input-area {
+      padding: 16px 20px;
+      border-top: 1px solid var(--line-color);
+      display: flex;
+      gap: 10px;
+      align-items: flex-end;
+      background: var(--bg);
+    }
+    .chat-input {
+      flex: 1;
+      padding: 12px 16px;
+      border-radius: 12px;
+      border: 1px solid var(--line-color);
+      background: var(--card-bg);
+      color: var(--text);
+      font-size: 14px;
+      font-family: inherit;
+      resize: none;
+      max-height: 120px;
+      min-height: 44px;
+    }
+    .chat-input:focus {
+      outline: none;
+      border-color: var(--accent);
+    }
+    .chat-send-btn {
+      padding: 12px 24px;
+      border-radius: 12px;
+      border: none;
+      background: var(--accent);
+      color: var(--bg);
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      white-space: nowrap;
+      transition: opacity 0.15s;
+    }
+    .chat-send-btn:hover { opacity: 0.85; }
+    .chat-send-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+    .chat-loading {
+      align-self: flex-start;
+      padding: 12px 16px;
+      color: var(--muted);
+      font-size: 14px;
+    }
+    .chat-loading::after {
+      content: '...';
+      animation: dots 1.5s steps(4, end) infinite;
+    }
+    @keyframes dots {
+      0%, 20% { content: ''; }
+      40% { content: '.'; }
+      60% { content: '..'; }
+      80%, 100% { content: '...'; }
+    }
     .parse-upload-area {
       border: 2px dashed rgba(125, 211, 252, 0.3);
       border-radius: 14px;
@@ -887,6 +1003,7 @@
     <div class="view-switcher" style="display: flex; gap: 8px; justify-content: center; margin: 12px 0;">
       <button id="viewGenerateBtn" class="view-tab active" type="button">正向生成</button>
       <button id="viewParseBtn" class="view-tab" type="button">模板解析</button>
+      <button id="viewChatBtn" class="view-tab" type="button">智能拼贴</button>
     </div>
 
     <section class="workspace" id="viewGenerate">
@@ -1141,6 +1258,24 @@
         </div>
       </div>
     </section>
+
+    <section class="workspace" id="viewChat" style="display: none;">
+      <div class="panel" style="grid-column: 1 / -1;">
+        <h2 class="section-title">智能拼贴 — 一句话找素材 + 模板匹配</h2>
+        <div class="micro" style="margin-bottom: 16px;">
+          输入一句话描述你想要的拼贴，系统会搜索素材库、匹配模板、打分排序，最后给出合成结果。
+        </div>
+        <div class="chat-container">
+          <div class="chat-messages" id="chatMessages">
+            <div class="chat-message assistant">你好！告诉我你想要什么拼贴，比如"给我的猫拼一个三拼"或"挑四张去海边玩的照片帮我拼一下"。</div>
+          </div>
+          <div class="chat-input-area">
+            <textarea class="chat-input" id="chatInput" placeholder="输入你的拼贴需求..." rows="1"></textarea>
+            <button class="chat-send-btn" id="chatSendBtn" type="button">发送</button>
+          </div>
+        </div>
+      </div>
+    </section>
   </div>
 
   <div id="galleryModal" class="gallery-modal" role="dialog" aria-modal="true" aria-labelledby="galleryDialogTitle">
@@ -1233,6 +1368,7 @@
       pendingTemplateId: '',
       activeLayoutId: '',
       keepAspectResize: false,
+      conversationHistory: [],
     };
 
     const GRID_LAYOUT = { cols: 120, rows: 160 };
@@ -1338,8 +1474,13 @@
       clearButton: document.getElementById('clearButton'),
       viewGenerateBtn: document.getElementById('viewGenerateBtn'),
       viewParseBtn: document.getElementById('viewParseBtn'),
+      viewChatBtn: document.getElementById('viewChatBtn'),
       viewGenerate: document.getElementById('viewGenerate'),
       viewParse: document.getElementById('viewParse'),
+      viewChat: document.getElementById('viewChat'),
+      chatMessages: document.getElementById('chatMessages'),
+      chatInput: document.getElementById('chatInput'),
+      chatSendBtn: document.getElementById('chatSendBtn'),
       parseFileInput: document.getElementById('parseFileInput'),
       parseUploadArea: document.getElementById('parseUploadArea'),
       parseUploadPreview: document.getElementById('parseUploadPreview'),
@@ -2985,21 +3126,249 @@
 
     // --- View switching ---
     function switchView(view) {
+      console.log('[switchView] switching to:', view);
+      els.viewGenerate.style.display = 'none';
+      els.viewParse.style.display = 'none';
+      els.viewChat.style.display = 'none';
+      els.viewGenerateBtn.classList.remove('active');
+      els.viewParseBtn.classList.remove('active');
+      els.viewChatBtn.classList.remove('active');
       if (view === 'parse') {
-        els.viewGenerate.style.display = 'none';
         els.viewParse.style.display = '';
-        els.viewGenerateBtn.classList.remove('active');
         els.viewParseBtn.classList.add('active');
         loadCustomTemplates();
+      } else if (view === 'chat') {
+        els.viewChat.style.display = '';
+        els.viewChatBtn.classList.add('active');
+        console.log('[switchView] viewChat display:', els.viewChat.style.display);
       } else {
         els.viewGenerate.style.display = '';
-        els.viewParse.style.display = 'none';
         els.viewGenerateBtn.classList.add('active');
-        els.viewParseBtn.classList.remove('active');
       }
     }
     els.viewGenerateBtn.addEventListener('click', () => switchView('generate'));
     els.viewParseBtn.addEventListener('click', () => switchView('parse'));
+    els.viewChatBtn.addEventListener('click', () => switchView('chat'));
+
+    // --- Smart Collage Chat ---
+    function addChatMessage(text, type) {
+      const msg = document.createElement('div');
+      msg.className = 'chat-message ' + type;
+      msg.textContent = text;
+      els.chatMessages.appendChild(msg);
+      els.chatMessages.scrollTop = els.chatMessages.scrollHeight;
+      return msg;
+    }
+
+    function addChatLoading() {
+      const msg = document.createElement('div');
+      msg.className = 'chat-loading';
+      msg.id = 'chatLoadingIndicator';
+      msg.textContent = '正在搜索和匹配';
+      els.chatMessages.appendChild(msg);
+      els.chatMessages.scrollTop = els.chatMessages.scrollHeight;
+    }
+
+    function removeChatLoading() {
+      const el = document.getElementById('chatLoadingIndicator');
+      if (el) el.remove();
+    }
+
+    async function sendChatQuery() {
+      const query = els.chatInput.value.trim();
+      if (!query) return;
+      els.chatSendBtn.disabled = true;
+      console.log('[chat] query:', query);
+
+      // Add user message
+      addChatMessage(query, 'user');
+      els.chatInput.value = '';
+      els.chatInput.style.height = 'auto';
+
+      addChatLoading();
+
+      try {
+        // 走 brain planner: /agent/execute 做意图识别 + 任务规划 + 工具执行
+        const payload = {
+          user_id: 'web-chat',
+          text: query,
+          library_root: els.libraryRootInput.value.trim() || state.bootstrap?.library_root || 'data/live_photo',
+          selected_asset_ids: [],
+          guided_tool_names: [],
+          layout_context: [],
+          operation_log: [],
+          input_image_paths: [],
+          input_video_paths: [],
+          conversation_history: state.conversationHistory.slice(-10),
+        };
+        const response = await fetch('/agent/execute', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
+        console.log('[chat] response status:', response.status);
+        const data = await response.json();
+        console.log('[chat] data:', data);
+        removeChatLoading();
+
+        if (!response.ok) {
+          addChatMessage('请求失败: ' + (data.detail || data.error || `HTTP ${response.status}`), 'assistant');
+          return;
+        }
+
+        // 渲染 planner 的意图和规划
+        const plan = data.plan || {};
+        const intent = plan.intent || '(未知意图)';
+        const toolCalls = plan.tool_calls || [];
+        const thinkLines = [`意图: ${intent}`, `规划: ${toolCalls.length} 个工具步骤`];
+        for (const tc of toolCalls) {
+          thinkLines.push(`  → ${tc.tool}: ${tc.reason || ''}`);
+        }
+        if (plan.need_clarification && plan.clarification_questions?.length) {
+          thinkLines.push('需要澄清:');
+          for (const q of plan.clarification_questions) {
+            thinkLines.push(`  ? ${q}`);
+          }
+        }
+        addChatMessage(thinkLines.join('\n'), 'thinking');
+
+        // 如果需要澄清, 显示问题
+        if (plan.need_clarification) {
+          addChatMessage(data.final_response || '请补充更多信息后继续。', 'assistant');
+          return;
+        }
+
+        // 从 tool_results 中提取结果
+        const toolResults = data.tool_results || [];
+        let finalVideo = null;
+        const resultLines = [];
+        for (const tr of toolResults) {
+          const toolName = tr.tool || '';
+          const success = tr.success;
+          const payload = tr.payload || {};
+          if (!success) {
+            resultLines.push(`✗ ${toolName}: ${payload.error || '失败'}`);
+            continue;
+          }
+          // 检查是否有 final_video (collage 工具的输出)
+          if (payload.final_video) {
+            finalVideo = payload.final_video;
+          }
+          // 检查是否有 asset_count (scan_library 等工具)
+          if (payload.asset_count !== undefined) {
+            resultLines.push(`✓ ${toolName}: ${payload.asset_count} 张素材`);
+          }
+          // 检查是否有 matched_ids (search_by_text)
+          if (payload.matched_ids) {
+            resultLines.push(`✓ ${toolName}: 匹配到 ${payload.matched_ids.length} 张`);
+          }
+          // 检查是否有 output_path (export_mp4 等)
+          if (payload.output_path && !finalVideo) {
+            finalVideo = payload.output_path;
+          }
+        }
+        if (resultLines.length) {
+          addChatMessage(resultLines.join('\n'), 'assistant');
+        }
+
+        // 显示 final_response
+        if (data.final_response) {
+          addChatMessage(data.final_response, 'assistant');
+        }
+
+        // 显示最终视频
+        if (finalVideo) {
+          const resultMsg = document.createElement('div');
+          resultMsg.className = 'chat-message result';
+          const header = document.createElement('div');
+          header.textContent = '合成完成！点击视频可放大查看';
+          header.style.marginBottom = '8px';
+          resultMsg.appendChild(header);
+
+          const thumbWrap = document.createElement('div');
+          thumbWrap.style.cssText = 'display:inline-block;cursor:pointer;position:relative;';
+          const thumb = document.createElement('video');
+          thumb.src = '/api/ui/media?path=' + encodeURIComponent(finalVideo);
+          thumb.controls = true;
+          thumb.loop = true;
+          thumb.autoplay = true;
+          thumb.muted = true;
+          thumb.playsInline = true;
+          thumb.style.cssText = 'width:180px;height:240px;border-radius:8px;object-fit:cover;display:block;background:#000;';
+          thumbWrap.appendChild(thumb);
+
+          const badge = document.createElement('div');
+          badge.textContent = '⤢ 放大';
+          badge.style.cssText = 'position:absolute;bottom:4px;right:4px;background:rgba(0,0,0,0.7);color:#fff;font-size:11px;padding:2px 6px;border-radius:4px;pointer-events:none;';
+          thumbWrap.appendChild(badge);
+
+          thumbWrap.addEventListener('click', function() {
+            const overlay = document.createElement('div');
+            overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.85);z-index:9999;display:flex;align-items:center;justify-content:center;';
+            const big = document.createElement('video');
+            big.src = thumb.src;
+            big.controls = true;
+            big.loop = true;
+            big.autoplay = true;
+            big.style.cssText = 'max-width:90vw;max-height:90vh;border-radius:12px;';
+            overlay.appendChild(big);
+            overlay.addEventListener('click', function(e) {
+              if (e.target === overlay) overlay.remove();
+            });
+            const escHandler = function(e) {
+              if (e.key === 'Escape') { overlay.remove(); document.removeEventListener('keydown', escHandler); }
+            };
+            document.addEventListener('keydown', escHandler);
+            document.body.appendChild(overlay);
+          });
+
+          resultMsg.appendChild(thumbWrap);
+          els.chatMessages.appendChild(resultMsg);
+          els.chatMessages.scrollTop = els.chatMessages.scrollHeight;
+        }
+
+        // 记录对话历史，让下一次请求有上下文
+        let historyEntry = { role: 'user', text: query };
+        if (intent !== 'conversation' && toolCalls.length > 0) {
+          // 记录工具执行结果
+          const tr = toolResults.find(t => t.tool === 'smart_collage');
+          if (tr && tr.success) {
+            const p = tr.payload || {};
+            historyEntry.result = {
+              intent: intent,
+              final_video: p.final_video || finalVideo || '',
+              selected_template: p.selected_template || {},
+            };
+          }
+        }
+        state.conversationHistory.push(historyEntry);
+        // 也记录 assistant 回复摘要
+        if (data.final_response) {
+          state.conversationHistory.push({ role: 'assistant', text: data.final_response.substring(0, 200) });
+        }
+        // 限制历史长度
+        if (state.conversationHistory.length > 20) {
+          state.conversationHistory = state.conversationHistory.slice(-20);
+        }
+      } catch (err) {
+        removeChatLoading();
+        addChatMessage('请求失败: ' + err.message, 'assistant');
+      } finally {
+        els.chatSendBtn.disabled = false;
+      }
+    }
+
+    els.chatSendBtn.addEventListener('click', sendChatQuery);
+    els.chatInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        sendChatQuery();
+      }
+    });
+    els.chatInput.addEventListener('input', function() {
+      this.style.height = 'auto';
+      this.style.height = Math.min(this.scrollHeight, 120) + 'px';
+    });
 
     // --- Template parsing ---
     function loadCustomTemplates() {

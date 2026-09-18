@@ -1,11 +1,9 @@
-import logging
 import os
+
+os.environ.setdefault("PYTORCH_CUDA_ALLOC_CONF", "expandable_segments:True")
+
 from pathlib import Path
 
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s %(levelname)s %(name)s %(message)s",
-)
 from fastapi import FastAPI
 from fastapi import HTTPException
 from pydantic import BaseModel, Field
@@ -15,15 +13,6 @@ from fastapi.responses import FileResponse
 from .config import settings
 from .foundation import LibraryService, OfflinePreprocessIndexer
 from .foundation.memory import MemoryService
-from .foundation.template_parser import (
-    load_custom_templates,
-    parse_image_to_template,
-    save_all_custom_templates,
-    save_custom_template,
-)
-from .foundation.dots_mocr_parser import parse_image_to_template_dots
-from .foundation.cv_parser import parse_image_to_template_cv
-from .foundation.dino_parser import parse_image_to_template_dino, parse_image_to_template_dino_base
 from .models import AgentRequest, AgentResponse
 from .orchestrator import LivePhotoAgent
 from .ui import build_ui_bootstrap, load_index_html
@@ -47,28 +36,20 @@ agent = LivePhotoAgent()
 
 class PlannerConfigUpdate(BaseModel):
     planner_backend: str | None = None
-    qwen_endpoint: str | None = None
-    qwen_auth_token: str | None = None
-    qwen_workspace_id: str | None = None
-    qwen_timeout_seconds: float | None = None
-    qwen_model: str | None = None
     local_model_dir: str | None = None
     local_device: str | None = None
     local_dtype: str | None = None
     local_max_new_tokens: int | None = None
+    local_quantization: str | None = None
 
 
 _PLANNER_BASELINE = {
     "planner_backend": settings.planner_backend,
-    "qwen_endpoint": settings.qwen_endpoint,
-    "qwen_auth_token": settings.qwen_auth_token,
-    "qwen_workspace_id": settings.qwen_workspace_id,
-    "qwen_timeout_seconds": settings.qwen_timeout_seconds,
-    "qwen_model": settings.qwen_model,
     "local_model_dir": settings.local_model_dir,
     "local_device": settings.local_device,
     "local_dtype": settings.local_dtype,
     "local_max_new_tokens": settings.local_max_new_tokens,
+    "local_quantization": settings.local_quantization,
 }
 
 
@@ -93,15 +74,11 @@ def _planner_snapshot() -> dict[str, object]:
 
     return {
         "planner_backend": settings.planner_backend,
-        "qwen_endpoint": settings.qwen_endpoint,
-        "qwen_auth_token_configured": bool(settings.effective_qwen_auth_token),
-        "qwen_workspace_id": settings.qwen_workspace_id,
-        "qwen_timeout_seconds": settings.qwen_timeout_seconds,
-        "qwen_model": settings.qwen_model,
         "local_model_dir": str(settings.local_model_dir) if settings.local_model_dir else None,
         "local_device": settings.local_device,
         "local_dtype": settings.local_dtype,
         "local_max_new_tokens": settings.local_max_new_tokens,
+        "local_quantization": settings.local_quantization,
         "runtime_info": runtime_info,
     }
 
@@ -131,16 +108,6 @@ def set_planner_config(update: PlannerConfigUpdate) -> dict[str, object]:
     payload = update.model_dump(exclude_unset=True)
     if "planner_backend" in payload and payload["planner_backend"] is not None:
         settings.planner_backend = str(payload["planner_backend"]).strip().lower()
-    if "qwen_endpoint" in payload:
-        settings.qwen_endpoint = _normalize_optional(payload["qwen_endpoint"])
-    if "qwen_auth_token" in payload:
-        settings.qwen_auth_token = _normalize_optional(payload["qwen_auth_token"])
-    if "qwen_workspace_id" in payload:
-        settings.qwen_workspace_id = _normalize_optional(payload["qwen_workspace_id"])
-    if "qwen_timeout_seconds" in payload and payload["qwen_timeout_seconds"] is not None:
-        settings.qwen_timeout_seconds = float(payload["qwen_timeout_seconds"])
-    if "qwen_model" in payload and payload["qwen_model"] is not None:
-        settings.qwen_model = str(payload["qwen_model"]).strip()
     if "local_model_dir" in payload:
         local_dir = _normalize_optional(payload["local_model_dir"])
         settings.local_model_dir = Path(local_dir).expanduser().resolve() if local_dir else None
@@ -150,6 +117,8 @@ def set_planner_config(update: PlannerConfigUpdate) -> dict[str, object]:
         settings.local_dtype = str(payload["local_dtype"]).strip().lower()
     if "local_max_new_tokens" in payload and payload["local_max_new_tokens"] is not None:
         settings.local_max_new_tokens = int(payload["local_max_new_tokens"])
+    if "local_quantization" in payload and payload["local_quantization"] is not None:
+        settings.local_quantization = str(payload["local_quantization"]).strip().lower()
 
     agent.planner.reset_runtime()
     return _planner_snapshot()
@@ -158,15 +127,11 @@ def set_planner_config(update: PlannerConfigUpdate) -> dict[str, object]:
 @app.delete("/api/ui/planner-config")
 def reset_planner_config() -> dict[str, object]:
     settings.planner_backend = str(_PLANNER_BASELINE["planner_backend"])
-    settings.qwen_endpoint = _PLANNER_BASELINE["qwen_endpoint"]
-    settings.qwen_auth_token = _PLANNER_BASELINE["qwen_auth_token"]
-    settings.qwen_workspace_id = _PLANNER_BASELINE["qwen_workspace_id"]
-    settings.qwen_timeout_seconds = float(_PLANNER_BASELINE["qwen_timeout_seconds"])
-    settings.qwen_model = str(_PLANNER_BASELINE["qwen_model"])
     settings.local_model_dir = _PLANNER_BASELINE["local_model_dir"]
     settings.local_device = str(_PLANNER_BASELINE["local_device"])
     settings.local_dtype = str(_PLANNER_BASELINE["local_dtype"])
     settings.local_max_new_tokens = int(_PLANNER_BASELINE["local_max_new_tokens"])
+    settings.local_quantization = str(_PLANNER_BASELINE["local_quantization"])
     agent.planner.reset_runtime()
     return _planner_snapshot()
 
@@ -283,88 +248,3 @@ def memory_feedback(request: FeedbackRequest) -> dict[str, object]:
         comment=request.comment,
         asset_ids=request.asset_ids,
     )
-
-
-# ---------------------------------------------------------------------------
-# Template parsing (reverse: image -> template JSON)
-# ---------------------------------------------------------------------------
-
-class TemplateParseRequest(BaseModel):
-    image_base64: str
-    image_name: str = "uploaded_image"
-    grid_cols: int = 120
-    grid_rows: int = 160
-    backend: str = "vlm"  # "vlm" | "dots_mocr" | "cv" | "dino" | "dino_base"
-
-
-class TemplateSaveRequest(BaseModel):
-    template: dict[str, object]
-
-
-@app.post("/api/template/parse")
-def template_parse(request: TemplateParseRequest) -> dict[str, object]:
-    """Send an image to VLM and receive a template JSON matching TEMPLATE_LIBRARY format."""
-    import base64 as _b64
-
-    image_bytes = _b64.b64decode(request.image_base64)
-
-    if request.backend == "dots_mocr":
-        result = parse_image_to_template_dots(
-            image_bytes=image_bytes,
-            image_name=request.image_name,
-            grid_cols=request.grid_cols,
-            grid_rows=request.grid_rows,
-        )
-    elif request.backend == "cv":
-        result = parse_image_to_template_cv(
-            image_bytes=image_bytes,
-            image_name=request.image_name,
-            grid_cols=request.grid_cols,
-            grid_rows=request.grid_rows,
-        )
-    elif request.backend == "dino":
-        result = parse_image_to_template_dino(
-            image_bytes=image_bytes,
-            image_name=request.image_name,
-            grid_cols=request.grid_cols,
-            grid_rows=request.grid_rows,
-        )
-    elif request.backend == "dino_base":
-        result = parse_image_to_template_dino_base(
-            image_bytes=image_bytes,
-            image_name=request.image_name,
-            grid_cols=request.grid_cols,
-            grid_rows=request.grid_rows,
-        )
-    else:
-        result = parse_image_to_template(
-            image_bytes=image_bytes,
-            image_name=request.image_name,
-            grid_cols=request.grid_cols,
-            grid_rows=request.grid_rows,
-        )
-    return {"template": result}
-
-
-@app.post("/api/template/save")
-def template_save(request: TemplateSaveRequest) -> dict[str, object]:
-    """Persist a custom template to .custom_templates.json."""
-    saved = save_custom_template(request.template)
-    return {"saved": True, "template": saved}
-
-
-@app.get("/api/template/list")
-def template_list() -> dict[str, object]:
-    """Return all custom templates."""
-    return {"templates": load_custom_templates()}
-
-
-class TemplateSaveAllRequest(BaseModel):
-    templates: list[dict[str, object]]
-
-
-@app.post("/api/template/save-all")
-def template_save_all(request: TemplateSaveAllRequest) -> dict[str, object]:
-    """Batch persist custom templates (e.g. after deletion)."""
-    save_all_custom_templates(request.templates)
-    return {"saved": True, "count": len(request.templates)}

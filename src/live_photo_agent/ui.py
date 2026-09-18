@@ -88,7 +88,6 @@ def _planner_info_or_fallback() -> dict[str, object]:
         return {
             "planner_backend": settings.planner_backend,
             "planner_model": settings.qwen_model,
-            "planner_endpoint": settings.qwen_endpoint,
             "local_model_dir": str(settings.local_model_dir) if settings.local_model_dir else None,
             "status": "unconfigured",
         }

@@ -30,7 +30,14 @@ class Phase4Splitter:
         placements = layout["placements"]
 
         for p in placements:
-            asset = assets[p["id"]]
+            # 处理拆分的背景strip (id 像 asset_03_split1)
+            if "_split" in p["id"]:
+                # 找原始 asset (去掉 _splitN 后缀)
+                base_id = p["id"].rsplit("_split", 1)[0]
+                asset = assets.get(base_id, {})
+            else:
+                asset = assets.get(p["id"], {})
+            
             video_path = asset.get("video_path")
             jpg_path = asset.get("jpg_path")
 

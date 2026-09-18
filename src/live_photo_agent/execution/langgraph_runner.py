@@ -92,8 +92,10 @@ class PlannerGraphRunner:
                 StateGraph=StateGraph,
                 END=END,
             )
-        except Exception:  # noqa: BLE001
-            self._record_trace(initial_state, "run", "langgraph_unavailable_fallback", {})
+        except Exception as exc:  # noqa: BLE001
+            import logging as _logging
+            _logging.getLogger("live_photo_agent.execution").exception("langgraph failed, falling back: %s", exc)
+            self._record_trace(initial_state, "run", "langgraph_unavailable_fallback", {"error": str(exc)})
             result = self._run_fallback(
                 initial_state=initial_state,
                 planner=planner,
@@ -175,7 +177,7 @@ class PlannerGraphRunner:
         )
 
     def _build_input_subgraph(self, StateGraph: Any, END: Any) -> Any:
-        input_graph = StateGraph(dict)
+        input_graph = StateGraph(GraphState)
 
         def prepare_input_node(state: GraphState) -> GraphState:
             base_context = dict(state.get("base_context", {}))
@@ -184,6 +186,8 @@ class PlannerGraphRunner:
             base_context["preprocess"] = preprocess
             trace = self._record_trace(state, "input.prepare", "prepared", {"preprocess_keys": sorted(preprocess.keys())})
             return {
+                "request": state.get("request"),
+                "library_summary": state.get("library_summary"),
                 "base_context": base_context,
                 "route_reason": "input_prepared",
                 "graph_trace": trace,
@@ -201,7 +205,7 @@ class PlannerGraphRunner:
         planner: QwenPlanner,
         capability: CapabilityLayer,
     ) -> Any:
-        planning_graph = StateGraph(dict)
+        planning_graph = StateGraph(GraphState)
 
         def plan_node(state: GraphState) -> GraphState:
             request = state["request"]
@@ -413,8 +417,15 @@ class PlannerGraphRunner:
 
     def _collect_validation_errors_relaxed(self, request: AgentRequest, plan: ExecutionPlan) -> list[str]:
         calls = plan.tool_calls
+        # Conversation/chat intents legitimately have no tool calls
         if not calls:
+            if plan.intent in ("conversation", "chat", "answer_question"):
+                return []
             return ["未生成可执行工具链，请补充可执行步骤或改为澄清问题。"]
+
+        # Conversation intent with tool calls is contradictory.
+        if plan.intent in ("conversation", "chat", "answer_question"):
+            return ["意图标记为 conversation 却生成了工具调用，请明确意图或移除工具调用。"]
 
         sequence = [call.tool for call in calls]
         errors: list[str] = []
@@ -425,10 +436,16 @@ class PlannerGraphRunner:
         if ToolName.EXPORT_MP4 in sequence and ToolName.CONCAT_CLIPS not in sequence:
             errors.append("export_mp4 前应包含 concat_clips。")
 
+        # L2 collage tools are mutually exclusive.
+        l2_collage_tools = [ToolName.SMART_COLLAGE, ToolName.TEMPLATE_COLLAGE, ToolName.LIVE_PHOTO_COLLAGE]
+        l2_present = [t for t in l2_collage_tools if t in sequence]
+        if len(l2_present) > 1:
+            errors.append(f"L2 拼贴工具互斥，不能同时包含 {', '.join(t.value for t in l2_present)}。")
+
         return errors
 
     def _build_execution_subgraph(self, StateGraph: Any, END: Any, tools: ToolRegistry) -> Any:
-        execution_graph = StateGraph(dict)
+        execution_graph = StateGraph(GraphState)
 
         def execute_node(state: GraphState) -> GraphState:
             plan = state["plan"]
@@ -464,7 +481,7 @@ class PlannerGraphRunner:
                 metrics,
             )
             return {
-                "context": context,
+                "context": {**context, "tool_results": tool_results},
                 "tool_results": tool_results,
                 "route_reason": "executed",
                 "graph_trace": trace,
@@ -679,8 +696,16 @@ class PlannerGraphRunner:
 
     def _collect_validation_errors(self, request: AgentRequest, plan: ExecutionPlan) -> list[str]:
         calls = plan.tool_calls
+        # Conversation/chat intents legitimately have no tool calls
         if not calls:
+            if plan.intent in ("conversation", "chat", "answer_question"):
+                return []
             return ["未生成可执行工具链，请补充可执行步骤或改为澄清问题。"]
+
+        # Conversation intent with tool calls is contradictory: the planner
+        # is trying to execute tools while claiming it's just chatting.
+        if plan.intent in ("conversation", "chat", "answer_question"):
+            return ["意图标记为 conversation 却生成了工具调用，请明确意图或移除工具调用。"]
 
         sequence = [call.tool for call in calls]
         errors: list[str] = []
@@ -719,6 +744,20 @@ class PlannerGraphRunner:
             for tool in (ToolName.ADD_TEXT_OVERLAY, ToolName.MIX_AUDIO_BGM, ToolName.EXPORT_MP4, ToolName.OVERLAY_SUBJECT_CLIP):
                 if tool in sequence and sequence.index(tool) < concat_idx:
                     errors.append(f"{tool.value} 应在 concat_clips 之后执行。")
+
+        # L2 collage tools are mutually exclusive (normalize_plan enforces this,
+        # but validate in case of direct plan injection).
+        l2_collage_tools = [ToolName.SMART_COLLAGE, ToolName.TEMPLATE_COLLAGE, ToolName.LIVE_PHOTO_COLLAGE]
+        l2_present = [t for t in l2_collage_tools if t in sequence]
+        if len(l2_present) > 1:
+            errors.append(f"L2 拼贴工具互斥，不能同时包含 {', '.join(t.value for t in l2_present)}。")
+
+        # smart_collage requires a non-empty query.
+        if ToolName.SMART_COLLAGE in sequence:
+            smart_call = next(call for call in calls if call.tool == ToolName.SMART_COLLAGE)
+            query = str(smart_call.arguments.get("query", "")).strip()
+            if not query:
+                errors.append("smart_collage 需要非空 query 参数以执行检索。")
 
         return errors
 

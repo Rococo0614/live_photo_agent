@@ -85,23 +85,6 @@ class VLMSemanticAnalyzer:
         search_keywords: list[str] = []
         theme = ""
 
-        if settings.vlm_backend != "disabled" and settings.vlm_endpoint:
-            try:
-                remote = self._call_endpoint(asset=asset)
-                if remote:
-                    summary_text = str(remote.get("summary") or summary_text)
-                    scene_tags = self._normalize_tags(list(remote.get("scene_tags", [])))
-                    subject_tags = self._normalize_tags(list(remote.get("subject_tags", [])))
-                    motion_tags = self._normalize_tags(list(remote.get("motion_tags", [])))
-                    audio_tags = self._normalize_tags(list(remote.get("audio_tags", [])))
-                    search_keywords = self._normalize_tags(list(remote.get("search_keywords", [])))
-                    theme = str(remote.get("theme") or "")
-                else:
-                    print(f"  [VLM] {asset.asset_id}: endpoint returned empty response", flush=True)
-            except Exception as exc:  # noqa: BLE001
-                print(f"  [VLM] {asset.asset_id}: call failed — {exc}", flush=True)
-                raise
-
         if not summary_text:
             summary_text = summary.content_summary or asset.image_path.stem
 

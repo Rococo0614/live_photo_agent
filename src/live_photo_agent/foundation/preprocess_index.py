@@ -285,11 +285,7 @@ class OfflinePreprocessIndexer:
         from .vlm_semantics import VLMSemanticAnalyzer  # local import to avoid circular
         from ..config import settings as _settings
         if not _settings.vlm_endpoint:
-            raise RuntimeError(
-                "LPA_VLM_ENDPOINT is not set.\n"
-                "Run first: source scripts/use_endpoint_backend.sh "
-                "<endpoint_url> <api_key> <model>"
-            )
+            return {"total": 0, "enriched": 0, "skipped": 0, "failed": 0, "reason": "VLM disabled"}
         rows = self._read_index_rows()
         enriched = 0
         skipped = 0

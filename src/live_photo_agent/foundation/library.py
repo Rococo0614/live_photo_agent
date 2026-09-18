@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -32,6 +33,9 @@ class LibraryService:
 
         library_root = library_root.resolve()
         persisted_summaries = self.load_preprocess_index(library_root)
+
+        # Cleanup stale motion cache entries (older than 24h)
+        self.cleanup_motion_cache(max_age_hours=24)
 
         image_files = [
             path for path in library_root.rglob("*") if path.is_file() and path.suffix.lower() in IMAGE_EXTENSIONS
@@ -133,7 +137,10 @@ class LibraryService:
         if not normalized_query:
             return list(assets)
 
-        query_terms = [term for term in normalized_query.split() if term]
+        whitespace_terms = [term for term in normalized_query.split() if term]
+        cjk_pattern = re.compile(r"[\u4e00-\u9fff\u3400-\u4dbf]")
+        cjk_chars = cjk_pattern.findall(normalized_query)
+        query_terms = whitespace_terms + cjk_chars
         scored_assets: list[tuple[float, LivePhotoAsset]] = []
         for asset in assets:
             summary = asset.preprocess_summary
@@ -182,7 +189,7 @@ class LibraryService:
                 return None
 
             image_hash = hashlib.sha1(str(image_path.resolve()).encode("utf-8")).hexdigest()[:12]
-            cache_root = settings.workspace_dir / ".live_photo_motion_cache" / image_hash
+            cache_root = settings.agent_work_dir / "motion_cache" / image_hash
             cache_root.mkdir(parents=True, exist_ok=True)
             motion_path = cache_root / f"{image_path.stem}.mp4"
 
@@ -194,6 +201,31 @@ class LibraryService:
             return motion_path
         except Exception:  # noqa: BLE001
             return None
+
+    def cleanup_motion_cache(self, max_age_hours: int = 24) -> int:
+        """Remove motion cache entries older than max_age_hours.
+
+        Returns the number of removed cache directories.
+        """
+        import time
+        cache_root = settings.agent_work_dir / "motion_cache"
+        if not cache_root.exists():
+            return 0
+        now = time.time()
+        max_age_seconds = max_age_hours * 3600
+        removed = 0
+        for sub in cache_root.iterdir():
+            if not sub.is_dir():
+                continue
+            try:
+                age = now - sub.stat().st_mtime
+                if age > max_age_seconds:
+                    import shutil
+                    shutil.rmtree(sub, ignore_errors=True)
+                    removed += 1
+            except Exception:  # noqa: BLE001
+                continue
+        return removed
 
     def _locate_embedded_segments(self, data: bytes) -> tuple[int, int] | None:
         if len(data) < 16:

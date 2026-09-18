@@ -80,14 +80,27 @@ class Phase5Composer:
             # 1. 构建背景画布 (铺满1920)
             canvas = np.zeros((self.canvas_h, self.canvas_w, 3), dtype=np.uint8)
 
+            # 读取所有背景帧
+            bg_frames = {}
             for aid, cap in bg_caps.items():
                 ret, frame = cap.read()
-                if not ret:
-                    continue
+                if ret:
+                    bg_frames[aid] = frame
+
+            # 用第一个背景素材铺满整个画布作为底色 (防止空隙黑色)
+            if bg_frames:
+                first_aid = next(iter(bg_frames))
+                fill_resized = self._resize_to_canvas(bg_frames[first_aid], self.canvas_w, self.canvas_h)
+                canvas[:] = fill_resized
+
+            # 在各自位置放对应背景 (覆盖底色)
+            for aid, frame in bg_frames.items():
                 y, h = bg_ranges[aid]
-                # resize 到目标区域宽度=canvas_w, 高度=h
-                frame_resized = self._resize_to_canvas(frame, self.canvas_w, h)
-                canvas[y:y+h, :] = frame_resized
+                actual_h = frame.shape[0]
+                target_h = min(h, actual_h)
+                frame_resized = self._resize_to_canvas(frame, self.canvas_w, target_h)
+                end_y = min(y + target_h, self.canvas_h)
+                canvas[y:end_y, :] = frame_resized[:end_y - y, :]
 
             # 2. 叠加主体 (z-order: coverage升序, 小的在底)
             for p in subject_placements:
@@ -100,8 +113,9 @@ class Phase5Composer:
                 if not ret_sub or not ret_alpha:
                     continue
 
-                # alpha mask
-                alpha_gray = cv2.cvtColor(alpha_frame, cv2.COLOR_BGR2GRAY)
+                # alpha mask (resize to canvas first)
+                alpha_resized = self._resize_to_canvas(alpha_frame, self.canvas_w, self.canvas_h)
+                alpha_gray = cv2.cvtColor(alpha_resized, cv2.COLOR_BGR2GRAY)
                 m_f = cv2.GaussianBlur(alpha_gray.astype(np.float32) / 255.0, (21, 21), 0)
 
                 # subject 帧 resize 到画布尺寸
@@ -121,7 +135,30 @@ class Phase5Composer:
         for cap in list(bg_caps.values()) + list(sub_caps.values()) + list(alpha_caps.values()):
             cap.release()
 
-        print(f"\n  final.mp4: {out_path} ({out_path.stat().st_size/1e6:.1f}MB)")
+        print(f"\n  final.mp4 (raw): {out_path} ({out_path.stat().st_size/1e6:.1f}MB)")
+
+        # 转码为浏览器兼容的 H.264 (mp4v 不被 Chrome 支持)
+        h264_path = self.output_dir / "final_h264.mp4"
+        import subprocess, shutil
+        ffmpeg = shutil.which("ffmpeg")
+        if ffmpeg:
+            rc = subprocess.run(
+                [ffmpeg, "-y", "-i", str(out_path),
+                 "-c:v", "libx264", "-preset", "fast", "-crf", "20",
+                 "-pix_fmt", "yuv420p", "-movflags", "+faststart",
+                 str(h264_path)],
+                capture_output=True, text=True,
+            )
+            if rc.returncode == 0 and h264_path.exists() and h264_path.stat().st_size > 0:
+                out_path.unlink()
+                h264_path.rename(out_path)
+                print(f"  final.mp4 (H.264): {out_path} ({out_path.stat().st_size/1e6:.1f}MB)")
+            else:
+                print(f"  ffmpeg 转码失败(rc={rc.returncode})，保留 mp4v 原始文件")
+                if h264_path.exists():
+                    h264_path.unlink()
+        else:
+            print("  未找到 ffmpeg，保留 mp4v 原始文件")
         print(f"  分辨率: {self.canvas_w}x{self.canvas_h}")
 
     def _resize_to_canvas(self, frame, target_w, target_h):

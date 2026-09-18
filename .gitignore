@@ -1,21 +1,74 @@
-.venv/
+# ===== Python =====
 __pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+.conda/
+*.egg
+build/
+dist/
+
+# ===== 测试与缓存 =====
 .pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+.hypothesis/
+.deepeval/
+
+# ===== 环境与密钥 =====
+.env
+.env.*
+!.env.example
+
+# ===== IDE / 编辑器 =====
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# ===== 运行产物（agent / 服务 / 索引） =====
 .agent_memory.json
+.agent_trace.jsonl
 .album_catalog.json
 .album_operations.jsonl
+.album_preprocess_index.jsonl
 .asset_feature_index.json
 .graph_runs.jsonl
 .live_photo_motion_cache/
 .agent_work/
-data/
-models/
-*.egg-info/
-tests/_last_plan_raw_output.txt
-tests/evals/planner_eval_report.json
-tests/evals/planner_eval_failures.jsonl
-.env
 .device_plan.json
 .server.log
 .server.pid
-.album_preprocess_index.jsonl
+*.log
+
+# ===== 本地数据与模型 =====
+data/
+models/
+model_test_files/
+live_photo_decoded/
+
+# ===== 浏览器 / 调试临时数据 =====
+chrome_data/
+xhs_login_tmp.py
+
+# ===== 历史产出与对比报告（本机大目录，不入库） =====
+历史产出_*/
+comparison_report/
+
+# ===== Android 二进制与构建产物 =====
+android/app/libs/
+android/app/src/main/jniLibs/
+android/app/build/
+android/build/
+android/.gradle/
+android/local.properties
+android/app/release/
+android/.cxx/
+
+# ===== 测试产物 =====
+tests/_last_plan_raw_output.txt
+tests/evals/planner_eval_report.json
+tests/evals/planner_eval_failures.jsonl

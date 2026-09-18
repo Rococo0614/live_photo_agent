@@ -133,6 +133,15 @@ class ToolName(str, Enum):
     # L2 vertical tool: live photo collage (segmentation + free layout + composition)
     LIVE_PHOTO_COLLAGE = "live_photo_collage"
 
+    # L2 vertical tool: template collage (direct stacking, no segmentation)
+    TEMPLATE_COLLAGE = "template_collage"
+
+    # L2 vertical tool: smart collage (search + template match + composition)
+    SMART_COLLAGE = "smart_collage"
+
+    # L2 vertical tool: VLM-based asset content summarization
+    ASSET_SUMMARIZE = "asset_summarize"
+
 
 class ToolCall(BaseModel):
     tool: ToolName
@@ -165,6 +174,9 @@ class AgentRequest(BaseModel):
     # sees retry_feedback appended to the request text so it can correct course.
     retry_of_run_id: str = ""
     retry_feedback: str = ""
+    # Conversation history: list of {role, text, template_id?, final_video?}
+    # Lets the planner understand context like "换个模板" (change template).
+    conversation_history: list[dict[str, object]] = Field(default_factory=list)
 
 
 class ToolResult(BaseModel):

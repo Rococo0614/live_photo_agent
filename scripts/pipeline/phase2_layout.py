@@ -172,11 +172,21 @@ class Phase2Planner:
             diff = total_h - self.canvas_h
             placements[-1]["canvas_h"] = max(placements[-1]["canvas_h"] - diff, 1)
 
-        # Step 5: 跨越保证
-        self._ensure_crossing(placements, subject_assets)
+        # Step 5: 强制约束验证 + 调整 (最多重试5次)
+        layout_ok = False
+        for attempt in range(5):
+            issues = self._validate_constraints(placements, subject_assets)
+            if not issues:
+                layout_ok = True
+                print(f"\n  约束验证通过 (attempt {attempt+1})")
+                break
+            print(f"\n  约束验证失败 (attempt {attempt+1}), 调整中...")
+            for issue in issues:
+                print(f"    ✗ {issue}")
+            placements = self._fix_constraints(placements, issues, subject_assets)
 
-        # Step 6: 重叠检测
-        self._check_overlap(placements, subject_assets)
+        if not layout_ok:
+            print(f"\n  ⚠ 约束验证5次仍未通过, 使用最佳布局")
 
         layout = {
             "canvas": {"w": self.canvas_w, "h": self.canvas_h},
@@ -212,86 +222,193 @@ class Phase2Planner:
                 "bg_region": "full",
             }
 
-    def _ensure_crossing(self, placements, subject_assets):
-        """保证每个主体跨越≥1个背景边界
+    def _validate_constraints(self, placements, subject_assets):
+        """验证两个强制约束:
+        1. 每个主体必须横跨≥2个背景(即跨越≥1个背景边界)
+        2. 每个背景素材必须可见(不能被主体完全遮盖)
         
-        不移动背景位置, 而是检查背景的边界(top/bottom)是否在主体范围内。
-        如果没有, 记录但不强制调整(布局已经保证主体在背景之间)。
+        返回 issues 列表, 空列表=通过
         """
+        issues = []
         subject_placements = [p for p in placements if p["type"] == "subject"]
         bg_placements = [p for p in placements if p["type"] == "background"]
+        asset_map = {a["id"]: a for a in subject_assets}
 
-        if not bg_placements:
-            return
-
+        # 约束1: 主体横跨≥2背景 (跨越≥1个背景边界)
+        all_crossing_fail = []
         for sp in subject_placements:
             s_top = sp["canvas_y"]
             s_bot = sp["canvas_y"] + sp["canvas_h"]
-
-            # 检查主体是否跨越任何背景的边界
-            # 相邻主体和背景的边界天然在主体边缘
-            # 主体mask会跨越到相邻背景 → 算跨越
+            
             crossings = 0
             for bp in bg_placements:
                 b_top = bp["canvas_y"]
                 b_bot = bp["canvas_y"] + bp["canvas_h"]
-                # 背景 top 边界在主体范围内(含边缘)
-                if s_top <= b_top <= s_bot:
+                # 背景 top 边界严格在主体范围内(不含边缘)
+                if s_top < b_top < s_bot:
                     crossings += 1
-                # 背景 bottom 边界在主体范围内(含边缘)
-                if s_top <= b_bot <= s_bot:
+                # 背景 bottom 边界严格在主体范围内(不含边缘)
+                if s_top < b_bot < s_bot:
                     crossings += 1
+            
+            if crossings < 1:
+                issues.append(f"crossing_fail|{sp['id']}|crossings={crossings}")
+                all_crossing_fail.append(sp["id"])
+        
+        # 如果多个主体不跨越, 合并为一个 group issue 方便拆分修复
+        if len(all_crossing_fail) > 1:
+            # 移除单独的 crossing_fail, 添加 group issue
+            issues = [i for i in issues if not i.startswith("crossing_fail")]
+            issues.insert(0, f"crossing_group|{','.join(all_crossing_fail)}")
 
-            if crossings == 0:
-                print(f"    ⚠ {sp['id']} 未跨越任何背景边界")
+        # 约束2: 每个背景必须出现(可见高度>0且不被主体完全遮盖)
+        for bp in bg_placements:
+            b_top = bp["canvas_y"]
+            b_bot = bp["canvas_y"] + bp["canvas_h"]
+            b_h = bp["canvas_h"]
+            
+            if b_h <= 0:
+                issues.append(f"bg_invisible|{bp['id']}|height={b_h}")
+                continue
+            
+            # 检查背景是否被某个主体完全覆盖
+            # 用主体bbox估算覆盖比例
+            covered_h = 0
+            for sp in subject_placements:
+                s_top = sp["canvas_y"]
+                s_bot = sp["canvas_y"] + sp["canvas_h"]
+                overlap = max(0, min(s_bot, b_bot) - max(s_top, b_top))
+                covered_h = max(covered_h, overlap)
+            
+            visible_h = b_h - covered_h
+            visibility_ratio = visible_h / b_h if b_h > 0 else 0
+            
+            if visibility_ratio < 0.15:
+                issues.append(f"bg_covered|{bp['id']}|visible={visible_h}/{b_h}={visibility_ratio*100:.0f}%")
+
+        return issues
+
+    def _fix_constraints(self, placements, issues, subject_assets):
+        """根据 issues 主动调整布局
+        
+        策略:
+        - crossing_fail: 把背景移到不跨越的主体中线, 如果有多个不跨越的主体,
+          把背景拆成多个strip分别插入
+        - bg_invisible: 从主体借高度
+        - bg_covered: 缩小主体让背景可见
+        """
+        
+        # 收集 crossing issues
+        crossing_group_subjects = []
+        crossing_single_subjects = []
+        other_issues = []
+        for issue in issues:
+            parts = issue.split("|")
+            if parts[0] == "crossing_group":
+                crossing_group_subjects = parts[1].split(",")
+            elif parts[0] == "crossing_fail":
+                crossing_single_subjects.append(parts[1])
             else:
-                print(f"    ✓ {sp['id']} 跨越 {crossings} 个背景边界")
-
-    def _check_overlap(self, placements, subject_assets):
-        """检查主体mask交集<10%"""
-        subject_placements = [p for p in placements if p["type"] == "subject"]
-        asset_map = {a["id"]: a for a in subject_assets}
-
-        for i in range(len(subject_placements)):
-            for j in range(i + 1, len(subject_placements)):
-                p1 = subject_placements[i]
-                p2 = subject_placements[j]
-
-                # 用 bbox 估算重叠
-                a1 = asset_map.get(p1["id"])
-                a2 = asset_map.get(p2["id"])
-                if not a1 or not a2:
+                other_issues.append(issue)
+        
+        # 处理 crossing_group: 多个主体不跨越 → 拆分背景
+        if crossing_group_subjects:
+            bg_placements = [p for p in placements if p["type"] == "background"]
+            if bg_placements:
+                bg = bg_placements[0]
+                n_splits = len(crossing_group_subjects)
+                split_h = max(bg["canvas_h"] // n_splits, 50)
+                
+                placements.remove(bg)
+                
+                for i, sid in enumerate(crossing_group_subjects):
+                    sp = next((p for p in placements if p["id"] == sid), None)
+                    if not sp:
+                        continue
+                    s_mid = sp["canvas_y"] + sp["canvas_h"] // 2
+                    new_bg = {
+                        "id": f"{bg['id']}_split{i+1}",
+                        "type": "background",
+                        "canvas_y": max(0, s_mid - split_h // 2),
+                        "canvas_h": split_h,
+                        "bg_region": "full",
+                    }
+                    placements.append(new_bg)
+                    print(f"    修复跨越(拆分): {sid} ← {new_bg['id']} 插入到中线 y={new_bg['canvas_y']}")
+        
+        # 处理单个 crossing_fail
+        for sid in crossing_single_subjects:
+            sp = next((p for p in placements if p["id"] == sid), None)
+            if sp:
+                s_mid = sp["canvas_y"] + sp["canvas_h"] // 2
+                bg_placements = [p for p in placements if p["type"] == "background"]
+                if bg_placements:
+                    best_bg = min(bg_placements, key=lambda bp: abs(bp["canvas_y"] + bp["canvas_h"]//2 - s_mid))
+                    old_y = best_bg["canvas_y"]
+                    old_h = best_bg["canvas_h"]
+                    new_y = max(0, min(s_mid - old_h // 4, self.canvas_h - old_h))
+                    best_bg["canvas_y"] = new_y
+                    print(f"    修复跨越: {sid} ← {best_bg['id']} y:{old_y}→{new_y}")
+        
+        # 处理其他 issues
+        for issue in other_issues:
+            parts = issue.split("|")
+            issue_type = parts[0]
+            asset_id = parts[1] if len(parts) > 1 else ""
+            
+            if issue_type == "bg_invisible":
+                bp = next((p for p in placements if p["id"] == asset_id), None)
+                if not bp:
                     continue
-
-                bbox1 = a1.get("bbox")
-                bbox2 = a2.get("bbox")
-                if not bbox1 or not bbox2:
+                for sp in placements:
+                    if sp["type"] != "subject" or sp["canvas_h"] <= 200:
+                        continue
+                    sp["canvas_h"] -= 100
+                    bp["canvas_h"] += 100
+                    print(f"    修复背景: {bp['id']} ← {sp['id']} 借100px")
+                    break
+            
+            elif issue_type == "bg_covered":
+                bp = next((p for p in placements if p["id"] == asset_id), None)
+                if not bp:
                     continue
-
-                # 画布坐标的 y 范围
-                y1_top = p1["canvas_y"]
-                y1_bot = p1["canvas_y"] + p1["canvas_h"]
-                y2_top = p2["canvas_y"]
-                y2_bot = p2["canvas_y"] + p2["canvas_h"]
-
-                # y 方向重叠
-                y_overlap = max(0, min(y1_bot, y2_bot) - max(y1_top, y2_top))
-                if y_overlap == 0:
-                    continue
-
-                # 估算 mask 交集 (用 bbox 面积近似)
-                # x 方向重叠 (bbox)
-                x_overlap = max(0, min(bbox1[2], bbox2[2]) - max(bbox1[0], bbox2[0]))
-                if x_overlap == 0:
-                    continue
-
-                overlap_area = x_overlap * y_overlap
-                area1 = (bbox1[2] - bbox1[0]) * (bbox1[3] - bbox1[1])
-                ratio = overlap_area / max(area1, 1)
-
-                print(f"    重叠检查: {p1['id']} ∩ {p2['id']} = {ratio*100:.1f}% (y_overlap={y_overlap}px)")
-                if ratio > 0.10:
-                    print(f"      ⚠ 重叠>{10}%, 需要z-order处理 (小coverage在底)")
+                b_top = bp["canvas_y"]
+                b_bot = bp["canvas_y"] + bp["canvas_h"]
+                for sp in placements:
+                    if sp["type"] != "subject":
+                        continue
+                    s_top = sp["canvas_y"]
+                    s_bot = sp["canvas_y"] + sp["canvas_h"]
+                    overlap = max(0, min(s_bot, b_bot) - max(s_top, b_top))
+                    if overlap > bp["canvas_h"] * 0.5:
+                        shrink = min(overlap // 2, sp["canvas_h"] // 4)
+                        sp["canvas_h"] -= shrink
+                        bp["canvas_h"] += shrink
+                        print(f"    修复遮盖: {bp['id']} ← {sp['id']} 缩{shrink}px")
+                        break
+        
+        # 边界保护 + 铺满
+        for p in placements:
+            if p["canvas_y"] < 0:
+                p["canvas_y"] = 0
+            if p["canvas_y"] + p["canvas_h"] > self.canvas_h:
+                p["canvas_h"] = max(self.canvas_h - p["canvas_y"], 1)
+        
+        # 重新铺满: 把差额加到最大的背景strip
+        total_h = sum(p["canvas_h"] for p in placements)
+        if total_h < self.canvas_h:
+            diff = self.canvas_h - total_h
+            bg_placements = [p for p in placements if p["type"] == "background"]
+            if bg_placements:
+                biggest_bg = max(bg_placements, key=lambda p: p["canvas_h"])
+                biggest_bg["canvas_h"] += diff
+            else:
+                placements[-1]["canvas_h"] += diff
+        
+        # 不做连续排列! 保留背景和主体的重叠(主体在背景之上, z-order控制)
+        # 背景铺满画布由 Phase5 的底色铺满逻辑处理
+        
+        return placements
 
     def _render_layout_animation(self, manifest, layout):
         """生成 phase2_layout_plan.mp4 — 动画展示放置过程"""

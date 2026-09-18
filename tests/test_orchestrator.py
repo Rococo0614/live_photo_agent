@@ -41,11 +41,6 @@ def test_execute_end_to_end(tmp_path: Path, monkeypatch) -> None:
                     arguments={"query": request.text},
                 ),
                 ToolCall(
-                    tool=ToolName.DRAFT_EDIT_PLAN,
-                    reason="Model drafts curation plan for shortlisted assets.",
-                    arguments={"style": "social_highlight"},
-                ),
-                ToolCall(
                     tool=ToolName.SUMMARIZE_RESULTS,
                     reason="Model finalizes user-facing summary.",
                     arguments={"response_style": "concise"},
@@ -71,7 +66,6 @@ def test_execute_end_to_end(tmp_path: Path, monkeypatch) -> None:
     assert [call.tool.value for call in response.plan.tool_calls] == [
         "scan_library",
         "search_by_text",
-        "draft_edit_plan",
         "summarize_results",
     ]
     assert "beach_sunset_01" in response.final_response

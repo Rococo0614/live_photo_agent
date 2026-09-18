@@ -6,7 +6,6 @@ from ..foundation.library import LibraryService
 from ..models import ToolCall, ToolName, ToolResult
 from .l0_atomic_tools import L0AtomicTools
 from .l1_integrated_tools import L1IntegratedTools
-from .l2_vertical_tools import L2VerticalTools
 
 
 ToolHandler = Callable[[ToolCall, dict[str, object]], ToolResult]
@@ -18,13 +17,11 @@ class ToolRegistry:
     def __init__(self, library_service: LibraryService) -> None:
         self.l0 = L0AtomicTools(library_service)
         self.l1 = L1IntegratedTools(library_service)
-        self.l2 = L2VerticalTools()
 
         self._handlers: dict[ToolName, ToolHandler] = {
             ToolName.SCAN_LIBRARY: self.l0.scan_library,
             ToolName.FILTER_SELECTED: self.l0.filter_selected,
             ToolName.SEARCH_BY_TEXT: self.l1.search_by_text,
-            ToolName.DRAFT_EDIT_PLAN: self.l2.draft_edit_plan,
             ToolName.SUMMARIZE_RESULTS: self.l1.summarize_results,
             ToolName.EXTRACT_KEY_FRAMES: self.l0.extract_key_frames,
             ToolName.ESTIMATE_MOTION_SCORE: self.l0.estimate_motion_score,
@@ -41,8 +38,6 @@ class ToolRegistry:
             ToolName.SET_DISPLAY_FRAME: self.l0.set_display_frame,
             ToolName.EXTRACT_SUBJECT_MATTE: self.l0.extract_subject_matte,
             ToolName.OVERLAY_SUBJECT_CLIP: self.l0.overlay_subject_clip,
-            ToolName.EXTRACT_REGION_MATTE: self.l0.extract_region_matte,
-            ToolName.LIVE_PHOTO_COLLAGE: self.l2.live_photo_collage,
         }
 
     def execute(self, call: ToolCall, context: dict[str, object]) -> ToolResult:

@@ -1,16 +1,9 @@
 from __future__ import annotations
 
 import json
-import logging
 from dataclasses import dataclass
 from pathlib import Path
-from threading import Thread
-from time import perf_counter
 from typing import Any
-from urllib.error import HTTPError, URLError
-from urllib.request import Request, urlopen
-
-logger = logging.getLogger("live_photo_agent.planner")
 
 from .capability.contracts import TOOL_CONTRACTS
 from .config import settings
@@ -112,14 +105,6 @@ TOOL_SPECS: tuple[ToolSpec, ...] = (
         when_to_use="Use when the request needs semantic retrieval or candidate narrowing.",
         arguments={"query": "Natural-language search query derived from the user goal."},
         output_schema={"match_count": "int", "matched_ids": "string[]"},
-    ),
-    ToolSpec(
-        name=ToolName.DRAFT_EDIT_PLAN,
-        level="L2",
-        purpose="Produce a concrete curation or editing plan over the current focus assets.",
-        when_to_use="Use when the request asks for sorting, highlighting, cover selection, curation, or edits.",
-        arguments={"style": "Requested output style such as social_highlight or memory_story."},
-        output_schema={"style": "string", "asset_count": "int", "suggestions": "string[]"},
     ),
     ToolSpec(
         name=ToolName.SUMMARIZE_RESULTS,
@@ -310,34 +295,6 @@ TOOL_SPECS: tuple[ToolSpec, ...] = (
         },
         output_schema={"overlay_applied": "bool", "output_path": "string(path)"},
     ),
-    ToolSpec(
-        name=ToolName.LIVE_PHOTO_COLLAGE,
-        level="L2",
-        purpose=(
-            "Live photo collage: detect subjects via Mask2Former, segment+track via Cutie, "
-            "plan free layout (subjects don't overlap, each spans >=2 backgrounds), "
-            "split into bg+subject+alpha, compose final 1440x1920 video."
-        ),
-        when_to_use=(
-            "Use when the user wants to combine multiple live photos into a single collage video, "
-            "e.g. '拼贴', 'collage', '组合多个live', '拼接素材', '分割主体拼接'. "
-            "Automatically handles live photo container unpacking, subject detection, "
-            "free layout planning, and final composition."
-        ),
-        arguments={
-            "asset_paths": "List of asset file paths (live photo jpg containers or mp4 files).",
-            "output_dir": "Output directory for all generated files.",
-            "canvas_width": "Canvas width in pixels (default 1440).",
-            "canvas_height": "Canvas height in pixels (default 1920).",
-            "span_ratio": "Subject crossing ratio (default 0.25).",
-        },
-        output_schema={
-            "final_video": "string(path)",
-            "manifest": "object",
-            "layout_plan": "object",
-            "phase_videos": "string[]",
-        },
-    ),
 )
 
 
@@ -349,88 +306,32 @@ class QwenPlanner:
         self._local_runtime = None
 
     def create_plan(self, request: AgentRequest, library_summary: dict[str, object]) -> ExecutionPlan:
-        backend = self._resolve_backend()
-        start = perf_counter()
-        logger.info("[PLANNER TIMER] create_plan start (backend=%s)", backend)
-        try:
-            if backend == "endpoint":
-                plan = self._call_remote_planner(request, library_summary)
-            elif backend == "local_hf":
-                plan = self._call_local_hf_planner(request, library_summary)
-            else:
-                raise RuntimeError(f"Unsupported planner backend: {backend}")
-        finally:
-            elapsed_ms = (perf_counter() - start) * 1000
-            logger.info(
-                "[PLANNER TIMER] create_plan done (backend=%s) elapsed=%.1fms tool_count=%d",
-                backend,
-                elapsed_ms,
-                len(getattr(plan, "tool_calls", [])) if "plan" in dir() else 0,
-            )
+        plan = self._call_local_hf_planner(request, library_summary)
+        self._trim_inference_memory()
         return plan
 
+    def _trim_inference_memory(self) -> None:
+        """Free KV cache / intermediate tensors, keep model weights resident."""
+        try:
+            import gc
+            import torch
+        except Exception:
+            return
+        gc.collect()
+        torch.cuda.synchronize()
+        torch.cuda.empty_cache()
+        if hasattr(torch.cuda, 'ipc_collect'):
+            torch.cuda.ipc_collect()
+
     def runtime_info(self) -> dict[str, object]:
-        backend = self._resolve_backend()
         info: dict[str, object] = {
-            "planner_backend": backend,
+            "planner_backend": "local_hf",
             "planner_model": settings.qwen_model,
         }
-        if backend == "endpoint":
-            info["planner_endpoint"] = settings.qwen_endpoint
-        elif backend == "local_hf":
-            info["local_model_dir"] = str(settings.local_model_dir) if settings.local_model_dir else None
-            info["local_device"] = settings.local_device
-            info["local_dtype"] = settings.local_dtype
+        info["local_model_dir"] = str(settings.local_model_dir) if settings.local_model_dir else None
+        info["local_device"] = settings.local_device
+        info["local_dtype"] = settings.local_dtype
         return info
-
-    def _resolve_backend(self) -> str:
-        backend = settings.planner_backend.strip().lower()
-        if backend in {"endpoint", "local_hf"}:
-            return backend
-        if backend != "auto":
-            raise RuntimeError("LPA_PLANNER_BACKEND must be one of: auto, endpoint, local_hf")
-        if settings.qwen_endpoint:
-            return "endpoint"
-        if settings.local_model_dir:
-            return "local_hf"
-        raise RuntimeError(
-            "Planner backend resolution failed. Set LPA_QWEN_ENDPOINT for endpoint mode or "
-            "set LPA_LOCAL_MODEL_DIR for local_hf mode."
-        )
-
-    def _call_remote_planner(self, request: AgentRequest, library_summary: dict[str, object]) -> ExecutionPlan:
-        endpoint = settings.qwen_endpoint
-        if endpoint is None:
-            raise RuntimeError("LPA_QWEN_ENDPOINT is missing")
-
-        payload = self._build_planner_payload(request, library_summary)
-        body = json.dumps(payload, ensure_ascii=False).encode("utf-8")
-        headers = {"Content-Type": "application/json"}
-        if settings.effective_qwen_auth_token:
-            headers["Authorization"] = f"Bearer {settings.effective_qwen_auth_token}"
-        if settings.qwen_workspace_id:
-            # Different docs use different capitalization; include both for compatibility.
-            headers["X-DashScope-WorkSpace"] = settings.qwen_workspace_id
-            headers["X-DashScope-Workspace"] = settings.qwen_workspace_id
-
-        request_obj = Request(url=endpoint, data=body, headers=headers, method="POST")
-        net_start = perf_counter()
-        try:
-            with urlopen(request_obj, timeout=settings.planner_generation_timeout_seconds) as response:
-                raw_text = response.read().decode("utf-8")
-        except HTTPError as exc:
-            error_text = exc.read().decode("utf-8", errors="ignore") if exc.fp else ""
-            raise RuntimeError(f"Planner endpoint HTTP {exc.code}: {error_text}") from exc
-        except URLError as exc:
-            raise RuntimeError(f"Planner endpoint unreachable: {exc.reason}") from exc
-        logger.info(
-            "[PLANNER TIMER] remote network elapsed=%.1fms timeout_limit=%.1fs",
-            (perf_counter() - net_start) * 1000,
-            settings.planner_generation_timeout_seconds,
-        )
-
-        plan = self._parse_plan_response(raw_text)
-        return ExecutionPlan.model_validate(plan)
 
     def _call_local_hf_planner(self, request: AgentRequest, library_summary: dict[str, object]) -> ExecutionPlan:
         runtime = self._get_or_create_local_runtime()
@@ -446,30 +347,23 @@ class QwenPlanner:
         if hasattr(runtime.model, "device") and runtime.model.device is not None:
             inputs = {k: v.to(runtime.model.device) for k, v in inputs.items()}
 
-        box: dict[str, Any] = {}
-
-        def _generate() -> None:
-            with torch.no_grad():
-                box["out"] = runtime.model.generate(
-                    **inputs,
-                    max_new_tokens=settings.local_max_new_tokens,
-                    do_sample=False,
-                )
-
-        worker = Thread(target=_generate, name="local-planner-generate", daemon=True)
-        worker.start()
-        timeout = settings.planner_generation_timeout_seconds
-        worker.join(timeout=timeout)
-        if worker.is_alive():
-            raise RuntimeError(
-                f"Local HF planner generation exceeded planner_generation_timeout_seconds={timeout}s; aborted."
+        with torch.no_grad():
+            out = runtime.model.generate(
+                **inputs,
+                max_new_tokens=settings.local_max_new_tokens,
+                do_sample=False,
+                use_cache=False,
             )
-        if "out" not in box:
-            raise RuntimeError("Local HF planner generation produced no output.")
 
-        out = box["out"]
         generated_tokens = out[:, inputs["input_ids"].shape[1] :]
         generated_text = runtime.tokenizer.decode(generated_tokens[0], skip_special_tokens=True).strip()
+
+        del out, generated_tokens, inputs
+        import gc
+        gc.collect()
+        if runtime.model.device is not None and str(runtime.model.device) != "cpu":
+            torch.cuda.empty_cache()
+
         plan_dict = self._parse_json_text(generated_text)
         return ExecutionPlan.model_validate(plan_dict)
 
@@ -507,10 +401,31 @@ class QwenPlanner:
         _ensure_torch_autocast_compat(torch)
 
         tokenizer = AutoTokenizer.from_pretrained(str(model_path), trust_remote_code=True)
+
+        quantization = settings.local_quantization.strip().lower()
+        quant_config = None
+        if quantization in ("4bit", "nf4", "bitsandbytes", "int4"):
+            from transformers import BitsAndBytesConfig
+
+            quant_config = BitsAndBytesConfig(
+                load_in_4bit=True,
+                bnb_4bit_compute_dtype=dtype_map.get(dtype_raw, torch.bfloat16),
+                bnb_4bit_use_double_quant=True,
+                bnb_4bit_quant_type="nf4",
+            )
+        elif quantization in ("8bit", "int8"):
+            from transformers import BitsAndBytesConfig
+
+            quant_config = BitsAndBytesConfig(load_in_8bit=True)
+
         model_kwargs: dict[str, object] = {
             "trust_remote_code": True,
-            "dtype": dtype_map[dtype_raw],
         }
+        if quant_config is not None:
+            model_kwargs["quantization_config"] = quant_config
+        else:
+            model_kwargs["dtype"] = dtype_map[dtype_raw]
+
         model_kwargs["device_map"] = "auto" if device_raw == "auto" else device_raw
 
         model = AutoModelForCausalLM.from_pretrained(str(model_path), **model_kwargs)
@@ -539,27 +454,28 @@ class QwenPlanner:
         return local_messages
 
     def _build_planner_payload(self, request: AgentRequest, library_summary: dict[str, object]) -> dict[str, object]:
-        from .foundation.layout_resolver import LayoutResolver
-
         tool_choices = "|".join(spec.name.value for spec in TOOL_SPECS)
         layout_assets = self._extract_layout_assets(request.layout_context)
         edit_directives = self._extract_edit_directives(request.layout_context)
-        # Deterministic spatial layout: grid coords -> canvas percentages + z-order.
-        # This is authoritative; the planner must use it instead of guessing geometry.
-        composition_template = LayoutResolver().resolve(request.layout_context).model_dump(mode="json")
-        # Slim tool catalog: the planner only needs tool name + purpose + argument
-        # names to plan a valid tool chain. The remaining contract metadata
-        # (preconditions, side_effects, failure_modes, security_scope, timings,
-        # quality_metrics, full argument_help) is for the local execution engine
-        # and UI, not the LLM — sending it inflates the prompt and is the main
-        # cause of 45-67s endpoint latency. Keep it minimal.
         tool_catalog = [
             {
                 "tool": spec.name.value,
+                "level": spec.level,
                 "purpose": spec.purpose,
+                "when_to_use": spec.when_to_use,
                 "allowed_arguments": list(spec.arguments.keys()),
+                "argument_help": spec.arguments,
+                "output_schema": spec.output_schema,
+                "preconditions": list(contract.preconditions),
+                "side_effects": list(contract.side_effects),
+                "failure_modes": list(contract.failure_modes),
+                "idempotent": contract.idempotent,
+                "security_scope": contract.security_scope,
+                "timeout_budget_ms": contract.timeout_budget_ms,
+                "quality_metrics": list(contract.quality_metrics),
             }
             for spec in TOOL_SPECS
+            for contract in [TOOL_CONTRACTS[spec.name]]
         ]
         return {
             "model": settings.qwen_model,
@@ -574,22 +490,18 @@ class QwenPlanner:
                         "If guided_tool_names is non-empty, prefer those tools when they fit the request and explain any omission in tool_calls.reason. "
                         "Treat request.layout_assets and request.edit_directives as authoritative user-provided edit constraints. "
                         "If request.edit_directives is non-empty, you must preserve those edit intents in the planned reasoning and relevant tool arguments when applicable. "
-                        "request.composition_template is the AUTHORITATIVE spatial layout, computed deterministically from the user's grid. "
-                        "You MUST honor it: background slots (role=background) become a single compose_videos_spatial call whose placements match each slot's "
-                        "left_pct/top_pct/width_pct/height_pct and z_index ordering; foreground slots (role=foreground) become subject_segmentation + overlay_subject_clip "
-                        "using that slot's anchor/scale/x_offset/y_offset. Do NOT fall back to concat_clips for a spatial layout, and do NOT recompute coordinates yourself. "
                         "If library_summary.reusable_strategies is provided, treat it as prior successful candidates "
                         "and adapt only when it fits the current request; do not copy blindly. "
                         "Do not infer hidden rules or default workflow stages beyond tool boundaries. "
-                        "Layered layout is expected, not an error: when layout_context items carry "
-                        "foreground=true/is_overlay=true or distinct z_index, a full-canvas item overlapping "
-                        "background tiles is an intentional foreground (e.g. subject segmentation) over a backdrop. "
-                        "Do NOT raise need_clarification for such overlap; plan the foreground extraction/overlay directly. "
-                        "There are TWO distinct prompt types in this system: "
-                        "(1) image_prompt in layout_assets — a WHOLE-IMAGE processing instruction (e.g. color enhancement, style transfer) that applies to the entire asset; "
-                        "(2) edit_prompt in edit_directives — a REGION-ONLY instruction tied to a specific edit_rect (e.g. subject segmentation, local inpainting). "
-                        "When an asset has BOTH, plan the whole-image processing FIRST, then apply the region-specific edit on the processed result. "
-                        "Only ask for clarification when coordinates are genuinely missing or the spatial intent is truly ambiguous. "
+                        # 以下三条针对实测失败：qwen-omni-turbo 会把 17 个工具全量复述且
+                        # arguments 全空，qwen-max 把 arguments 填成 ''，qwen-plus 返回空数组。
+                        # 根因是既没要求"只列必要工具"，也没要求 arguments 必须是具体值。
+                        "Plan only the tools required to achieve request.text; never enumerate the whole catalog. "
+                        "Every tool_calls[].arguments must be a non-empty object of concrete values "
+                        "(numbers as numbers, durations and timestamps in integer milliseconds), "
+                        "drawn from that tool's allowed_arguments. Never emit null, '' or {} for arguments. "
+                        "Use request.input_video_paths / request.input_image_paths as the material to operate on; "
+                        "if they are empty and no asset is selected, set need_clarification instead of guessing a path. "
                         "No prose."
                     ),
                 },
@@ -602,8 +514,13 @@ class QwenPlanner:
                                 "selected_asset_ids": request.selected_asset_ids,
                                 "guided_tool_names": [tool.value for tool in request.guided_tool_names],
                                 "library_root": str(request.library_root),
+                                # 素材路径此前从未进入 payload，模型不知道要对哪个文件下手，
+                                # 因此 arguments 只能留空或复述词表。缺这两行时
+                                # run_device_plan.py 的 --device-input 是一条死路。
+                                "input_video_paths": [str(p) for p in request.input_video_paths],
+                                "input_image_paths": [str(p) for p in request.input_image_paths],
+                                "layout_context": request.layout_context,
                                 "layout_assets": layout_assets,
-                                "composition_template": composition_template,
                                 "edit_directives": edit_directives,
                                 "has_canvas_edits": bool(edit_directives),
                                 "operation_log": request.operation_log,
@@ -654,8 +571,6 @@ class QwenPlanner:
                         "h": item.get("grid_h"),
                     },
                     "z_index": item.get("z_index"),
-                    "pin_to_top": bool(item.get("pin_to_top", False)),
-                    "image_prompt": str(item.get("image_prompt", "")),
                 }
             )
         return assets
@@ -676,7 +591,6 @@ class QwenPlanner:
                     "label": str(item.get("label", "")),
                     "edit_prompt": str(edit_prompt or "").strip(),
                     "edit_rect": edit_rect if isinstance(edit_rect, dict) else None,
-                    "foreground": bool(item.get("foreground") or item.get("is_overlay")),
                 }
             )
         return directives

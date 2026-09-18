@@ -185,19 +185,10 @@ class L0AtomicTools:
             if output_dir.exists():
                 shutil.rmtree(output_dir, ignore_errors=True)
             try:
-                use_motion = str(call.arguments.get("use_motion", "")).strip().lower() in ("1", "true", "yes")
-                # edit_rect 来源优先级：
-                #   1. call.arguments 中显式传入（planner 指定）
-                #   2. composition_template 中对应 asset 的 slot.edit_rect（前端画布框选）
-                edit_rect = self._resolve_edit_rect(call, context, asset.asset_id)
-                if motion_path is not None and use_motion:
+                if motion_path is not None:
                     result = self.media_ops.extract_subject_matte_frames(motion_path, output_dir, mode=mode)
                 else:
-                    optimize_cfg = call.arguments.get("optimize_filters")
-                    if optimize_cfg is not None:
-                        result = self._extract_subject_matte_from_still(asset, output_dir, edit_rect, optimize_cfg)
-                    else:
-                        result = self._extract_subject_matte_from_still(asset, output_dir, edit_rect)
+                    result = self._extract_subject_matte_from_still(asset, output_dir)
             except MediaOpsError as exc:
                 failed_asset_ids.append(asset.asset_id)
                 return ToolResult(
@@ -220,22 +211,10 @@ class L0AtomicTools:
             },
         )
 
-    def _extract_subject_matte_from_still(
-        self,
-        asset: LivePhotoAsset,
-        output_dir: Path,
-        edit_rect: dict[str, float] | None = None,
-        optimize_cfg: dict | None = None,
-    ) -> dict[str, object]:
+    def _extract_subject_matte_from_still(self, asset: LivePhotoAsset, output_dir: Path) -> dict[str, object]:
         output_dir.mkdir(parents=True, exist_ok=True)
         mask_path = output_dir / "mask.png"
-        # Resolve a grabCut rectangle from the user's framed region (normalized
-        # 0-1 within the source still). This is what makes "分割 jpeg 框选区域"
-        # actually cut out the framed subject instead of the whole frame.
-        still_rect = self._normalize_edit_rect_to_pixels(asset, edit_rect)
-        segmentation = self.media_ops.segment_subject(
-            Path(asset.image_path), mask_path, mode="person_first", rect=still_rect
-        )
+        segmentation = self.media_ops.segment_subject(Path(asset.image_path), mask_path, mode="person_first")
 
         try:
             import cv2
@@ -255,17 +234,6 @@ class L0AtomicTools:
             frame_path = output_dir / f"frame_{index:05d}.png"
             cv2.imwrite(str(frame_path), rgba)
 
-        # Optional post-processing: smooth mask + denoise foreground frames
-        try:
-            mask_path = Path(mask_path)
-        except Exception:
-            mask_path = output_dir / "mask.png"
-        try:
-            self.media_ops.optimize_subject_matte(output_dir, mask_path, optimize_cfg)
-        except Exception:
-            # Don't fail the whole tool if optimization step errors; it's best-effort
-            pass
-
         return {
             "frames_dir": str(output_dir),
             "frame_count": frame_count,
@@ -275,119 +243,6 @@ class L0AtomicTools:
             "average_foreground_ratio": float(segmentation.get("foreground_ratio", 0.0)),
             "source_type": "still_image",
         }
-
-    @staticmethod
-    def _parse_edit_rect(raw: object) -> dict[str, float] | None:
-        """Parse a normalized (0-1) subject rectangle from the request.
-
-        The frontend sends ``edit_rect`` as {x, y, w, h} in 0-1 of the source
-        still. Returns None when missing/invalid so segmentation falls back to
-        the whole-frame grabCut.
-        """
-        if not isinstance(raw, dict):
-            return None
-        keys = ("x", "y", "w", "h")
-        if not all(isinstance(raw.get(k), (int, float)) for k in keys):
-            return None
-        x = float(raw["x"])
-        y = float(raw["y"])
-        w = float(raw["w"])
-        h = float(raw["h"])
-        if w <= 0 or h <= 0:
-            return None
-        return {
-            "x": max(0.0, min(1.0, x)),
-            "y": max(0.0, min(1.0, y)),
-            "w": max(0.0, min(1.0 - max(0.0, x), w)),
-            "h": max(0.0, min(1.0 - max(0.0, y), h)),
-        }
-
-    @staticmethod
-    def _parse_edit_rect_for_asset(raw: object, asset_id: str) -> dict[str, float] | None:
-        """Resolve edit_rect for a specific asset.
-
-        Supports two forms:
-        1. A single {x, y, w, h} dict (applies to all assets).
-        2. A {asset_id: {x, y, w, h}} mapping (per-asset, e.g. from fallback).
-        """
-        if not isinstance(raw, dict):
-            return None
-        # Form 2: per-asset mapping — check if any value is itself a rect dict
-        for key, val in raw.items():
-            if isinstance(val, dict) and "x" in val and "w" in val:
-                if str(key) == str(asset_id):
-                    return L0AtomicTools._parse_edit_rect(val)
-                continue
-        # Form 1: single rect dict
-        if "x" in raw and "w" in raw:
-            return L0AtomicTools._parse_edit_rect(raw)
-        return None
-
-    @staticmethod
-    def _normalize_edit_rect_to_pixels(
-        asset: LivePhotoAsset, edit_rect: dict[str, float] | None
-    ) -> tuple[int, int, int, int] | None:
-        """Convert a normalized edit_rect into source-still pixel coordinates.
-
-        Returns None when no rect is provided or the image cannot be probed,
-        letting segment_subject use its default whole-frame rectangle.
-        """
-        if not edit_rect:
-            return None
-        try:
-            import cv2
-        except ImportError:
-            return None
-        image = cv2.imread(str(asset.image_path))
-        if image is None:
-            return None
-        height, width = image.shape[:2]
-        # segment_subject downscales to a 512px max side; replicate that scale so
-        # the rect lands on the same small image grabCut operates on.
-        max_side = 512
-        scale = min(1.0, max_side / max(width, height))
-        s_w = max(1, int(width * scale))
-        s_h = max(1, int(height * scale))
-        rx = int(edit_rect["x"] * s_w)
-        ry = int(edit_rect["y"] * s_h)
-        rw = max(1, int(edit_rect["w"] * s_w))
-        rh = max(1, int(edit_rect["h"] * s_h))
-        return (rx, ry, rw, rh)
-
-    def _resolve_edit_rect(
-        self,
-        call: ToolCall,
-        context: dict[str, object],
-        asset_id: str,
-    ) -> dict[str, float] | None:
-        """Resolve edit_rect for *asset_id* from call args or composition_template.
-
-        Priority:
-          1. ``call.arguments["edit_rect"]`` — planner explicitly passes it
-             (can be a single ``{x,y,w,h}`` or ``{asset_id: {x,y,w,h}}`` map).
-          2. ``context["composition_template"]["slots"]`` — the LayoutResolver
-             carried the frontend canvas edit_rect into the slot.
-        """
-        raw = call.arguments.get("edit_rect")
-        parsed = self._parse_edit_rect_for_asset(raw, asset_id)
-        if parsed:
-            return parsed
-        template = context.get("composition_template")
-        if isinstance(template, dict):
-            for slot in template.get("slots", []):
-                if str(slot.get("asset_id")) != str(asset_id):
-                    continue
-                rect = slot.get("edit_rect")
-                if isinstance(rect, dict) and all(
-                    isinstance(rect.get(k), (int, float)) for k in ("x", "y", "w", "h")
-                ):
-                    return {
-                        "x": float(rect["x"]),
-                        "y": float(rect["y"]),
-                        "w": float(rect["w"]),
-                        "h": float(rect["h"]),
-                    }
-        return None
 
     def overlay_subject_clip(self, call: ToolCall, context: dict[str, object]) -> ToolResult:
         foreground_asset_id = str(call.arguments.get("foreground_asset_id", "")).strip()
@@ -422,17 +277,6 @@ class L0AtomicTools:
         timeline_id = str(timeline.get("timeline_id", "timeline"))
         output_path = workspace / "overlay_composite" / f"{timeline_id}_with_{foreground_asset_id}.mp4"
 
-        # Prefer the deterministic spatial placement from the resolved
-        # CompositionTemplate for this foreground asset. This is what makes a
-        # 框选 region land exactly where the user dragged it on the canvas,
-        # instead of being forced into a center/anchor keyword. Fall back to
-        # explicit left/top/width/height arguments (e.g. from the deterministic
-        # planner) when no template slot matches.
-        placement = self._foreground_placement_from_template(context, foreground_asset_id)
-        if placement is None:
-            placement = self._explicit_foreground_placement(call)
-        used_placement = placement is not None
-
         try:
             result_path = self.media_ops.composite_foreground_over_background(
                 background_path=Path(str(background_path_raw)),
@@ -444,7 +288,6 @@ class L0AtomicTools:
                 x_offset=x_offset,
                 y_offset=y_offset,
                 fit_mode=fit_mode,
-                placement=placement,
             )
         except MediaOpsError as exc:
             return ToolResult(
@@ -470,8 +313,6 @@ class L0AtomicTools:
             "x_offset": x_offset,
             "y_offset": y_offset,
             "fit_mode": fit_mode,
-            "used_template_placement": used_placement,
-            "placement": placement,
             "path": str(result_path),
         }
 
@@ -480,123 +321,6 @@ class L0AtomicTools:
             success=True,
             payload={"overlay_applied": True, "output_path": str(result_path)},
         )
-
-    def extract_region_matte(self, call: ToolCall, context: dict[str, object]) -> ToolResult:
-        """Extract foreground subject from a sub-region of each video frame via grabCut.
-
-        Arguments:
-            asset_id: required, the asset to process
-            region: "bottom_third" (default) | "bottom_half" | "top_third"
-            keep_region: bool, keep region area fully opaque (default True)
-            sample_every: int, run grabCut every N frames (default 3)
-        """
-        asset_id = str(call.arguments.get("asset_id", "")).strip()
-        region = str(call.arguments.get("region", "bottom_third")).strip()
-        keep_region = bool(call.arguments.get("keep_region", True))
-        sample_every = int(call.arguments.get("sample_every", 3))
-
-        asset = self._asset_by_id(asset_id, context)
-        if not asset:
-            return ToolResult(tool=call.tool, success=False,
-                              payload={"error": f"asset_not_found: {asset_id}"})
-
-        motion_path = self._asset_motion_path(asset)
-        if not motion_path or not motion_path.exists():
-            return ToolResult(tool=call.tool, success=False,
-                              payload={"error": f"no_motion_video: {asset_id}"})
-
-        workspace = self._segmentation_workspace_dir()
-        output_dir = workspace / "region_mattes" / asset_id
-        try:
-            result = self.media_ops.segment_subject_region_video(
-                motion_path, output_dir, region=region,
-                keep_region=keep_region, sample_every=sample_every,
-            )
-        except Exception as exc:
-            return ToolResult(tool=call.tool, success=False,
-                              payload={"error": str(exc), "error_code": "region_matte_failed"})
-
-        # Export RGBA video
-        output_path = workspace / "region_exports" / f"{asset_id}.webm"
-        output_path.parent.mkdir(parents=True, exist_ok=True)
-        try:
-            self.media_ops.export_rgba_video(
-                motion_path, output_dir, output_path,
-            )
-        except Exception as exc:
-            output_path = None
-
-        context["region_matte"] = {
-            "asset_id": asset_id,
-            "region": region,
-            "frames_dir": str(output_dir),
-            "frame_count": result["frame_count"],
-            "rgba_video": str(output_path) if output_path else None,
-        }
-
-        return ToolResult(
-            tool=call.tool,
-            success=True,
-            payload={
-                "frame_count": result["frame_count"],
-                "region": region,
-                "frames_dir": str(output_dir),
-                "rgba_video": str(output_path) if output_path else None,
-            },
-        )
-
-    def _foreground_placement_from_template(
-        self,
-        context: dict[str, object],
-        foreground_asset_id: str,
-    ) -> dict[str, float] | None:
-        """Resolve the canvas placement for a foreground overlay slot.
-
-        Reads the foreground LayoutSlot from the resolved CompositionTemplate.
-        Returns edge-anchored percentages (left/top/width/height) so the
-        segmented subject is composited exactly where the user framed it.
-        Returns ``None`` when no template / no matching foreground slot exists,
-        so the caller falls back to anchor-based placement.
-        """
-        template = context.get("composition_template")
-        if not template:
-            return None
-        slots = template.get("slots") if isinstance(template, dict) else None
-        if not slots:
-            return None
-        for slot in slots:
-            if str(slot.get("asset_id")) != str(foreground_asset_id):
-                continue
-            if (slot.get("role") or "background") != "foreground":
-                continue
-            return {
-                "left": float(slot.get("left_pct", 0.0)),
-                "top": float(slot.get("top_pct", 0.0)),
-                "width": float(slot.get("width_pct", 100.0)),
-                "height": float(slot.get("height_pct", 100.0)),
-            }
-        return None
-
-    def _explicit_foreground_placement(self, call: ToolCall) -> dict[str, float] | None:
-        """Use explicit left/top/width/height arguments as a placement fallback.
-
-        Only returns a placement when all four edge-anchored percentages are
-        present and finite, so anchor-based placement is preserved otherwise.
-        """
-        args = call.arguments
-        keys = ("left", "top", "width", "height")
-        if not all(isinstance(args.get(k), (int, float)) for k in keys):
-            return None
-        width = max(0.0, min(100.0, float(args["width"])))
-        height = max(0.0, min(100.0, float(args["height"])))
-        if width <= 0 or height <= 0:
-            return None
-        return {
-            "left": max(0.0, min(100.0, float(args["left"]))),
-            "top": max(0.0, min(100.0, float(args["top"]))),
-            "width": width,
-            "height": height,
-        }
 
     def _cleanup_subject_matte_temp(self, matte: dict[str, object]) -> None:
         frames_dir_raw = matte.get("frames_dir")
@@ -827,7 +551,7 @@ class L0AtomicTools:
                 asset = by_id.get(asset_id)
                 if asset is None:
                     continue
-                source_path = self._resolve_asset_video_path(asset, source_maps, workspace)
+                source_path = self._resolve_asset_video_path(asset, source_maps)
                 if source_path is None:
                     continue
                 clip_paths.append(source_path)
@@ -844,26 +568,15 @@ class L0AtomicTools:
                     },
                 )
 
-            # Spatial layout priority:
-            #   1. If the planner/request resolved a CompositionTemplate with
-            #      background slots, that is the AUTHORITATIVE spatial layout
-            #      (deterministically derived from the user's grid drag). Use it
-            #      directly instead of guessing from text keywords.
-            #   2. Otherwise fall back to the text/learned-driven composition mode.
-            template_placements = self._build_placements_from_template(context, resolved_order)
-            if template_placements is not None:
-                composition_mode = "template"
-            else:
-                composition_mode = self._resolve_concat_composition_mode(
-                    explicit_layout=layout_mode,
-                    request_text=str(context.get("request_text", "")),
-                    clip_count=len(clip_paths),
-                    reusable_strategies=context.get("reusable_strategies", []),
-                )
-
+            composition_mode = self._resolve_concat_composition_mode(
+                explicit_layout=layout_mode,
+                request_text=str(context.get("request_text", "")),
+                clip_count=len(clip_paths),
+                reusable_strategies=context.get("reusable_strategies", []),
+            )
             total_candidate_count = len(clip_paths)
             capped_clip_count = total_candidate_count
-            if composition_mode != "timeline" and template_placements is None and len(clip_paths) > 3:
+            if composition_mode != "timeline" and len(clip_paths) > 3:
                 clip_paths = clip_paths[:3]
                 resolved_order = resolved_order[:3]
                 capped_clip_count = len(clip_paths)
@@ -871,30 +584,27 @@ class L0AtomicTools:
             if composition_mode == "timeline":
                 self.media_ops.concat_videos(clip_paths, timeline_path)
             else:
-                compose_kwargs: dict[str, object] = {"canvas": canvas, "layout": composition_mode}
-                if template_placements is not None:
-                    compose_kwargs["placements"] = template_placements
-                else:
-                    layout_context = context.get("layout_context", [])
-                    placements: list[dict[str, float]] = []
-                    if isinstance(layout_context, list):
-                        placement_by_asset = {
-                            str(item.get("asset_id")): item
-                            for item in layout_context
-                            if isinstance(item, dict) and item.get("asset_id")
-                        }
-                        for asset_id in resolved_order:
-                            item = placement_by_asset.get(asset_id)
-                            if item is None:
-                                placements = []
-                                break
-                            placements.append({
-                                key: float(item[key])
-                                for key in ("left", "top", "width", "height")
-                                if key in item and isinstance(item[key], (int, float))
-                            })
-                    if placements:
-                        compose_kwargs["placements"] = placements
+                layout_context = context.get("layout_context", [])
+                placements: list[dict[str, float]] = []
+                if isinstance(layout_context, list):
+                    placement_by_asset = {
+                        str(item.get("asset_id")): item
+                        for item in layout_context
+                        if isinstance(item, dict) and item.get("asset_id")
+                    }
+                    for asset_id in resolved_order:
+                        item = placement_by_asset.get(asset_id)
+                        if item is None:
+                            placements = []
+                            break
+                        placements.append({
+                            key: float(item[key])
+                            for key in ("left", "top", "width", "height")
+                            if key in item and isinstance(item[key], (int, float))
+                        })
+                compose_kwargs = {"canvas": canvas, "layout": composition_mode}
+                if placements:
+                    compose_kwargs["placements"] = placements
                 self.media_ops.compose_videos_spatial(clip_paths, timeline_path, **compose_kwargs)
 
             timeline = {
@@ -926,67 +636,6 @@ class L0AtomicTools:
                 "composed_count": capped_clip_count,
             },
         )
-
-    def _build_placements_from_template(
-        self,
-        context: dict[str, object],
-        resolved_order: list[str],
-    ) -> list[dict[str, float]] | None:
-        """Build spatial placements from the resolved CompositionTemplate.
-
-        Returns an ordered list of edge-anchored percentage placements
-        (left/top/width/height) for the background slots, matched to
-        ``resolved_order``. Returns ``None`` when no usable spatial template
-        exists, so the caller falls back to text-driven composition.
-        """
-        template = context.get("composition_template")
-        if not template:
-            return None
-        slots = template.get("slots") if isinstance(template, dict) else None
-        if not slots:
-            return None
-
-        bg_slots = [s for s in slots if (s.get("role") or "background") != "foreground"]
-        if not bg_slots:
-            return None
-
-        by_asset: dict[str, dict[str, object]] = {
-            str(s.get("asset_id")): s for s in bg_slots if s.get("asset_id")
-        }
-        placements: list[dict[str, float]] = []
-        # Try deterministic mapping by asset_id first.
-        missing = False
-        for asset_id in resolved_order:
-            slot = by_asset.get(asset_id)
-            if slot is None:
-                missing = True
-                break
-            placements.append({
-                "left": float(slot.get("left_pct", 0.0)),
-                "top": float(slot.get("top_pct", 0.0)),
-                "width": float(slot.get("width_pct", 100.0)),
-                "height": float(slot.get("height_pct", 100.0)),
-            })
-
-        if missing:
-            # Fallback: if the template's background slots count exactly matches
-            # the resolved_order length, map slots positionally (ordered by
-            # z_index) to tolerate ID mismatches while preserving layout.
-            if len(bg_slots) == len(resolved_order):
-                placements = []
-                sorted_slots = sorted(bg_slots, key=lambda s: (s.get("z_index", 0), str(s.get("slot_id"))))
-                for slot in sorted_slots:
-                    placements.append({
-                        "left": float(slot.get("left_pct", 0.0)),
-                        "top": float(slot.get("top_pct", 0.0)),
-                        "width": float(slot.get("width_pct", 100.0)),
-                        "height": float(slot.get("height_pct", 100.0)),
-                    })
-            else:
-                return None
-        if not placements:
-            return None
-        return placements
 
     def _resolve_concat_composition_mode(
         self,
@@ -1031,7 +680,6 @@ class L0AtomicTools:
             return "triptych_portrait"
         if any(marker in text for marker in spatial_markers) and clip_count >= 2:
             return "triptych_portrait"
-        # Keep default conservative; preference should come from explicit user request or learned strategy.
         return "timeline"
 
     def _learned_concat_layout(self, reusable_strategies: object) -> str:
@@ -1447,28 +1095,9 @@ class L0AtomicTools:
                 return path
         return self._asset_motion_path(asset)
 
-    def _resolve_asset_video_path(
-        self, asset: LivePhotoAsset, source_maps: list[dict[str, object]], workspace: Path | None = None
-    ) -> Path | None:
+    def _resolve_asset_video_path(self, asset: LivePhotoAsset, source_maps: list[dict[str, object]]) -> Path | None:
         for source_map in source_maps:
             resolved = self._segment_source_path(asset, source_map)
             if resolved is not None and resolved.exists():
                 return resolved
-        motion = self._asset_motion_path(asset)
-        if motion is not None:
-            return motion
-        # Pure still asset (no motion clip): materialize a short static-frame
-        # video so it can participate in the composition timeline like a live
-        # photo. This is what lets a plain JPEG be embedded into the result.
-        image_path = Path(asset.image_path) if asset.image_path else None
-        if image_path is not None and image_path.exists():
-            if workspace is None:
-                workspace = self._workspace_dir({"library_root": image_path.parent})
-            out_dir = workspace / "static_frames"
-            out_dir.mkdir(parents=True, exist_ok=True)
-            out_path = out_dir / f"{asset.asset_id}.mp4"
-            try:
-                return self.media_ops.image_to_static_video(image_path, out_path)
-            except MediaOpsError:
-                return None
-        return None
+        return self._asset_motion_path(asset)
