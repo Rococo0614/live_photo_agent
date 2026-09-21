@@ -783,6 +783,51 @@
       background: rgba(251, 191, 36, 0.18);
       color: #fbbf24;
     }
+    .template-tag.sequential {
+      background: rgba(56, 189, 248, 0.18);
+      color: #38bdf8;
+    }
+    /* v2: 时序模板时间轴条 */
+    .template-timeline-bar {
+      position: absolute;
+      left: 4%;
+      right: 4%;
+      bottom: 2px;
+      height: 6px;
+      background: rgba(255, 255, 255, 0.08);
+      border-radius: 3px;
+      display: flex;
+      overflow: hidden;
+    }
+    .template-timeline-seg {
+      position: absolute;
+      top: 0;
+      height: 100%;
+      opacity: 0.75;
+      border-right: 1px solid rgba(0, 0, 0, 0.3);
+    }
+    .template-timeline-seg:last-child { border-right: none; }
+    /* v2: 时序 slot 里的时间标签 */
+    .template-thumb-slot.sequential {
+      animation: seqPulse 3s ease-in-out infinite;
+    }
+    .template-thumb-slot-time {
+      position: absolute;
+      bottom: 1px;
+      left: 50%;
+      transform: translateX(-50%);
+      font-size: 8px;
+      font-weight: 700;
+      color: rgba(255, 255, 255, 0.9);
+      background: rgba(0, 0, 0, 0.5);
+      padding: 1px 3px;
+      border-radius: 2px;
+      white-space: nowrap;
+    }
+    @keyframes seqPulse {
+      0%, 100% { opacity: 0.5; }
+      50% { opacity: 1; }
+    }
     .asset-loader-bar strong { display: block; margin-top: 4px; font-size: 14px; }
     .operation-card { margin-top: 14px; }
     .operation-log { display: grid; gap: 8px; margin-top: 10px; }
@@ -1522,6 +1567,51 @@
       return (Number(gridY) / GRID_LAYOUT.rows) * 100;
     }
 
+    // v2: position_preference + bg_region → grid 坐标映射
+    function slotToGrid(slot) {
+      const pp = slot.position_preference || 'any';
+      const br = slot.bg_region || 'full';
+      const margin = 6;
+      const fullW = 108;  // 120 - 2*6
+      const thirdH = 46;   // ~160/3 - margin
+      const gap = 4;
+
+      // bg_region 决定垂直区域
+      let gy, gh;
+      if (br === 'top_third') { gy = 8; gh = thirdH; }
+      else if (br === 'middle_third') { gy = 8 + thirdH + gap; gh = thirdH; }
+      else if (br === 'bottom_third') { gy = 8 + 2 * (thirdH + gap); gh = thirdH; }
+      else { gy = 8; gh = 144; } // full
+
+      // position_preference 微调
+      if (pp === 'upper' && br === 'full') { gy = 8; gh = thirdH; }
+      else if (pp === 'middle' && br === 'full') { gy = 8 + thirdH + gap; gh = thirdH; }
+      else if (pp === 'lower' && br === 'full') { gy = 8 + 2 * (thirdH + gap); gh = thirdH; }
+
+      return { gx: margin, gy, gw: fullW, gh };
+    }
+
+    // v2: 时间窗口描述
+    function formatTimeWindow(slot, totalDur) {
+      const s = slot.start_time_s ?? 0;
+      const e = slot.end_time_s ?? totalDur;
+      return `${s.toFixed(1)}-${e.toFixed(1)}s`;
+    }
+
+    // v2: 检测模板是否为时序模板（slots 有不同时间窗口）
+    function isSequentialTemplate(template) {
+      if (!template.slots) return false;
+      const windows = template.slots.map(s => `${s.start_time_s}-${s.end_time_s}`);
+      return new Set(windows).size > 1;
+    }
+
+    // v2: 转场效果描述
+    function formatTransition(trans) {
+      if (!trans) return '';
+      const typeMap = { fade: '淡入', slide_left: '左滑', slide_right: '右滑', slide_up: '上滑', slide_down: '下滑', zoom: '缩放' };
+      return `${typeMap[trans.type] || trans.type} ${trans.duration_ms}ms`;
+    }
+
     function percentToGridX(percentX) {
       return Math.round((Number(percentX) / 100) * GRID_LAYOUT.cols);
     }
@@ -2152,7 +2242,7 @@
     }
 
     function getAllTemplates() {
-      return [...TEMPLATE_LIBRARY, ...customTemplates];
+      return [...TEMPLATE_LIBRARY, ...v2Templates, ...customTemplates];
     }
 
     function renderTemplateControls() {
@@ -2171,22 +2261,47 @@
         const active = template.id === state.activeTemplateId ? 'active' : '';
         const hasPrompt = template.slots.some((s) => s.image_prompt);
         const hasPin = template.slots.some((s) => s.pin_to_top);
-        const thumbSlots = template.slots.map((slot) => {
+        const isSeq = isSequentialTemplate(template);
+        const totalDur = template.total_duration_s || 6;
+
+        const thumbSlots = template.slots.map((slot, idx) => {
+          const grid = (slot.gx !== undefined) ? slot : slotToGrid(slot);
           const classes = ['template-thumb-slot'];
           if (slot.pin_to_top) classes.push('pin-to-top');
           if (slot.image_prompt) classes.push('has-prompt');
+          if (isSeq) classes.push('sequential');
           const pinIcon = slot.pin_to_top ? '<span class="template-thumb-pin-icon">T</span>' : '';
           const promptIcon = slot.image_prompt ? '<span class="template-thumb-prompt-icon">P</span>' : '';
-          return `<div class="${classes.join(' ')}" style="left:${gridToPercentX(slot.gx)}%;top:${gridToPercentY(slot.gy)}%;width:${gridToPercentX(slot.gw)}%;height:${gridToPercentY(slot.gh)}%">${promptIcon}${pinIcon}</div>`;
+          const slotLabel = isSeq ? `<span class="template-thumb-slot-time">${formatTimeWindow(slot, totalDur)}</span>` : '';
+          return `<div class="${classes.join(' ')}" style="left:${gridToPercentX(grid.gx)}%;top:${gridToPercentY(grid.gy)}%;width:${gridToPercentX(grid.gw)}%;height:${gridToPercentY(grid.gh)}%">${promptIcon}${pinIcon}${slotLabel}</div>`;
         }).join('');
+
+        // v2: 时间轴条 (时序模板)
+        let timelineBar = '';
+        if (isSeq) {
+          const timelineSlots = template.slots.map((slot, idx) => {
+            const s = slot.start_time_s ?? 0;
+            const e = slot.end_time_s ?? totalDur;
+            const left = (s / totalDur) * 100;
+            const width = ((e - s) / totalDur) * 100;
+            const colors = ['#38bdf8', '#34d399', '#fbbf24', '#f87171', '#a78bfa'];
+            const color = colors[idx % colors.length];
+            return `<div class="template-timeline-seg" style="left:${left}%;width:${width}%;background:${color}" title="${formatTimeWindow(slot, totalDur)}"></div>`;
+          }).join('');
+          timelineBar = `<div class="template-timeline-bar">${timelineSlots}</div>`;
+        }
+
         const tags = [];
         if (hasPrompt) tags.push('<span class="template-tag prompt">提示</span>');
         if (hasPin) tags.push('<span class="template-tag pin">置顶</span>');
+        if (isSeq) tags.push('<span class="template-tag sequential">时序</span>');
+        const metaParts = [template.style || '?', template.board || '?', `${template.slots.length} 格`];
+        if (template.total_duration_s) metaParts.push(`${template.total_duration_s}s`);
         return `
           <button class="template-card ${active}" data-template-id="${escapeHtml(template.id)}" type="button">
             <div class="template-card-name">${escapeHtml(template.name)}${tags.join('')}</div>
-            <div class="template-card-meta">${escapeHtml(template.style)} · ${escapeHtml(template.board)} · ${template.slots.length} 格</div>
-            <div class="template-thumb">${thumbSlots}</div>
+            <div class="template-card-meta">${escapeHtml(metaParts.join(' · '))}</div>
+            <div class="template-thumb">${thumbSlots}${timelineBar}</div>
           </button>
         `;
       }).join('');
@@ -3111,16 +3226,47 @@
     renderToolGuidance();
     renderToolCatalog();
 
+    loadV2TemplatesAsync().then(() => renderTemplateControls());
     loadCustomTemplatesAsync();
     async function loadCustomTemplatesAsync() {
       try {
-        const resp = await fetch('/api/template/list');
+        const resp = await fetch('/api/templates');
         if (resp.ok) {
           const data = await resp.json();
-          customTemplates = data.templates || [];
+          // v2 templates already loaded by loadV2TemplatesAsync; custom templates
+          // are user-saved ones with style='custom'. Filter them out here.
+          customTemplates = (data.templates || []).filter(t => t.style === 'custom');
         }
       } catch (e) {
         customTemplates = [];
+      }
+    }
+
+    // v2: 从后端 /api/templates 加载带时间窗口的模板
+    let v2Templates = [];
+    async function loadV2TemplatesAsync() {
+      try {
+        const resp = await fetch('/api/templates');
+        if (!resp.ok) return;
+        const data = await resp.json();
+        v2Templates = (data.templates || []).map(t => {
+          // 把 v2 slot 转成 UI 兼容格式（grid 坐标 + 时间字段）
+          const slots = (t.slots || []).map(s => {
+            const grid = slotToGrid(s);
+            return {
+              ...s,
+              gx: grid.gx, gy: grid.gy, gw: grid.gw, gh: grid.gh,
+              start_time_s: s.start_time_s ?? 0,
+              end_time_s: s.end_time_s ?? (t.total_duration_s || 6),
+              enter_transition: s.enter_transition,
+              exit_transition: s.exit_transition,
+              fill_mode: s.fill_mode || 'freeze',
+            };
+          });
+          return { ...t, slots };
+        });
+      } catch (e) {
+        v2Templates = [];
       }
     }
 

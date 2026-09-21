@@ -355,6 +355,53 @@ class QwenPlanner:
         self._trim_inference_memory()
         return plan
 
+    def chat(self, user_text: str, library_summary: dict[str, object] | None = None) -> str:
+        """Generate a natural-language reply for conversation intents.
+
+        Reuses the local HF runtime; no JSON parsing — just text generation.
+        """
+        runtime = self._get_or_create_local_runtime()
+        try:
+            import torch
+        except Exception as exc:  # noqa: BLE001
+            raise RuntimeError("Local HF backend requires torch.") from exc
+
+        system_prompt = (
+            "你是 Live Photo Agent 的对话助手。用户用自然语言和你交流，"
+            "你用简洁友好的中文回复。如果用户想做拼贴、剪辑或搜索素材，"
+            "建议他们在输入框里描述需求（例如「三拼小猫」），系统会自动规划工具。"
+        )
+        lib_count = (library_summary or {}).get("asset_count", "未知")
+        user_prompt = (
+            f"（背景：当前素材库有 {lib_count} 个素材）\n"
+            f"用户说：{user_text}\n"
+            "请用一两句话友好地回复。"
+        )
+        messages = [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_prompt},
+        ]
+
+        prompt = runtime.tokenizer.apply_chat_template(messages, tokenize=False, add_generation_prompt=True)
+        inputs = runtime.tokenizer(prompt, return_tensors="pt")
+        if hasattr(runtime.model, "device") and runtime.model.device is not None:
+            inputs = {k: v.to(runtime.model.device) for k, v in inputs.items()}
+
+        with torch.no_grad():
+            out = runtime.model.generate(
+                **inputs,
+                max_new_tokens=128,
+                do_sample=False,
+                use_cache=True,
+            )
+
+        generated_tokens = out[:, inputs["input_ids"].shape[1]:]
+        reply = runtime.tokenizer.decode(generated_tokens[0], skip_special_tokens=True).strip()
+
+        del out, generated_tokens, inputs
+        self._trim_inference_memory()
+        return reply
+
     def _trim_inference_memory(self) -> None:
         """Free KV cache / intermediate tensors, keep model weights resident."""
         try:

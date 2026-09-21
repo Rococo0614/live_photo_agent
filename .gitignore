@@ -47,8 +47,6 @@ htmlcov/
 # ===== 本地数据与模型 =====
 data/
 models/
-model_test_files/
-live_photo_decoded/
 
 # ===== 浏览器 / 调试临时数据 =====
 chrome_data/
@@ -57,6 +55,7 @@ xhs_login_tmp.py
 # ===== 历史产出与对比报告（本机大目录，不入库） =====
 历史产出_*/
 comparison_report/
+model_test_files/
 
 # ===== Android 二进制与构建产物 =====
 android/app/libs/
