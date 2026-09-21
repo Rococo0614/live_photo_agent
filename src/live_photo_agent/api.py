@@ -35,7 +35,6 @@ agent = LivePhotoAgent()
 
 
 class PlannerConfigUpdate(BaseModel):
-    planner_backend: str | None = None
     local_model_dir: str | None = None
     local_device: str | None = None
     local_dtype: str | None = None
@@ -44,7 +43,6 @@ class PlannerConfigUpdate(BaseModel):
 
 
 _PLANNER_BASELINE = {
-    "planner_backend": settings.planner_backend,
     "local_model_dir": settings.local_model_dir,
     "local_device": settings.local_device,
     "local_dtype": settings.local_dtype,
@@ -66,14 +64,13 @@ def _planner_snapshot() -> dict[str, object]:
         runtime_info = agent.planner.runtime_info()
     except RuntimeError as exc:
         runtime_info = {
-            "planner_backend": settings.planner_backend,
-            "planner_model": settings.qwen_model,
+            "planner_backend": "local_hf",
             "status": "unconfigured",
             "error": str(exc),
         }
 
     return {
-        "planner_backend": settings.planner_backend,
+        "planner_backend": "local_hf",
         "local_model_dir": str(settings.local_model_dir) if settings.local_model_dir else None,
         "local_device": settings.local_device,
         "local_dtype": settings.local_dtype,
@@ -86,6 +83,34 @@ def _planner_snapshot() -> dict[str, object]:
 @app.get("/health")
 def health() -> dict[str, str]:
     return {"status": "ok"}
+
+
+@app.get("/api/templates")
+def list_templates() -> dict[str, object]:
+    """List all available collage templates (v2: with time windows).
+
+    This is the interface for external template systems — they can GET this
+    endpoint to see the current template definitions and the JSON schema.
+    """
+    from .foundation.retrieval.template_library import TemplateLibrary
+    lib = TemplateLibrary()
+    return {
+        "schema_version": "2.0",
+        "schema_url": "docs/template_schema_v2.json",
+        "templates": [t.to_dict() for t in lib.list_all()],
+    }
+
+
+@app.get("/api/templates/{template_id}")
+def get_template(template_id: str) -> dict[str, object]:
+    """Get a single template definition by ID."""
+    from .foundation.retrieval.template_library import TemplateLibrary
+    lib = TemplateLibrary()
+    t = lib.get(template_id)
+    if t is None:
+        from fastapi import HTTPException
+        raise HTTPException(status_code=404, detail=f"Template '{template_id}' not found")
+    return t.to_dict()
 
 
 @app.get("/", response_class=HTMLResponse)
@@ -106,8 +131,6 @@ def get_planner_config() -> dict[str, object]:
 @app.post("/api/ui/planner-config")
 def set_planner_config(update: PlannerConfigUpdate) -> dict[str, object]:
     payload = update.model_dump(exclude_unset=True)
-    if "planner_backend" in payload and payload["planner_backend"] is not None:
-        settings.planner_backend = str(payload["planner_backend"]).strip().lower()
     if "local_model_dir" in payload:
         local_dir = _normalize_optional(payload["local_model_dir"])
         settings.local_model_dir = Path(local_dir).expanduser().resolve() if local_dir else None
@@ -126,7 +149,6 @@ def set_planner_config(update: PlannerConfigUpdate) -> dict[str, object]:
 
 @app.delete("/api/ui/planner-config")
 def reset_planner_config() -> dict[str, object]:
-    settings.planner_backend = str(_PLANNER_BASELINE["planner_backend"])
     settings.local_model_dir = _PLANNER_BASELINE["local_model_dir"]
     settings.local_device = str(_PLANNER_BASELINE["local_device"])
     settings.local_dtype = str(_PLANNER_BASELINE["local_dtype"])

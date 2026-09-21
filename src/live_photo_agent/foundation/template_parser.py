@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import base64
 import hashlib
 import json
 import logging
@@ -9,7 +8,7 @@ _logger = logging.getLogger(__name__)
 from pathlib import Path
 from typing import Any
 
-from ..config import settings
+from .local_vlm import chat_with_images, parse_json_response
 
 DEFAULT_GRID_COLS = 120
 DEFAULT_GRID_ROWS = 160
@@ -56,30 +55,6 @@ def _build_parse_prompt() -> str:
         "  ]\n\n"
         "只输出 JSON 数组，不要 markdown 代码块，不要解释。"
     )
-
-
-def _parse_json_response(text: str) -> dict[str, Any] | list[Any] | None:
-    cleaned = text.strip()
-    if cleaned.startswith("```"):
-        cleaned = re.sub(r"^```(?:json)?\s*", "", cleaned)
-        cleaned = re.sub(r"\s*```$", "", cleaned)
-    # Extract the first JSON array or object
-    for start, end, is_list in [(cleaned.find("["), cleaned.rfind("]"), True),
-                                 (cleaned.find("{"), cleaned.rfind("}"), False)]:
-        if start >= 0 and end > start:
-            try:
-                parsed = json.loads(cleaned[start:end + 1])
-                if is_list and isinstance(parsed, list):
-                    return parsed
-                if not is_list and isinstance(parsed, dict):
-                    return parsed
-            except json.JSONDecodeError:
-                continue
-    try:
-        parsed = json.loads(cleaned)
-    except json.JSONDecodeError:
-        return None
-    return parsed
 
 
 def _snap_to_grid(slots: list[dict[str, Any]], tolerance: float = 5.0) -> list[dict[str, Any]]:
@@ -252,67 +227,40 @@ def parse_image_to_template(
     grid_cols: int = 3,
     grid_rows: int = 4,
 ) -> dict[str, Any]:
-    """Send image to VLM endpoint and return a template JSON dict.
+    """Send image to local VLM and return a template JSON dict.
 
     The returned dict has the same shape as TEMPLATE_LIBRARY entries:
     { id, name, style, board, slots: [{ gx, gy, gw, gh, pin_to_top, image_prompt }] }
     """
-    import urllib.request
-    import urllib.error
-
-    endpoint = settings.vlm_endpoint
-    if not endpoint:
-        raise RuntimeError("VLM endpoint not configured (LPA_VLM_ENDPOINT)")
+    from PIL import Image
+    import io
 
     img_hash = _image_hash(image_bytes)
     template_id = f"custom_{img_hash}"
-
-    encoded_image = base64.b64encode(image_bytes).decode("ascii")
-
-    content: list[dict[str, Any]] = [
-        {"type": "text", "text": _build_parse_prompt()},
-        {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{encoded_image}"}},
-    ]
 
     _logger.info(
         "[TEMPLATE_PARSE] image=%s bytes=%d cols=%d rows=%d",
         image_name, len(image_bytes), grid_cols, grid_rows,
     )
 
-    payload = {
-        "model": settings.vlm_model or "default",
-        "temperature": 0,
-        "messages": [
-            {"role": "system", "content": _build_parse_system_prompt()},
-            {"role": "user", "content": content},
-        ],
-    }
+    image = Image.open(io.BytesIO(image_bytes)).convert("RGB")
+    prompt = _build_parse_prompt()
+    system_prompt = _build_parse_system_prompt()
 
-    data = json.dumps(payload).encode("utf-8")
-    headers: dict[str, str] = {"Content-Type": "application/json"}
-    if settings.effective_qwen_auth_token:
-        headers["Authorization"] = f"Bearer {settings.effective_qwen_auth_token}"
-    if settings.qwen_workspace_id:
-        headers["X-DashScope-WorkSpace"] = settings.qwen_workspace_id
-        headers["X-DashScope-Workspace"] = settings.qwen_workspace_id
-
-    req = urllib.request.Request(endpoint, data=data, headers=headers, method="POST")
-    try:
-        with urllib.request.urlopen(req, timeout=float(settings.vlm_timeout_seconds)) as response:
-            raw = response.read().decode("utf-8")
-    except urllib.error.URLError as exc:
-        raise RuntimeError(f"VLM request failed: {exc}") from exc
-
-    parsed_raw = json.loads(raw)
-    extracted = _extract_response_text(parsed_raw)
+    extracted = chat_with_images(
+        images=[image],
+        prompt=prompt,
+        system_prompt=system_prompt,
+        max_new_tokens=512,
+    )
     _logger.info(
-        "[TEMPLATE_PARSE] raw_response_len=%d extracted_len=%d extracted_preview=%s",
-        len(raw), len(extracted or ""), (extracted or "")[:300],
+        "[TEMPLATE_PARSE] extracted_len=%d extracted_preview=%s",
+        len(extracted or ""), (extracted or "")[:300],
     )
     if not extracted:
         raise RuntimeError("VLM returned empty response")
 
-    template = _parse_json_response(extracted)
+    template = parse_json_response(extracted)
     if template is None:
         raise RuntimeError(f"VLM response is not valid JSON: {extracted[:200]}")
 
@@ -341,26 +289,6 @@ def parse_image_to_template(
         "board": template_board,
         "slots": slots,
     }
-
-
-def _extract_response_text(parsed: Any) -> str | None:
-    if isinstance(parsed, dict):
-        choices = parsed.get("choices")
-        if isinstance(choices, list) and choices:
-            message = choices[0].get("message", {})
-            if isinstance(message, dict):
-                content = message.get("content", "")
-                if isinstance(content, str):
-                    return content
-                if isinstance(content, list):
-                    for block in content:
-                        if isinstance(block, dict) and isinstance(block.get("text"), str):
-                            return block["text"]
-        for key in ("output_text", "text", "content"):
-            val = parsed.get(key)
-            if isinstance(val, str):
-                return val
-    return None
 
 
 def load_custom_templates() -> list[dict[str, Any]]:

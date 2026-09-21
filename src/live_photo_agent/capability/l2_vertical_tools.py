@@ -224,7 +224,8 @@ class L2VerticalTools:
         try:
             final_path = self._stack_videos(
                 asset_paths, output_dir, canvas_w, canvas_h, layout_type,
-                template_id=template_id, template_slots=template_slots)
+                template_id=template_id, template_slots=template_slots,
+                total_duration_s=float(call.arguments.get("total_duration_s", 6.0)))
         except Exception as exc:
             return ToolResult(
                 tool=call.tool,
@@ -249,88 +250,145 @@ class L2VerticalTools:
         )
 
     def _stack_videos(self, asset_paths, output_dir, canvas_w, canvas_h, layout_type,
-                      template_id="", template_slots=None):
-        """按模板布局将多个视频直接 resize+crop 后堆叠到画布, 转码 H.264。"""
+                      template_id="", template_slots=None, total_duration_s=6.0):
+        """按模板布局将多个视频堆叠到画布, 支持时间窗口 (v2)。
+
+        v1: 所有素材同时播放, 帧数 = min(各素材帧数)
+        v2: 按 total_duration_s 生成视频, 每个素材在 [start_time_s, end_time_s] 内出现
+            支持转场 (fade/slide), fill_mode (freeze/loop/trim)
+        """
         import cv2
         import numpy as np
-        import subprocess, shutil, json
+        import subprocess, shutil
 
         n = len(asset_paths)
         template_slots = template_slots or []
+        fps = 30.0
 
-        if layout_type == "vertical":
-            placements = []
-            y = 0
-            # Use slot position_preference to determine height ratios
-            if template_slots and len(template_slots) == n:
-                # Map position to weight: upper=1, middle=1, lower=1, any=1
-                # But subject_required slots can be weighted differently if needed
-                weights = []
-                for slot in template_slots:
-                    pos = slot.get("position_preference", "any")
-                    # All slots equal weight by default
-                    weights.append(1.0)
-                total_weight = sum(weights)
-                for i, (p, w) in enumerate(zip(asset_paths, weights)):
-                    h = int(canvas_h * w / total_weight) if i < n - 1 else (canvas_h - y)
-                    placements.append({"path": p, "y": y, "h": h, "x": 0, "w": canvas_w})
-                    y += h
-                print(f"  [template_collage] template={template_id} slots={n} weights={weights}")
-            else:
-                # Equal split fallback
+        # --- Build placements: spatial + temporal ---
+        placements = []
+        for i, p in enumerate(asset_paths):
+            slot = template_slots[i] if i < len(template_slots) else {}
+            # Spatial
+            if layout_type == "vertical":
                 seg_h = canvas_h // n
-                for i, p in enumerate(asset_paths):
-                    h = seg_h if i < n - 1 else (canvas_h - y)
-                    placements.append({"path": p, "y": y, "h": h, "x": 0, "w": canvas_w})
-                    y += h
-                print(f"  [template_collage] equal split, n={n}")
-        elif layout_type == "horizontal":
-            seg_w = canvas_w // n
-            placements = []
-            x = 0
-            for i, p in enumerate(asset_paths):
+                y = i * seg_h
+                h = seg_h if i < n - 1 else (canvas_h - y)
+                x, w = 0, canvas_w
+            elif layout_type == "horizontal":
+                seg_w = canvas_w // n
+                x = i * seg_w
                 w = seg_w if i < n - 1 else (canvas_w - x)
-                placements.append({"path": p, "y": 0, "h": canvas_h, "x": x, "w": w})
-                x += w
-        else:
-            raise ValueError(f"unsupported layout_type: {layout_type}")
+                y, h = 0, canvas_h
+            else:
+                # Free layout from grid
+                gx = int(slot.get("grid_x", 0))
+                gy = int(slot.get("grid_y", i * (160 // n)))
+                gw = int(slot.get("grid_w", 120))
+                gh = int(slot.get("grid_h", 160 // n))
+                x = int(gx / 120 * canvas_w)
+                y = int(gy / 160 * canvas_h)
+                w = int(gw / 120 * canvas_w)
+                h = int(gh / 160 * canvas_h)
 
+            # Temporal
+            start_s = float(slot.get("start_time_s", 0.0))
+            end_s = float(slot.get("end_time_s", total_duration_s))
+            fill_mode = str(slot.get("fill_mode", "freeze"))
+            enter_t = slot.get("enter_transition") or {}
+            exit_t = slot.get("exit_transition") or {}
+            enter_type = str(enter_t.get("type", "fade")) if enter_t else "fade"
+            enter_ms = int(enter_t.get("duration_ms", 300)) if enter_t else 300
+            exit_type = str(exit_t.get("type", "fade")) if exit_t else "fade"
+            exit_ms = int(exit_t.get("duration_ms", 300)) if exit_t else 300
+
+            placements.append({
+                "path": p,
+                "x": x, "y": y, "w": w, "h": h,
+                "start_s": start_s, "end_s": end_s,
+                "fill_mode": fill_mode,
+                "enter_type": enter_type, "enter_ms": enter_ms,
+                "exit_type": exit_type, "exit_ms": exit_ms,
+            })
+
+        # --- Open video captures ---
         caps = []
         for p in placements:
             vpath = p["path"]
             if not Path(vpath).exists():
                 continue
-            caps.append((p, cv2.VideoCapture(str(vpath))))
+            cap = cv2.VideoCapture(str(vpath))
+            if cap.isOpened():
+                f = cap.get(cv2.CAP_PROP_FPS)
+                if f > 0:
+                    fps = f
+                caps.append((p, cap))
 
         if not caps:
             raise RuntimeError("stack_videos: 没有可用的视频素材")
 
-        n_frames = min(int(c.get(cv2.CAP_PROP_FRAME_COUNT)) for _, c in caps)
-        fps = 30.0
-        for _, c in caps:
-            f = c.get(cv2.CAP_PROP_FPS)
-            if f > 0:
-                fps = f
-                break
+        # --- Calculate total frames ---
+        total_frames = int(total_duration_s * fps)
+        print(f"  [template_collage] template={template_id} slots={n} duration={total_duration_s}s frames={total_frames} fps={fps}")
 
+        # --- Pre-read all frames for each asset (for freeze/loop/trim) ---
+        asset_frames: list[list[np.ndarray]] = []
+        for p, cap in caps:
+            frames = []
+            while True:
+                ret, frame = cap.read()
+                if not ret:
+                    break
+                frames.append(frame)
+            cap.release()
+            asset_frames.append(frames)
+            print(f"  [template_collage] {Path(p['path']).name}: {len(frames)} frames, window=[{p['start_s']:.1f}s, {p['end_s']:.1f}s], fill={p['fill_mode']}")
+
+        # --- Render each frame ---
         out_path = output_dir / "final_raw.mp4"
         fourcc = cv2.VideoWriter_fourcc(*"mp4v")
         writer = cv2.VideoWriter(str(out_path), fourcc, fps, (canvas_w, canvas_h))
 
         if not writer.isOpened():
-            for _, c in caps:
-                c.release()
-            raise RuntimeError("stack_videos: VideoWriter 无法打开, 可能磁盘空间不足或编解码器不可用")
+            raise RuntimeError("stack_videos: VideoWriter 无法打开, 可能磁盘空间不足")
 
-        print(f"  [template_collage] 帧数={n_frames}, FPS={fps}, 素材={len(caps)}, layout={layout_type}")
-
-        for fi in range(n_frames):
+        for fi in range(total_frames):
+            t = fi / fps  # current time in seconds
             canvas = np.zeros((canvas_h, canvas_w, 3), dtype=np.uint8)
-            for placement, cap in caps:
-                ret, frame = cap.read()
-                if not ret:
+
+            for idx, (p, frames) in enumerate(zip(caps, asset_frames)):
+                start_s = p["start_s"]
+                end_s = p["end_s"]
+
+                # Check if this asset is visible at time t
+                if t < start_s or t >= end_s:
                     continue
-                seg_w, seg_h = placement["w"], placement["h"]
+
+                if not frames:
+                    continue
+
+                # Determine which frame to show based on fill_mode
+                window_duration = end_s - start_s
+                elapsed = t - start_s
+                if p["fill_mode"] == "trim":
+                    # Play at normal speed, stop at end
+                    frame_idx = min(int(elapsed * fps), len(frames) - 1)
+                elif p["fill_mode"] == "loop":
+                    frame_idx = int(elapsed * fps) % len(frames)
+                elif p["fill_mode"] == "stretch":
+                    # Slow down to fill exactly
+                    if window_duration > 0:
+                        ratio = elapsed / window_duration
+                        frame_idx = min(int(ratio * len(frames)), len(frames) - 1)
+                    else:
+                        frame_idx = 0
+                else:  # freeze (default)
+                    frame_idx = min(int(elapsed * fps), len(frames) - 1)
+
+                frame = frames[frame_idx]
+
+                # Resize + crop to slot
+                seg_w, seg_h = p["w"], p["h"]
                 fh, fw = frame.shape[:2]
                 scale = max(seg_w / fw, seg_h / fh)
                 new_w, new_h = int(fw * scale), int(fh * scale)
@@ -338,22 +396,43 @@ class L2VerticalTools:
                 x0 = (new_w - seg_w) // 2
                 y0 = (new_h - seg_h) // 2
                 crop = resized[y0:y0 + seg_h, x0:x0 + seg_w]
-                cy, cx = placement["y"], placement["x"]
+
+                # Apply enter transition
+                enter_ms = p["enter_ms"]
+                enter_frames = int(enter_ms / 1000 * fps)
+                if enter_frames > 0 and elapsed < enter_ms / 1000 and p["enter_type"] == "fade":
+                    alpha = elapsed / (enter_ms / 1000)
+                    crop = (crop * alpha).astype(np.uint8)
+
+                # Apply exit transition
+                exit_ms = p["exit_ms"]
+                exit_frames = int(exit_ms / 1000 * fps)
+                time_to_end = end_s - t
+                if exit_frames > 0 and time_to_end < exit_ms / 1000 and p["exit_type"] == "fade":
+                    alpha = time_to_end / (exit_ms / 1000)
+                    crop = (crop * max(0, alpha)).astype(np.uint8)
+
+                # Place on canvas
+                cx, cy = p["x"], p["y"]
                 end_y = min(cy + seg_h, canvas_h)
                 end_x = min(cx + seg_w, canvas_w)
-                canvas[cy:end_y, cx:end_x] = crop[:end_y - cy, :end_x - cx]
+                # Blend if canvas already has content (for overlapping windows)
+                target = canvas[cy:end_y, cx:end_x]
+                src = crop[:end_y - cy, :end_x - cx]
+                if np.any(target):
+                    # Alpha blend
+                    alpha_mask = (src > 0).any(axis=2).astype(np.float32) * 0.5
+                    for c in range(3):
+                        target[:, :, c] = (target[:, :, c] * (1 - alpha_mask) + src[:, :, c] * alpha_mask).astype(np.uint8)
+                    canvas[cy:end_y, cx:end_x] = target
+                else:
+                    canvas[cy:end_y, cx:end_x] = src
+
             writer.write(canvas)
-            if fi % 20 == 0:
-                print(f"  [template_collage] 帧 {fi}/{n_frames}")
+            if fi % 30 == 0:
+                print(f"  [template_collage] 帧 {fi}/{total_frames} (t={t:.1f}s)")
 
         writer.release()
-        for _, c in caps:
-            c.release()
-
-        # 检查 raw 文件是否完整写入
-        if not out_path.exists() or out_path.stat().st_size < 1000:
-            raise RuntimeError(f"stack_videos: raw 视频写入失败 (size={out_path.stat().st_size if out_path.exists() else 0})")
-
         print(f"  [template_collage] final_raw.mp4: {out_path} ({out_path.stat().st_size/1e6:.1f}MB)")
 
         # 转码 H.264
@@ -478,12 +557,15 @@ class L2VerticalTools:
         # Try to load existing index
         index_rows = indexer.load_index()
         if not index_rows:
-            # Build index from library
+            # Build index from library — use lightweight scan (no unpacking)
             print("  [smart_collage] Building asset index...")
-            assets_to_index = self._scan_library_for_indexing(library_root)
-            report = indexer.build(assets_to_index)
-            print(f"  [smart_collage] Index: {report}")
-            index_rows = indexer.load_index()
+            assets_to_index = self._scan_library_assets(library_root)
+            if assets_to_index:
+                report = indexer.build(assets_to_index)
+                print(f"  [smart_collage] Index: {report}")
+                index_rows = indexer.load_index()
+            else:
+                print(f"  [smart_collage] No assets found in {library_root}")
 
         indexer.close()
 
@@ -757,7 +839,6 @@ class L2VerticalTools:
         """
         import cv2
         import torch
-        from transformers import AutoProcessor, AutoModelForImageTextToText
 
         library_root = Path(str(call.arguments.get("library_root", context.get("library_root", "data/live_photo"))))
         asset_ids_filter = call.arguments.get("asset_ids", [])
@@ -828,21 +909,19 @@ class L2VerticalTools:
                 },
             )
 
-        # Load Qwen2.5-VL model
-        model_dir = "/home/vivo/models/Qwen2.5-VL-7B-Instruct"
-        print(f"  [asset_summarize] Loading Qwen2.5-VL from {model_dir}...")
+        # Load local VLM via unified runtime
+        from ..foundation.local_vlm import get_runtime, release_runtime
         try:
-            processor = AutoProcessor.from_pretrained(model_dir, trust_remote_code=True)
-            model = AutoModelForImageTextToText.from_pretrained(
-                model_dir, dtype=torch.float16, device_map="auto", trust_remote_code=True,
-            )
+            runtime = get_runtime()
+            model = runtime.model
+            processor = runtime.processor
         except Exception as exc:
             return ToolResult(
                 tool=call.tool, success=False,
                 payload={"error": f"vlm_load_failed: {exc}", "error_code": "vlm_load_failed"},
             )
 
-        print(f"  [asset_summarize] Model loaded. GPU memory: {torch.cuda.memory_allocated()/1e9:.1f}GB")
+        print(f"  [asset_summarize] VLM ready. GPU memory: {torch.cuda.memory_allocated()/1e9:.1f}GB")
 
         # Process each asset — streaming: unpack → summarize → cleanup temp
         from ..capability.live_photo_cli import is_live_photo_container, unpack_motion_photo
@@ -900,13 +979,8 @@ class L2VerticalTools:
                     except OSError:
                         pass
 
-        # Release VL model
-        del model
-        del processor
-        import gc
-        gc.collect()
-        torch.cuda.empty_cache()
-        torch.cuda.ipc_collect()
+        # Release VL model via unified runtime
+        release_runtime()
         print(f"  [asset_summarize] VL model released. GPU memory: {torch.cuda.memory_allocated()/1e9:.1f}GB")
 
         # Rebuild index with new summaries

@@ -111,7 +111,7 @@ class PlannerGraphRunner:
             planner.runtime_info()
         except Exception as exc:  # noqa: BLE001
             raise PlannerUnavailableError(
-                "Planner backend is not available. Configure LPA_QWEN_ENDPOINT or LPA_LOCAL_MODEL_DIR before execution."
+                "Planner backend is not available. Configure LPA_LOCAL_MODEL_DIR before execution."
             ) from exc
 
     def _run_langgraph(

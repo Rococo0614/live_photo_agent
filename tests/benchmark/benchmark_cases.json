@@ -1,0 +1,276 @@
+{
+  "version": "1.0",
+  "description": "Live Photo Agent planner benchmark test cases. Each case has: input text, expected intent, expected tool(s), and notes. User should review and modify.",
+  "cases": [
+    {
+      "id": "C01",
+      "input": "你好",
+      "expected_intent": "conversation",
+      "expected_tools": [],
+      "complexity": "simple",
+      "category": "conversation",
+      "notes": "纯聊天，无工具调用"
+    },
+    {
+      "id": "C02",
+      "input": "帮我看看库里有多少素材",
+      "expected_intent": "conversation",
+      "expected_tools": ["scan_library"],
+      "complexity": "simple",
+      "category": "conversation",
+      "notes": "聊天但需要查库"
+    },
+    {
+      "id": "C03",
+      "input": "三拼小猫",
+      "expected_intent": "smart_collage",
+      "expected_tools": ["scan_library", "smart_collage"],
+      "complexity": "simple",
+      "category": "smart_collage",
+      "notes": "最经典的用例"
+    },
+    {
+      "id": "C04",
+      "input": "帮我做个三拼海边风景",
+      "expected_intent": "smart_collage",
+      "expected_tools": ["scan_library", "smart_collage"],
+      "complexity": "simple",
+      "category": "smart_collage",
+      "notes": "场景类查询"
+    },
+    {
+      "id": "C05",
+      "input": "拼一个三格的猫咪视频",
+      "expected_intent": "smart_collage",
+      "expected_tools": ["scan_library", "smart_collage"],
+      "complexity": "simple",
+      "category": "smart_collage",
+      "notes": "用了'拼'而非'三拼'"
+    },
+    {
+      "id": "C06",
+      "input": "三拼小猫，用最相关的三张",
+      "expected_intent": "smart_collage",
+      "expected_tools": ["scan_library", "smart_collage"],
+      "complexity": "medium",
+      "category": "smart_collage",
+      "notes": "带约束条件"
+    },
+    {
+      "id": "C07",
+      "input": "做个三拼，主题是城市夜景",
+      "expected_intent": "smart_collage",
+      "expected_tools": ["scan_library", "smart_collage"],
+      "complexity": "simple",
+      "category": "smart_collage",
+      "notes": "夜景主题"
+    },
+    {
+      "id": "C08",
+      "input": "三拼花朵特写",
+      "expected_intent": "smart_collage",
+      "expected_tools": ["scan_library", "smart_collage"],
+      "complexity": "simple",
+      "category": "smart_collage",
+      "notes": "微距特写类"
+    },
+    {
+      "id": "C09",
+      "input": "帮我拼一个三格的运动视频",
+      "expected_intent": "smart_collage",
+      "expected_tools": ["scan_library", "smart_collage"],
+      "complexity": "simple",
+      "category": "smart_collage",
+      "notes": "运动主题"
+    },
+    {
+      "id": "C10",
+      "input": "三拼，不要猫",
+      "expected_intent": "smart_collage",
+      "expected_tools": ["scan_library", "smart_collage"],
+      "complexity": "medium",
+      "category": "smart_collage",
+      "notes": "否定约束"
+    },
+    {
+      "id": "C11",
+      "input": "把这三张左右拼一下",
+      "expected_intent": "template_collage",
+      "expected_tools": ["scan_library", "template_collage"],
+      "complexity": "simple",
+      "category": "template_collage",
+      "notes": "明确左右布局"
+    },
+    {
+      "id": "C12",
+      "input": "上下拼三段视频",
+      "expected_intent": "template_collage",
+      "expected_tools": ["scan_library", "template_collage"],
+      "complexity": "simple",
+      "category": "template_collage",
+      "notes": "明确上下布局"
+    },
+    {
+      "id": "C13",
+      "input": "选三张做个竖排拼贴",
+      "expected_intent": "template_collage",
+      "expected_tools": ["scan_library", "template_collage"],
+      "complexity": "simple",
+      "category": "template_collage",
+      "notes": "竖排但不指定内容"
+    },
+    {
+      "id": "C14",
+      "input": "把这三个视频拼到一起，横着排",
+      "expected_intent": "template_collage",
+      "expected_tools": ["scan_library", "template_collage"],
+      "complexity": "simple",
+      "category": "template_collage",
+      "notes": "口语化的横向拼贴"
+    },
+    {
+      "id": "C15",
+      "input": "做一个三拼导出",
+      "expected_intent": "triptych_export",
+      "expected_tools": ["scan_library", "concat_clips", "export_mp4"],
+      "complexity": "simple",
+      "category": "triptych_export",
+      "notes": "经典导出用例"
+    },
+    {
+      "id": "C16",
+      "input": "三拼导出1080p视频",
+      "expected_intent": "triptych_export",
+      "expected_tools": ["scan_library", "concat_clips", "export_mp4"],
+      "complexity": "medium",
+      "category": "triptych_export",
+      "notes": "带分辨率约束"
+    },
+    {
+      "id": "C17",
+      "input": "帮我把三段视频拼起来导出",
+      "expected_intent": "triptych_export",
+      "expected_tools": ["scan_library", "concat_clips", "export_mp4"],
+      "complexity": "simple",
+      "category": "triptych_export",
+      "notes": "口语化导出"
+    },
+    {
+      "id": "C18",
+      "input": "把第一张的人物动态抠出来贴到后面三张拼接的画面上",
+      "expected_intent": "subject_overlay_composite",
+      "expected_tools": ["scan_library", "concat_clips", "extract_subject_matte", "overlay_subject_clip"],
+      "complexity": "complex",
+      "category": "subject_overlay",
+      "notes": "复杂抠图叠加"
+    },
+    {
+      "id": "C19",
+      "input": "抠出第二张的人放到拼接的视频上",
+      "expected_intent": "subject_overlay_composite",
+      "expected_tools": ["scan_library", "concat_clips", "extract_subject_matte", "overlay_subject_clip"],
+      "complexity": "complex",
+      "category": "subject_overlay",
+      "notes": "简化版抠图叠加"
+    },
+    {
+      "id": "C20",
+      "input": "三拼小猫，然后导出",
+      "expected_intent": "smart_collage",
+      "expected_tools": ["scan_library", "smart_collage"],
+      "complexity": "medium",
+      "category": "smart_collage",
+      "notes": "复合需求但 smart_collage 自带导出"
+    },
+    {
+      "id": "C21",
+      "input": "帮我找五张海边的照片",
+      "expected_intent": "conversation",
+      "expected_tools": ["scan_library", "search_by_text"],
+      "complexity": "medium",
+      "category": "search_only",
+      "notes": "只搜索不拼贴"
+    },
+    {
+      "id": "C22",
+      "input": "库里有没有猫的视频？",
+      "expected_intent": "conversation",
+      "expected_tools": ["scan_library", "search_by_text"],
+      "complexity": "medium",
+      "category": "search_only",
+      "notes": "问答式搜索"
+    },
+    {
+      "id": "C23",
+      "input": "三拼，左边猫右边狗中间风景",
+      "expected_intent": "smart_collage",
+      "expected_tools": ["scan_library", "smart_collage"],
+      "complexity": "complex",
+      "category": "smart_collage",
+      "notes": "带布局约束的三拼"
+    },
+    {
+      "id": "C24",
+      "input": "做一个四格的猫咪拼贴",
+      "expected_intent": "smart_collage",
+      "expected_tools": ["scan_library", "smart_collage"],
+      "complexity": "medium",
+      "category": "smart_collage",
+      "notes": "四格而非三格"
+    },
+    {
+      "id": "C25",
+      "input": "把这三张做个三拼，要好看的",
+      "expected_intent": "smart_collage",
+      "expected_tools": ["scan_library", "smart_collage"],
+      "complexity": "medium",
+      "category": "smart_collage",
+      "notes": "带质量要求"
+    },
+    {
+      "id": "C26",
+      "input": "帮我选三张最好看的夜景",
+      "expected_intent": "conversation",
+      "expected_tools": ["scan_library", "search_by_text"],
+      "complexity": "medium",
+      "category": "search_only",
+      "notes": "选片不拼贴"
+    },
+    {
+      "id": "C27",
+      "input": "三拼烟花视频",
+      "expected_intent": "smart_collage",
+      "expected_tools": ["scan_library", "smart_collage"],
+      "complexity": "simple",
+      "category": "smart_collage",
+      "notes": "烟花主题"
+    },
+    {
+      "id": "C28",
+      "input": "拼一个三格的日落风景",
+      "expected_intent": "smart_collage",
+      "expected_tools": ["scan_library", "smart_collage"],
+      "complexity": "simple",
+      "category": "smart_collage",
+      "notes": "日落主题"
+    },
+    {
+      "id": "C29",
+      "input": "你 能做什么",
+      "expected_intent": "conversation",
+      "expected_tools": [],
+      "complexity": "simple",
+      "category": "conversation",
+      "notes": "能力询问"
+    },
+    {
+      "id": "C30",
+      "input": "三拼冲浪的视频",
+      "expected_intent": "smart_collage",
+      "expected_tools": ["scan_library", "smart_collage"],
+      "complexity": "simple",
+      "category": "smart_collage",
+      "notes": "冲浪运动主题"
+    }
+  ]
+}

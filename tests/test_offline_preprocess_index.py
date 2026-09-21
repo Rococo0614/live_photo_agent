@@ -20,40 +20,22 @@ def _write_tiny_video(path: Path) -> None:
     path.write_bytes(b"\x00\x00\x00\x18ftypisom\x00\x00\x02\x00isom")
 
 
-def _fake_vlm_response() -> bytes:
-    import json as _json
-    return _json.dumps(
-        {
-            "choices": [
-                {
-                    "message": {
-                        "content": _json.dumps(
-                            {
-                                "summary": "海边日落的人物合影",
-                                "theme": "海边日落",
-                                "scene_tags": ["beach", "sunset"],
-                                "subject_tags": ["people", "family"],
-                                "motion_tags": ["still"],
-                                "audio_tags": ["no_motion"],
-                                "search_keywords": ["海边", "日落", "人物"],
-                            }
-                        )
-                    }
-                }
-            ]
-        }
-    ).encode("utf-8")
+_FAKE_PAYLOAD = {
+    "summary": "海边日落的人物合影",
+    "theme": "海边日落",
+    "scene_tags": ["beach", "sunset"],
+    "subject_tags": ["people", "family"],
+    "motion_tags": ["still"],
+    "audio_tags": ["no_motion"],
+    "search_keywords": ["海边", "日落", "人物"],
+}
 
 
-class _FakeVLMResponse:
-    def __enter__(self):
-        return self
-
-    def __exit__(self, exc_type, exc, tb):
-        return False
-
-    def read(self):
-        return _fake_vlm_response()
+def _patch_local_vlm(monkeypatch) -> None:
+    """Mock local VLM to return a fixed semantic payload (skip actual model loading)."""
+    monkeypatch.setattr(settings, "vlm_model_dir", "/tmp/test-vlm")
+    from live_photo_agent.foundation.vlm_semantics import VLMSemanticAnalyzer
+    monkeypatch.setattr(VLMSemanticAnalyzer, "_call_local_vlm", lambda self, asset: _FAKE_PAYLOAD)
 
 
 def test_offline_preprocess_indexer_build_and_incremental_reuse(tmp_path: Path, monkeypatch) -> None:
@@ -61,16 +43,10 @@ def test_offline_preprocess_indexer_build_and_incremental_reuse(tmp_path: Path, 
     monkeypatch.setattr(settings, "album_operation_log_file", tmp_path / ".album_operations.jsonl")
     monkeypatch.setattr(settings, "album_preprocess_index_file", tmp_path / ".album_preprocess_index.jsonl")
     monkeypatch.setattr(settings, "workspace_dir", tmp_path)
-    monkeypatch.setattr(settings, "vlm_endpoint", "https://example.test/vlm")
-    monkeypatch.setattr(settings, "vlm_backend", "endpoint")
-    monkeypatch.setattr(
-        "live_photo_agent.foundation.vlm_semantics.urllib.request.urlopen",
-        lambda req, timeout=None: _FakeVLMResponse(),
-    )
+    _patch_local_vlm(monkeypatch)
 
     library_root = tmp_path / "library"
     library_root.mkdir()
-    # Pair each jpeg with a motion clip so they register as live photos.
     _write_tiny_jpeg(library_root / "a1.jpg")
     _write_tiny_video(library_root / "a1.mp4")
     _write_tiny_jpeg(library_root / "a2.jpg")
@@ -93,9 +69,8 @@ def test_offline_preprocess_indexer_build_and_incremental_reuse(tmp_path: Path, 
     assert all("asset_fingerprint" in row["summary"]["quality_signals"] for row in rows)
     assert all("asset_fingerprint" in row["summary"]["technical_signals"] for row in rows)
     assert all(row["summary"]["provenance"]["technical_version"] == "v2" for row in rows)
-    # live photo assets get VLM semantic enrichment; non-live-photos do not.
     assert all("coarse_semantics" in row["summary"] for row in rows)
-    assert all(row["summary"]["semantic_signals"].get("producer") == "endpoint" for row in rows)
+    assert all(row["summary"]["semantic_signals"].get("producer") == "local_vlm" for row in rows)
 
 
 def test_offline_preprocess_indexer_force_rebuild(tmp_path: Path, monkeypatch) -> None:
@@ -103,12 +78,7 @@ def test_offline_preprocess_indexer_force_rebuild(tmp_path: Path, monkeypatch) -
     monkeypatch.setattr(settings, "album_operation_log_file", tmp_path / ".album_operations.jsonl")
     monkeypatch.setattr(settings, "album_preprocess_index_file", tmp_path / ".album_preprocess_index.jsonl")
     monkeypatch.setattr(settings, "workspace_dir", tmp_path)
-    monkeypatch.setattr(settings, "vlm_endpoint", "https://example.test/vlm")
-    monkeypatch.setattr(settings, "vlm_backend", "endpoint")
-    monkeypatch.setattr(
-        "live_photo_agent.foundation.vlm_semantics.urllib.request.urlopen",
-        lambda req, timeout=None: _FakeVLMResponse(),
-    )
+    _patch_local_vlm(monkeypatch)
 
     library_root = tmp_path / "library"
     library_root.mkdir()
@@ -128,8 +98,7 @@ def test_scan_preserves_valid_coarse_semantics(tmp_path: Path, monkeypatch) -> N
     monkeypatch.setattr(settings, "album_operation_log_file", tmp_path / ".album_operations.jsonl")
     monkeypatch.setattr(settings, "album_preprocess_index_file", tmp_path / ".album_preprocess_index.jsonl")
     monkeypatch.setattr(settings, "workspace_dir", tmp_path)
-    monkeypatch.setattr(settings, "vlm_endpoint", "https://example.test/vlm")
-    monkeypatch.setattr(settings, "vlm_backend", "endpoint")
+    _patch_local_vlm(monkeypatch)
 
     library_root = tmp_path / "library"
     library_root.mkdir()
@@ -170,8 +139,7 @@ def test_scan_invalidates_semantics_when_asset_changes(tmp_path: Path, monkeypat
     monkeypatch.setattr(settings, "album_operation_log_file", tmp_path / ".album_operations.jsonl")
     monkeypatch.setattr(settings, "album_preprocess_index_file", tmp_path / ".album_preprocess_index.jsonl")
     monkeypatch.setattr(settings, "workspace_dir", tmp_path)
-    monkeypatch.setattr(settings, "vlm_endpoint", "https://example.test/vlm")
-    monkeypatch.setattr(settings, "vlm_backend", "endpoint")
+    _patch_local_vlm(monkeypatch)
 
     library_root = tmp_path / "library"
     library_root.mkdir()

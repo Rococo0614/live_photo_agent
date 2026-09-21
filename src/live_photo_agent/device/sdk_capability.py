@@ -37,8 +37,8 @@ class CapabilityStatus(str, Enum):
     VERIFIED = "verified"
     #: SDK 里存在看起来对应的类，但没验证过调用路径与参数语义
     SDK_UNVERIFIED = "sdk_unverified"
-    #: SDK 做不到，必须调云端 VLM / 扩散接口（云端工具也算工具）
-    CLOUD_REQUIRED = "cloud_required"
+    #: SDK 做不到，需要本地模型 (VLM / diffusion) 处理
+    LOCAL_MODEL_REQUIRED = "local_model_required"
     #: 不碰媒体，用 Android 原生能力即可（图库扫描、集合筛选等）
     DEVICE_NATIVE = "device_native"
     #: 由规划器自身消化，不产生媒体操作
@@ -107,31 +107,31 @@ CAPABILITIES: dict[ToolName, Capability] = {
         "VMClip 速度相关字段（未在探针里定位到）",
         "探针类名清单里没看到明确的变速载体，可能需要另找 API",
     ),
-    # ---- 必须走云端模型 ----
+    # ---- 需要本地模型 (VLM / OpenCV / diffusion) ----
     ToolName.EXTRACT_SUBJECT_MATTE: Capability(
-        CapabilityStatus.CLOUD_REQUIRED,
-        "云端抠像接口",
-        "契约里 mode=mog2|knn 是 OpenCV 背景建模，属于 PC 假设的残留，需重定义",
+        CapabilityStatus.LOCAL_MODEL_REQUIRED,
+        "本地抠像 (OpenCV 背景建模)",
+        "契约里 mode=mog2|knn 是 OpenCV 背景建模；端侧 SDK 无对应能力",
     ),
     ToolName.SUBJECT_SEGMENTATION: Capability(
-        CapabilityStatus.CLOUD_REQUIRED,
-        "云端分割 / VLM",
+        CapabilityStatus.LOCAL_MODEL_REQUIRED,
+        "本地分割模型 / VLM",
         "SDK 有 VMBodyStrokeEngine 但那是人体描边特效，不等于可用的分割掩码",
     ),
     ToolName.ESTIMATE_MOTION_SCORE: Capability(
-        CapabilityStatus.CLOUD_REQUIRED,
-        "云端 VLM 预处理产出",
+        CapabilityStatus.LOCAL_MODEL_REQUIRED,
+        "本地 VLM 预处理产出",
         "作为素材资产随图片下发到端侧，端侧不重算",
     ),
     ToolName.SEARCH_BY_TEXT: Capability(
-        CapabilityStatus.CLOUD_REQUIRED,
-        "云端 VLM 语义检索",
+        CapabilityStatus.LOCAL_MODEL_REQUIRED,
+        "本地 VLM 语义检索 (BGE 向量)",
         "端侧可退化为在已下发的标签上做匹配",
     ),
     ToolName.STABILIZE_CLIP: Capability(
-        CapabilityStatus.CLOUD_REQUIRED,
+        CapabilityStatus.LOCAL_MODEL_REQUIRED,
         "无端侧承载物",
-        "探针里没有防抖相关类；若云端也不提供，这个工具应当从词表移除",
+        "探针里没有防抖相关类；若本地也不提供，这个工具应当从词表移除",
     ),
     # ---- 不碰媒体 ----
     ToolName.SCAN_LIBRARY: Capability(
@@ -155,7 +155,7 @@ def capability_of(tool: ToolName) -> Capability:
     return CAPABILITIES.get(
         tool,
         Capability(
-            CapabilityStatus.CLOUD_REQUIRED,
+            CapabilityStatus.LOCAL_MODEL_REQUIRED,
             "未登记",
             "该工具尚未在 sdk_capability 表中登记，无法判定由谁执行",
         ),

@@ -6,6 +6,7 @@ from ..foundation.library import LibraryService
 from ..models import ToolCall, ToolName, ToolResult
 from .l0_atomic_tools import L0AtomicTools
 from .l1_integrated_tools import L1IntegratedTools
+from .l2_vertical_tools import L2VerticalTools
 
 
 ToolHandler = Callable[[ToolCall, dict[str, object]], ToolResult]
@@ -17,6 +18,7 @@ class ToolRegistry:
     def __init__(self, library_service: LibraryService) -> None:
         self.l0 = L0AtomicTools(library_service)
         self.l1 = L1IntegratedTools(library_service)
+        self.l2 = L2VerticalTools()
 
         self._handlers: dict[ToolName, ToolHandler] = {
             ToolName.SCAN_LIBRARY: self.l0.scan_library,
@@ -38,6 +40,11 @@ class ToolRegistry:
             ToolName.SET_DISPLAY_FRAME: self.l0.set_display_frame,
             ToolName.EXTRACT_SUBJECT_MATTE: self.l0.extract_subject_matte,
             ToolName.OVERLAY_SUBJECT_CLIP: self.l0.overlay_subject_clip,
+            # L2 vertical tools
+            ToolName.LIVE_PHOTO_COLLAGE: self.l2.live_photo_collage,
+            ToolName.TEMPLATE_COLLAGE: self.l2.template_collage,
+            ToolName.SMART_COLLAGE: self.l2.smart_collage,
+            ToolName.ASSET_SUMMARIZE: self.l2.asset_summarize,
         }
 
     def execute(self, call: ToolCall, context: dict[str, object]) -> ToolResult:

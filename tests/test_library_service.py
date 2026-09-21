@@ -65,8 +65,7 @@ def test_scan_enriches_summary_with_semantic_signals(tmp_path: Path, monkeypatch
     monkeypatch.setattr(settings, "album_operation_log_file", operation_log_file)
     monkeypatch.setattr(settings, "album_preprocess_index_file", preprocess_index_file)
     monkeypatch.setattr(settings, "workspace_dir", tmp_path)
-    monkeypatch.setattr(settings, "vlm_endpoint", "https://example.test/vlm")
-    monkeypatch.setattr(settings, "vlm_backend", "endpoint")
+    monkeypatch.setattr(settings, "vlm_model_dir", "/tmp/test-vlm")
 
     library_root = tmp_path / "DCIM"
     library_root.mkdir(parents=True)
@@ -74,40 +73,18 @@ def test_scan_enriches_summary_with_semantic_signals(tmp_path: Path, monkeypatch
     (library_root / "beach_sunset.jpg").write_bytes(b"\xff\xd8beach\xff\xd9")
     (library_root / "beach_sunset.mp4").write_bytes(b"\x00\x00\x00\x18ftypisom\x00\x00\x02\x00isom")
 
-    class _FakeResponse:
-        def __enter__(self):
-            return self
+    _fake_payload = {
+        "summary": "海边日落的人物合影",
+        "theme": "海边日落",
+        "scene_tags": ["beach", "sunset"],
+        "subject_tags": ["people", "family"],
+        "motion_tags": ["still"],
+        "audio_tags": ["no_motion"],
+        "search_keywords": ["海边", "日落", "人物"],
+    }
 
-        def __exit__(self, exc_type, exc, tb):
-            return False
-
-        def read(self):
-            return json.dumps(
-                {
-                    "choices": [
-                        {
-                            "message": {
-                                "content": json.dumps(
-                                    {
-                                        "summary": "海边日落的人物合影",
-                                        "theme": "海边日落",
-                                        "scene_tags": ["beach", "sunset"],
-                                        "subject_tags": ["people", "family"],
-                                        "motion_tags": ["still"],
-                                        "audio_tags": ["no_motion"],
-                                        "search_keywords": ["海边", "日落", "人物"],
-                                    }
-                                )
-                            }
-                        }
-                    ]
-                }
-            ).encode("utf-8")
-
-    monkeypatch.setattr(
-        "live_photo_agent.foundation.vlm_semantics.urllib.request.urlopen",
-        lambda req, timeout=None: _FakeResponse(),
-    )
+    from live_photo_agent.foundation.vlm_semantics import VLMSemanticAnalyzer
+    monkeypatch.setattr(VLMSemanticAnalyzer, "_call_local_vlm", lambda self, asset: _fake_payload)
 
     service = LibraryService()
     assets = service.scan_live_photos(library_root)
@@ -169,8 +146,7 @@ def test_search_assets_uses_semantic_content(tmp_path: Path, monkeypatch) -> Non
     monkeypatch.setattr(settings, "album_operation_log_file", operation_log_file)
     monkeypatch.setattr(settings, "album_preprocess_index_file", preprocess_index_file)
     monkeypatch.setattr(settings, "workspace_dir", tmp_path)
-    monkeypatch.setattr(settings, "vlm_endpoint", "https://example.test/vlm")
-    monkeypatch.setattr(settings, "vlm_backend", "endpoint")
+    monkeypatch.setattr(settings, "vlm_model_dir", "/tmp/test-vlm")
 
     library_root = tmp_path / "DCIM"
     library_root.mkdir(parents=True)
@@ -178,40 +154,18 @@ def test_search_assets_uses_semantic_content(tmp_path: Path, monkeypatch) -> Non
     image_path.write_bytes(b"\xff\xd8beach\xff\xd9")
     (library_root / "beach_sunset.mp4").write_bytes(b"\x00\x00\x00\x18ftypisom\x00\x00\x02\x00isom")
 
-    class _FakeResponse:
-        def __enter__(self):
-            return self
+    _fake_payload = {
+        "summary": "海边日落的人物合影",
+        "theme": "海边日落",
+        "scene_tags": ["beach", "sunset"],
+        "subject_tags": ["people", "family"],
+        "motion_tags": ["still"],
+        "audio_tags": ["no_motion"],
+        "search_keywords": ["海边", "日落", "人物"],
+    }
 
-        def __exit__(self, exc_type, exc, tb):
-            return False
-
-        def read(self):
-            return json.dumps(
-                {
-                    "choices": [
-                        {
-                            "message": {
-                                "content": json.dumps(
-                                    {
-                                        "summary": "海边日落的人物合影",
-                                        "theme": "海边日落",
-                                        "scene_tags": ["beach", "sunset"],
-                                        "subject_tags": ["people", "family"],
-                                        "motion_tags": ["still"],
-                                        "audio_tags": ["no_motion"],
-                                        "search_keywords": ["海边", "日落", "人物"],
-                                    }
-                                )
-                            }
-                        }
-                    ]
-                }
-            ).encode("utf-8")
-
-    monkeypatch.setattr(
-        "live_photo_agent.foundation.vlm_semantics.urllib.request.urlopen",
-        lambda req, timeout=None: _FakeResponse(),
-    )
+    from live_photo_agent.foundation.vlm_semantics import VLMSemanticAnalyzer
+    monkeypatch.setattr(VLMSemanticAnalyzer, "_call_local_vlm", lambda self, asset: _fake_payload)
 
     service = LibraryService()
     assets = service.scan_live_photos(library_root)

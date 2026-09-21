@@ -295,6 +295,51 @@ TOOL_SPECS: tuple[ToolSpec, ...] = (
         },
         output_schema={"overlay_applied": "bool", "output_path": "string(path)"},
     ),
+    ToolSpec(
+        name=ToolName.SMART_COLLAGE,
+        level="L2",
+        purpose="Search assets by query, match template, VLM score, compose final video. Complete pipeline in one tool.",
+        when_to_use="Use when user wants '三拼XXX' or collage from search. Pass query and k. Do NOT also call search_by_text.",
+        arguments={
+            "query": "Search query derived from user text, e.g. '小猫', '海边', '夜景'.",
+            "k": "Number of assets to search (default 3).",
+            "library_root": "Library root path.",
+        },
+        output_schema={"final_video": "string(path)", "recommendations": "object[]", "selected_template": "object"},
+    ),
+    ToolSpec(
+        name=ToolName.TEMPLATE_COLLAGE,
+        level="L2",
+        purpose="Direct stacking collage: resize+crop videos per layout, no segmentation.",
+        when_to_use="Use when user wants specific layout (左右拼, 上下拼) with selected assets.",
+        arguments={
+            "asset_paths": "List of video file paths to collage.",
+            "layout_type": "Layout: vertical, horizontal, or grid.",
+        },
+        output_schema={"final_video": "string(path)", "layout_plan": "object"},
+    ),
+    ToolSpec(
+        name=ToolName.LIVE_PHOTO_COLLAGE,
+        level="L2",
+        purpose="Full live photo collage: segment subjects, plan layout, compose final video.",
+        when_to_use="Use when user wants subject-aware collage with segmentation (overlay pipeline).",
+        arguments={
+            "asset_paths": "List of video file paths.",
+            "output_dir": "Output directory for intermediate files.",
+        },
+        output_schema={"final_video": "string(path)", "manifest": "object", "layout_plan": "object"},
+    ),
+    ToolSpec(
+        name=ToolName.ASSET_SUMMARIZE,
+        level="L2",
+        purpose="VLM-based asset content summarization. Builds search index from video frames.",
+        when_to_use="Use when search index is empty or needs rebuild. Loads VLM on-demand.",
+        arguments={
+            "library_root": "Library root path.",
+            "force_rebuild": "Force rebuild all summaries (default false).",
+        },
+        output_schema={"summarized_count": "int", "updated_index": "string(path)"},
+    ),
 )
 
 
@@ -326,11 +371,11 @@ class QwenPlanner:
     def runtime_info(self) -> dict[str, object]:
         info: dict[str, object] = {
             "planner_backend": "local_hf",
-            "planner_model": settings.qwen_model,
+            "planner_model_dir": str(settings.local_model_dir) if settings.local_model_dir else None,
+            "local_device": settings.local_device,
+            "local_dtype": settings.local_dtype,
+            "local_quantization": settings.local_quantization,
         }
-        info["local_model_dir"] = str(settings.local_model_dir) if settings.local_model_dir else None
-        info["local_device"] = settings.local_device
-        info["local_dtype"] = settings.local_dtype
         return info
 
     def _call_local_hf_planner(self, request: AgentRequest, library_summary: dict[str, object]) -> ExecutionPlan:
@@ -352,7 +397,7 @@ class QwenPlanner:
                 **inputs,
                 max_new_tokens=settings.local_max_new_tokens,
                 do_sample=False,
-                use_cache=False,
+                use_cache=True,
             )
 
         generated_tokens = out[:, inputs["input_ids"].shape[1] :]
@@ -457,52 +502,56 @@ class QwenPlanner:
         tool_choices = "|".join(spec.name.value for spec in TOOL_SPECS)
         layout_assets = self._extract_layout_assets(request.layout_context)
         edit_directives = self._extract_edit_directives(request.layout_context)
+        # 精简 tool_catalog：只保留 tool name + purpose + when_to_use + allowed_arguments
+        # 不再塞 preconditions/side_effects/failure_modes/quality_metrics 等冗余字段
         tool_catalog = [
             {
                 "tool": spec.name.value,
                 "level": spec.level,
                 "purpose": spec.purpose,
                 "when_to_use": spec.when_to_use,
-                "allowed_arguments": list(spec.arguments.keys()),
-                "argument_help": spec.arguments,
-                "output_schema": spec.output_schema,
-                "preconditions": list(contract.preconditions),
-                "side_effects": list(contract.side_effects),
-                "failure_modes": list(contract.failure_modes),
-                "idempotent": contract.idempotent,
-                "security_scope": contract.security_scope,
-                "timeout_budget_ms": contract.timeout_budget_ms,
-                "quality_metrics": list(contract.quality_metrics),
+                "arguments": spec.arguments,
             }
             for spec in TOOL_SPECS
-            for contract in [TOOL_CONTRACTS[spec.name]]
         ]
         return {
-            "model": settings.qwen_model,
             "response_format": {"type": "json_object"},
             "messages": [
                 {
                     "role": "system",
                     "content": (
-                        "You are the planning brain of a live photo agent. "
-                        "Return only valid JSON that matches the ExecutionPlan schema. "
-                        "Use only tools from tool_catalog. "
-                        "If guided_tool_names is non-empty, prefer those tools when they fit the request and explain any omission in tool_calls.reason. "
-                        "Treat request.layout_assets and request.edit_directives as authoritative user-provided edit constraints. "
-                        "If request.edit_directives is non-empty, you must preserve those edit intents in the planned reasoning and relevant tool arguments when applicable. "
-                        "If library_summary.reusable_strategies is provided, treat it as prior successful candidates "
-                        "and adapt only when it fits the current request; do not copy blindly. "
-                        "Do not infer hidden rules or default workflow stages beyond tool boundaries. "
-                        # 以下三条针对实测失败：qwen-omni-turbo 会把 17 个工具全量复述且
-                        # arguments 全空，qwen-max 把 arguments 填成 ''，qwen-plus 返回空数组。
-                        # 根因是既没要求"只列必要工具"，也没要求 arguments 必须是具体值。
-                        "Plan only the tools required to achieve request.text; never enumerate the whole catalog. "
-                        "Every tool_calls[].arguments must be a non-empty object of concrete values "
-                        "(numbers as numbers, durations and timestamps in integer milliseconds), "
-                        "drawn from that tool's allowed_arguments. Never emit null, '' or {} for arguments. "
-                        "Use request.input_video_paths / request.input_image_paths as the material to operate on; "
-                        "if they are empty and no asset is selected, set need_clarification instead of guessing a path. "
-                        "No prose."
+                        "You are the planning brain of a live photo agent.\n"
+                        "\n"
+                        "## Intent Labels\n"
+                        "You must pick one of these exact intent labels:\n"
+                        "- smart_collage: User wants a 3-panel collage from searched assets (三拼, 拼贴, 三格)\n"
+                        "- template_collage: User wants a specific layout collage (左右拼, 上下拼, 横排, 竖排)\n"
+                        "- triptych_export: User wants to export a triptych video (导出, 三拼导出)\n"
+                        "- subject_overlay_composite: User wants to cut out a subject and overlay it (抠图, 叠加, 抠出来贴到)\n"
+                        "- search_only: User only wants to search/browse assets (找, 看看, 有没有, 选)\n"
+                        "- conversation: User is chatting, asking questions, or greeting (你好, 你能做什么, 谢谢)\n"
+                        "\n"
+                        "## Key Tool Selection Rules\n"
+                        "- '三拼XXX' → smart_collage (query=XXX, k=3). Do NOT also call search_by_text — smart_collage does its own search internally.\n"
+                        "- '左右拼/上下拼' with selected assets → template_collage\n"
+                        "- '导出' → triptych_export (scan_library → concat_clips → export_mp4)\n"
+                        "- '抠图/叠加' → subject_overlay_composite\n"
+                        "- '找/有没有/看看' → search_by_text only\n"
+                        "- '你好/谢谢/你能做什么' → conversation (no tools)\n"
+                        "- For smart_collage, the tool_calls should be: [{tool:scan_library}, {tool:smart_collage, query:XXX, k:3}]. Nothing else.\n"
+                        "\n"
+                        "## Output Rules\n"
+                        "- Return ONLY valid JSON matching the ExecutionPlan schema.\n"
+                        "- intent MUST be one of the exact labels above (not a description).\n"
+                        "- Plan only the tools required; never enumerate the whole catalog.\n"
+                        "- Every tool_calls[].arguments must be concrete values (not null, '' or {}).\n"
+                        "- smart_collage is a complete pipeline: search + template match + VLM score + compose. Do NOT decompose it into L0 tools.\n"
+                        "- No prose, no markdown, no code fences.\n"
+                        "\n"
+                        "## Examples\n"
+                        '{"user_goal":"三拼小猫","intent":"smart_collage","selected_asset_ids":[],"required_context":[],"need_clarification":false,"clarification_questions":[],"blocking_missing_info":[],"tool_calls":[{"tool":"scan_library","reason":"scan","arguments":{}},{"tool":"smart_collage","reason":"search and collage","arguments":{"query":"小猫","k":3}}]}\n'
+                        '{"user_goal":"你好","intent":"conversation","selected_asset_ids":[],"required_context":[],"need_clarification":false,"clarification_questions":[],"blocking_missing_info":[],"tool_calls":[]}\n'
+                        '{"user_goal":"三拼导出","intent":"triptych_export","selected_asset_ids":[],"required_context":[],"need_clarification":false,"clarification_questions":[],"blocking_missing_info":[],"tool_calls":[{"tool":"scan_library","reason":"scan","arguments":{}},{"tool":"concat_clips","reason":"build timeline","arguments":{}},{"tool":"export_mp4","reason":"export","arguments":{}}]}\n'
                     ),
                 },
                 {
@@ -514,9 +563,6 @@ class QwenPlanner:
                                 "selected_asset_ids": request.selected_asset_ids,
                                 "guided_tool_names": [tool.value for tool in request.guided_tool_names],
                                 "library_root": str(request.library_root),
-                                # 素材路径此前从未进入 payload，模型不知道要对哪个文件下手，
-                                # 因此 arguments 只能留空或复述词表。缺这两行时
-                                # run_device_plan.py 的 --device-input 是一条死路。
                                 "input_video_paths": [str(p) for p in request.input_video_paths],
                                 "input_image_paths": [str(p) for p in request.input_image_paths],
                                 "layout_context": request.layout_context,
@@ -529,7 +575,7 @@ class QwenPlanner:
                             "tool_catalog": tool_catalog,
                             "execution_plan_schema": {
                                 "user_goal": "string",
-                                "intent": "string",
+                                "intent": "string (must be one of: smart_collage, template_collage, triptych_export, subject_overlay_composite, search_only, conversation)",
                                 "selected_asset_ids": ["string"],
                                 "required_context": ["string"],
                                 "need_clarification": "boolean(default=false)",
@@ -594,36 +640,6 @@ class QwenPlanner:
                 }
             )
         return directives
-
-    def _parse_plan_response(self, response_text: str) -> dict[str, object]:
-        decoded = json.loads(response_text)
-        if isinstance(decoded, dict):
-            if "plan" in decoded and isinstance(decoded["plan"], dict):
-                return dict(decoded["plan"])
-            choices = decoded.get("choices")
-            if isinstance(choices, list) and choices:
-                first_choice = choices[0]
-                if isinstance(first_choice, dict):
-                    message = first_choice.get("message")
-                    if isinstance(message, dict):
-                        content = message.get("content")
-                        if isinstance(content, str):
-                            return self._parse_json_text(content)
-                        if isinstance(content, list):
-                            text_parts = [
-                                str(part.get("text", ""))
-                                for part in content
-                                if isinstance(part, dict) and part.get("type") == "text"
-                            ]
-                            if text_parts:
-                                return self._parse_json_text("\n".join(text_parts))
-            for key in ("output_text", "text", "content"):
-                candidate = decoded.get(key)
-                if isinstance(candidate, str):
-                    return self._parse_json_text(candidate)
-            if "tool_calls" in decoded:
-                return dict(decoded)
-        raise RuntimeError("Planner response does not contain a valid ExecutionPlan payload")
 
     def _parse_json_text(self, text: str) -> dict[str, object]:
         stripped = text.strip()

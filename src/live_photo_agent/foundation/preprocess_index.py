@@ -284,8 +284,8 @@ class OfflinePreprocessIndexer:
         """
         from .vlm_semantics import VLMSemanticAnalyzer  # local import to avoid circular
         from ..config import settings as _settings
-        if not _settings.vlm_endpoint:
-            return {"total": 0, "enriched": 0, "skipped": 0, "failed": 0, "reason": "VLM disabled"}
+        if not _settings.vlm_model_dir:
+            return {"total": 0, "enriched": 0, "skipped": 0, "failed": 0, "reason": "VLM disabled (LPA_VLM_MODEL_DIR not set)"}
         rows = self._read_index_rows()
         enriched = 0
         skipped = 0

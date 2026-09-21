@@ -19,7 +19,7 @@ class FoundationLayer:
         _ = request
         return FoundationState(
             pipeline_version=self.pipeline_version,
-            planner_model=settings.qwen_model,
+            planner_model=str(settings.local_model_dir) if settings.local_model_dir else "local_hf",
             asset_count=int(library_summary.get("asset_count", 0)),
             selected_asset_count=int(library_summary.get("selected_asset_count", 0)),
             session_memory_size=session_memory_size,

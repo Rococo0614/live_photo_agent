@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from pathlib import Path
 
+from ..config import settings
 from ..models import AgentRequest, ExecutionPlan, ToolCall, ToolName
 
 
@@ -292,6 +294,58 @@ TOOL_CONTRACTS: dict[ToolName, ToolContract] = {
         idempotent=False,
         security_scope="local_media_readwrite_temp",
     ),
+    ToolName.LIVE_PHOTO_COLLAGE: ToolContract(
+        level="L2",
+        purpose="Full live photo collage: segment subjects, plan layout, compose final video.",
+        allowed_arguments=("asset_paths", "output_dir", "canvas_width", "canvas_height", "span_ratio"),
+        output_fields=("final_video", "manifest", "layout_plan", "phase_videos"),
+        preconditions=("assets are live photos",),
+        side_effects=("writes final.mp4",),
+        failure_modes=("no_assets", "composition_failed"),
+        timeout_budget_ms=60000,
+        quality_metrics=("video_quality",),
+        idempotent=False,
+        security_scope="local_media_readwrite_temp",
+    ),
+    ToolName.TEMPLATE_COLLAGE: ToolContract(
+        level="L2",
+        purpose="Direct stacking collage: resize+crop videos per layout, no segmentation.",
+        allowed_arguments=("asset_paths", "output_dir", "canvas_width", "canvas_height", "layout_type", "template_id", "template_slots"),
+        output_fields=("final_video", "layout_plan"),
+        preconditions=("assets available",),
+        side_effects=("writes final.mp4",),
+        failure_modes=("no_assets", "composition_failed"),
+        timeout_budget_ms=30000,
+        quality_metrics=("video_quality",),
+        idempotent=False,
+        security_scope="local_media_readwrite_temp",
+    ),
+    ToolName.SMART_COLLAGE: ToolContract(
+        level="L2",
+        purpose="Smart collage: semantic search + template match + VLM score + compose.",
+        allowed_arguments=("query", "k", "library_root", "output_dir", "template_id", "exclude_template_id", "canvas_width", "canvas_height"),
+        output_fields=("final_video", "recommendations", "selected_template"),
+        preconditions=("asset index exists",),
+        side_effects=("writes final.mp4",),
+        failure_modes=("no_matching_assets", "no_matching_template", "composition_failed"),
+        timeout_budget_ms=60000,
+        quality_metrics=("relevance", "visual_harmony"),
+        idempotent=False,
+        security_scope="local_media_readwrite_temp",
+    ),
+    ToolName.ASSET_SUMMARIZE: ToolContract(
+        level="L2",
+        purpose="VLM-based asset content summarization. Extracts key frames, generates summary + tags, updates search index.",
+        allowed_arguments=("library_root", "asset_ids", "force_rebuild", "max_frames_per_asset", "output_dir"),
+        output_fields=("summarized_count", "updated_index", "summaries"),
+        preconditions=("assets in library",),
+        side_effects=("updates .asset_store.db",),
+        failure_modes=("no_assets", "vlm_load_failed"),
+        timeout_budget_ms=300000,
+        quality_metrics=("summary_quality",),
+        idempotent=False,
+        security_scope="local_media_readwrite_temp",
+    ),
 }
 
 
@@ -496,8 +550,9 @@ class CapabilityLayer:
         normalized = list(calls)
 
         # Guard 1: scan_library should be first so all later tools have asset context.
-        scan_index = next((idx for idx, call in enumerate(normalized) if call.tool == ToolName.SCAN_LIBRARY), -1)
-        if scan_index == -1:
+        # Also deduplicate: if scan_library appears multiple times, keep only the first.
+        scan_indices = [idx for idx, call in enumerate(normalized) if call.tool == ToolName.SCAN_LIBRARY]
+        if not scan_indices:
             normalized.insert(
                 0,
                 ToolCall(
@@ -506,13 +561,27 @@ class CapabilityLayer:
                     arguments={"library_root": str(request.library_root)},
                 ),
             )
-        elif scan_index > 0:
-            scan_call = normalized.pop(scan_index)
-            normalized.insert(0, scan_call)
+        else:
+            first_scan = normalized[scan_indices[0]]
+            for idx in reversed(scan_indices[1:]):
+                normalized.pop(idx)
+            if scan_indices[0] > 0:
+                normalized.pop(scan_indices[0])
+                normalized.insert(0, first_scan)
 
         # Guard 2: remove filter_selected when request has no selected ids.
         if not request.selected_asset_ids:
             normalized = [call for call in normalized if call.tool != ToolName.FILTER_SELECTED]
+
+        # Guard 2b: deduplicate — keep only the first occurrence of each tool.
+        seen: set[ToolName] = set()
+        deduped2: list[ToolCall] = []
+        for call in normalized:
+            if call.tool in seen:
+                continue
+            seen.add(call.tool)
+            deduped2.append(call)
+        normalized = deduped2
 
         sequence = [call.tool for call in normalized]
         segmentation_markers = ["分割", "抠图", "主体", "matte", "segment", "subject", "overlay", "叠加"]
@@ -554,50 +623,72 @@ class CapabilityLayer:
             )
             sequence = [call.tool for call in normalized]
 
-        # Guard 4: export_mp4 depends on concat_clips.
-        if ToolName.EXPORT_MP4 in sequence and ToolName.CONCAT_CLIPS not in sequence:
-            export_idx = sequence.index(ToolName.EXPORT_MP4)
-            normalized.insert(
-                export_idx,
-                ToolCall(
-                    tool=ToolName.CONCAT_CLIPS,
-                    reason="Build timeline before export_mp4.",
-                    arguments={},
-                ),
-            )
-            sequence = [call.tool for call in normalized]
-
-        # Guard 4b: overlay_subject_clip depends on concat_clips (a timeline to composite onto)
-        # and extract_subject_matte (the matte it composites).
-        if ToolName.OVERLAY_SUBJECT_CLIP in sequence:
+        # Guard 4: export_mp4 depends on concat_clips — insert if missing, reorder if after.
+        if ToolName.EXPORT_MP4 in sequence:
             if ToolName.CONCAT_CLIPS not in sequence:
-                overlay_idx = sequence.index(ToolName.OVERLAY_SUBJECT_CLIP)
+                export_idx = sequence.index(ToolName.EXPORT_MP4)
                 normalized.insert(
-                    overlay_idx,
+                    export_idx,
                     ToolCall(
                         tool=ToolName.CONCAT_CLIPS,
-                        reason="Build timeline before overlay_subject_clip.",
+                        reason="Build timeline before export_mp4.",
                         arguments={},
                     ),
                 )
+            else:
+                concat_idx = sequence.index(ToolName.CONCAT_CLIPS)
+                export_idx = sequence.index(ToolName.EXPORT_MP4)
+                if export_idx < concat_idx:
+                    concat_call = normalized.pop(concat_idx)
+                    normalized.insert(export_idx, concat_call)
+            sequence = [call.tool for call in normalized]
+
+        # Guard 4b: overlay_subject_clip depends on concat_clips and extract_subject_matte
+        # — insert if missing, reorder if after.
+        if ToolName.OVERLAY_SUBJECT_CLIP in sequence:
+            overlay_idx = sequence.index(ToolName.OVERLAY_SUBJECT_CLIP)
+            for dep in (ToolName.CONCAT_CLIPS, ToolName.EXTRACT_SUBJECT_MATTE):
+                if dep not in sequence:
+                    normalized.insert(
+                        overlay_idx,
+                        ToolCall(
+                            tool=dep,
+                            reason=f"Provide dependency required by overlay_subject_clip: {dep.value}.",
+                            arguments={},
+                        ),
+                    )
+                else:
+                    dep_idx = sequence.index(dep)
+                    if overlay_idx < dep_idx:
+                        dep_call = normalized.pop(dep_idx)
+                        normalized.insert(overlay_idx, dep_call)
                 sequence = [call.tool for call in normalized]
-            if ToolName.EXTRACT_SUBJECT_MATTE not in sequence:
                 overlay_idx = sequence.index(ToolName.OVERLAY_SUBJECT_CLIP)
-                normalized.insert(
-                    overlay_idx,
-                    ToolCall(
-                        tool=ToolName.EXTRACT_SUBJECT_MATTE,
-                        reason="Provide the subject matte required by overlay_subject_clip.",
-                        arguments={},
-                    ),
-                )
-                sequence = [call.tool for call in normalized]
 
         # Guard 5: summarize_results should be the final reporting step.
         summarize_index = next((idx for idx, call in enumerate(normalized) if call.tool == ToolName.SUMMARIZE_RESULTS), -1)
         if summarize_index != -1 and summarize_index != len(normalized) - 1:
             summarize_call = normalized.pop(summarize_index)
             normalized.append(summarize_call)
+
+        # Guard 6: L2 collage tools are mutually exclusive.
+        # smart_collage / template_collage / live_photo_collage overlap in function;
+        # keep only the first occurrence and drop the rest.
+        l2_collage_tools = {ToolName.SMART_COLLAGE, ToolName.TEMPLATE_COLLAGE, ToolName.LIVE_PHOTO_COLLAGE}
+        first_l2_tool: ToolName | None = None
+        deduped: list[ToolCall] = []
+        for call in normalized:
+            if call.tool in l2_collage_tools:
+                if first_l2_tool is None:
+                    first_l2_tool = call.tool
+                    deduped.append(call)
+                elif call.tool == first_l2_tool:
+                    continue  # duplicate of same tool, skip
+                else:
+                    continue  # different L2 tool, skip
+            else:
+                deduped.append(call)
+        normalized = deduped
 
         return normalized
 
@@ -642,8 +733,75 @@ class CapabilityLayer:
             for key, value in call.arguments.items()
             if key in contract.allowed_arguments
         }
-
+        args = self._validate_and_coerce_arguments(call.tool, args)
         return ToolCall(tool=call.tool, reason=call.reason, arguments=args)
+
+    def _validate_and_coerce_arguments(
+        self,
+        tool: ToolName,
+        args: dict[str, object],
+    ) -> dict[str, object]:
+        """Validate argument values and coerce defaults for L2 collage tools."""
+        if tool == ToolName.SMART_COLLAGE:
+            query = str(args.get("query", "")).strip()
+            if not query:
+                args["query"] = ""
+            else:
+                args["query"] = query
+
+            k = args.get("k", 3)
+            try:
+                k_int = int(k)  # type: ignore[arg-type]
+            except (TypeError, ValueError):
+                k_int = 3
+            k_int = max(2, min(10, k_int))
+            args["k"] = k_int
+
+            args = self._ensure_agent_work_output_dir(args)
+
+        elif tool in (ToolName.LIVE_PHOTO_COLLAGE, ToolName.TEMPLATE_COLLAGE):
+            asset_paths = args.get("asset_paths")
+            if not isinstance(asset_paths, list) or not asset_paths:
+                args["asset_paths"] = []
+            else:
+                args["asset_paths"] = [str(p) for p in asset_paths]
+
+            if tool == ToolName.TEMPLATE_COLLAGE:
+                layout_type = str(args.get("layout_type", "vertical")).strip().lower()
+                if layout_type not in ("vertical", "horizontal", "grid"):
+                    layout_type = "vertical"
+                args["layout_type"] = layout_type
+
+            args = self._ensure_agent_work_output_dir(args)
+
+        elif tool == ToolName.ASSET_SUMMARIZE:
+            args = self._ensure_agent_work_output_dir(args)
+
+        return args
+
+    def _ensure_agent_work_output_dir(self, args: dict[str, object]) -> dict[str, object]:
+        """Force output_dir under .agent_work.
+
+        Any output_dir that is missing, relative, or points outside
+        agent_work_dir is redirected to agent_work_dir. This keeps all
+        intermediate files in one place and prevents pollution of the library.
+        """
+        output_dir = args.get("output_dir")
+        agent_work_str = str(settings.agent_work_dir)
+
+        if not output_dir:
+            args["output_dir"] = agent_work_str
+            return args
+
+        output_dir_str = str(output_dir)
+        output_path = Path(output_dir_str)
+
+        if not output_path.is_absolute():
+            args["output_dir"] = str(settings.agent_work_dir / output_dir_str)
+        elif not output_dir_str.startswith(agent_work_str):
+            args["output_dir"] = agent_work_str
+
+        return args
 
     def _foreground_asset_from_layout_edits(self, layout_context: list[dict[str, object]]) -> str:
         for item in layout_context:

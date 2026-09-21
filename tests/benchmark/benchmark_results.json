@@ -1,0 +1,617 @@
+{
+  "fp16": {
+    "success_rate": 1.0,
+    "avg_latency_ms": 1912.2333333333333,
+    "p50_latency_ms": 1880.0,
+    "p99_latency_ms": 3245
+  },
+  "quantized": {
+    "success_rate": 1.0,
+    "avg_latency_ms": 2526.0666666666666,
+    "p50_latency_ms": 2453.0,
+    "p99_latency_ms": 4125
+  },
+  "intent_match_rate": 0.9,
+  "tool_match_rate": 0.7,
+  "cases": [
+    {
+      "case_id": "C01",
+      "input": "你好",
+      "fp16_intent": "conversation",
+      "quant_intent": "conversation",
+      "intent_match": true,
+      "fp16_tools": [],
+      "quant_tools": [],
+      "tool_match": true,
+      "fp16_latency_ms": 1641,
+      "quant_latency_ms": 1907,
+      "fp16_success": true,
+      "quant_success": true
+    },
+    {
+      "case_id": "C02",
+      "input": "帮我看看库里有多少素材",
+      "fp16_intent": "search_only",
+      "quant_intent": "search_only",
+      "intent_match": true,
+      "fp16_tools": [
+        "scan_library"
+      ],
+      "quant_tools": [
+        "scan_library"
+      ],
+      "tool_match": true,
+      "fp16_latency_ms": 1508,
+      "quant_latency_ms": 1922,
+      "fp16_success": true,
+      "quant_success": true
+    },
+    {
+      "case_id": "C03",
+      "input": "三拼小猫",
+      "fp16_intent": "smart_collage",
+      "quant_intent": "smart_collage",
+      "intent_match": true,
+      "fp16_tools": [
+        "scan_library",
+        "smart_collage"
+      ],
+      "quant_tools": [
+        "scan_library",
+        "smart_collage"
+      ],
+      "tool_match": true,
+      "fp16_latency_ms": 1666,
+      "quant_latency_ms": 2356,
+      "fp16_success": true,
+      "quant_success": true
+    },
+    {
+      "case_id": "C04",
+      "input": "帮我做个三拼海边风景",
+      "fp16_intent": "smart_collage",
+      "quant_intent": "smart_collage",
+      "intent_match": true,
+      "fp16_tools": [
+        "scan_library",
+        "smart_collage"
+      ],
+      "quant_tools": [
+        "scan_library",
+        "smart_collage"
+      ],
+      "tool_match": true,
+      "fp16_latency_ms": 1875,
+      "quant_latency_ms": 2450,
+      "fp16_success": true,
+      "quant_success": true
+    },
+    {
+      "case_id": "C05",
+      "input": "拼一个三格的猫咪视频",
+      "fp16_intent": "smart_collage",
+      "quant_intent": "smart_collage",
+      "intent_match": true,
+      "fp16_tools": [
+        "scan_library",
+        "smart_collage"
+      ],
+      "quant_tools": [
+        "scan_library",
+        "smart_collage"
+      ],
+      "tool_match": true,
+      "fp16_latency_ms": 1882,
+      "quant_latency_ms": 2437,
+      "fp16_success": true,
+      "quant_success": true
+    },
+    {
+      "case_id": "C06",
+      "input": "三拼小猫，用最相关的三张",
+      "fp16_intent": "smart_collage",
+      "quant_intent": "smart_collage",
+      "intent_match": true,
+      "fp16_tools": [
+        "scan_library",
+        "search_by_text"
+      ],
+      "quant_tools": [
+        "scan_library",
+        "smart_collage"
+      ],
+      "tool_match": false,
+      "fp16_latency_ms": 1942,
+      "quant_latency_ms": 2507,
+      "fp16_success": true,
+      "quant_success": true
+    },
+    {
+      "case_id": "C07",
+      "input": "做个三拼，主题是城市夜景",
+      "fp16_intent": "smart_collage",
+      "quant_intent": "smart_collage",
+      "intent_match": true,
+      "fp16_tools": [
+        "scan_library",
+        "smart_collage"
+      ],
+      "quant_tools": [
+        "scan_library",
+        "smart_collage"
+      ],
+      "tool_match": true,
+      "fp16_latency_ms": 1941,
+      "quant_latency_ms": 2501,
+      "fp16_success": true,
+      "quant_success": true
+    },
+    {
+      "case_id": "C08",
+      "input": "三拼花朵特写",
+      "fp16_intent": "smart_collage",
+      "quant_intent": "smart_collage",
+      "intent_match": true,
+      "fp16_tools": [
+        "scan_library",
+        "smart_collage"
+      ],
+      "quant_tools": [
+        "scan_library",
+        "smart_collage"
+      ],
+      "tool_match": true,
+      "fp16_latency_ms": 1902,
+      "quant_latency_ms": 2456,
+      "fp16_success": true,
+      "quant_success": true
+    },
+    {
+      "case_id": "C09",
+      "input": "帮我拼一个三格的运动视频",
+      "fp16_intent": "smart_collage",
+      "quant_intent": "smart_collage",
+      "intent_match": true,
+      "fp16_tools": [
+        "scan_library",
+        "smart_collage"
+      ],
+      "quant_tools": [
+        "scan_library",
+        "smart_collage"
+      ],
+      "tool_match": true,
+      "fp16_latency_ms": 1878,
+      "quant_latency_ms": 2464,
+      "fp16_success": true,
+      "quant_success": true
+    },
+    {
+      "case_id": "C10",
+      "input": "三拼，不要猫",
+      "fp16_intent": "smart_collage",
+      "quant_intent": "smart_collage",
+      "intent_match": true,
+      "fp16_tools": [
+        "scan_library",
+        "smart_collage"
+      ],
+      "quant_tools": [
+        "scan_library",
+        "smart_collage"
+      ],
+      "tool_match": true,
+      "fp16_latency_ms": 1845,
+      "quant_latency_ms": 2366,
+      "fp16_success": true,
+      "quant_success": true
+    },
+    {
+      "case_id": "C11",
+      "input": "把这三张左右拼一下",
+      "fp16_intent": "template_collage",
+      "quant_intent": "template_collage",
+      "intent_match": true,
+      "fp16_tools": [
+        "scan_library",
+        "concat_clips"
+      ],
+      "quant_tools": [
+        "scan_library",
+        "template_collage"
+      ],
+      "tool_match": false,
+      "fp16_latency_ms": 1784,
+      "quant_latency_ms": 2088,
+      "fp16_success": true,
+      "quant_success": true
+    },
+    {
+      "case_id": "C12",
+      "input": "上下拼三段视频",
+      "fp16_intent": "template_collage",
+      "quant_intent": "template_collage",
+      "intent_match": true,
+      "fp16_tools": [
+        "scan_library",
+        "concat_clips"
+      ],
+      "quant_tools": [
+        "scan_library",
+        "template_collage"
+      ],
+      "tool_match": false,
+      "fp16_latency_ms": 1754,
+      "quant_latency_ms": 2153,
+      "fp16_success": true,
+      "quant_success": true
+    },
+    {
+      "case_id": "C13",
+      "input": "选三张做个竖排拼贴",
+      "fp16_intent": "template_collage",
+      "quant_intent": "template_collage",
+      "intent_match": true,
+      "fp16_tools": [
+        "scan_library",
+        "search_by_text"
+      ],
+      "quant_tools": [
+        "scan_library",
+        "search_by_text"
+      ],
+      "tool_match": true,
+      "fp16_latency_ms": 1931,
+      "quant_latency_ms": 2931,
+      "fp16_success": true,
+      "quant_success": true
+    },
+    {
+      "case_id": "C14",
+      "input": "把这三个视频拼到一起，横着排",
+      "fp16_intent": "template_collage",
+      "quant_intent": "template_collage",
+      "intent_match": true,
+      "fp16_tools": [
+        "scan_library",
+        "concat_clips"
+      ],
+      "quant_tools": [
+        "scan_library",
+        "concat_clips",
+        "export_mp4"
+      ],
+      "tool_match": false,
+      "fp16_latency_ms": 1654,
+      "quant_latency_ms": 2717,
+      "fp16_success": true,
+      "quant_success": true
+    },
+    {
+      "case_id": "C15",
+      "input": "做一个三拼导出",
+      "fp16_intent": "triptych_export",
+      "quant_intent": "triptych_export",
+      "intent_match": true,
+      "fp16_tools": [
+        "scan_library",
+        "concat_clips",
+        "export_mp4"
+      ],
+      "quant_tools": [
+        "scan_library",
+        "concat_clips",
+        "export_mp4"
+      ],
+      "tool_match": true,
+      "fp16_latency_ms": 2321,
+      "quant_latency_ms": 2967,
+      "fp16_success": true,
+      "quant_success": true
+    },
+    {
+      "case_id": "C16",
+      "input": "三拼导出1080p视频",
+      "fp16_intent": "triptych_export",
+      "quant_intent": "triptych_export",
+      "intent_match": true,
+      "fp16_tools": [
+        "scan_library",
+        "concat_clips",
+        "export_mp4"
+      ],
+      "quant_tools": [
+        "scan_library",
+        "concat_clips",
+        "export_mp4"
+      ],
+      "tool_match": true,
+      "fp16_latency_ms": 2568,
+      "quant_latency_ms": 3429,
+      "fp16_success": true,
+      "quant_success": true
+    },
+    {
+      "case_id": "C17",
+      "input": "帮我把三段视频拼起来导出",
+      "fp16_intent": "triptych_export",
+      "quant_intent": "template_collage",
+      "intent_match": false,
+      "fp16_tools": [
+        "scan_library",
+        "concat_clips",
+        "export_mp4"
+      ],
+      "quant_tools": [
+        "scan_library",
+        "concat_clips",
+        "export_mp4"
+      ],
+      "tool_match": true,
+      "fp16_latency_ms": 2199,
+      "quant_latency_ms": 2908,
+      "fp16_success": true,
+      "quant_success": true
+    },
+    {
+      "case_id": "C18",
+      "input": "把第一张的人物动态抠出来贴到后面三张拼接的画面上",
+      "fp16_intent": "subject_overlay_composite",
+      "quant_intent": "subject_overlay_composite",
+      "intent_match": true,
+      "fp16_tools": [
+        "extract_subject_matte",
+        "concat_clips",
+        "overlay_subject_clip"
+      ],
+      "quant_tools": [
+        "extract_subject_matte",
+        "concat_clips",
+        "overlay_subject_clip"
+      ],
+      "tool_match": true,
+      "fp16_latency_ms": 3245,
+      "quant_latency_ms": 4125,
+      "fp16_success": true,
+      "quant_success": true
+    },
+    {
+      "case_id": "C19",
+      "input": "抠出第二张的人放到拼接的视频上",
+      "fp16_intent": "subject_overlay_composite",
+      "quant_intent": "subject_overlay_composite",
+      "intent_match": true,
+      "fp16_tools": [
+        "filter_selected",
+        "extract_subject_matte",
+        "concat_clips"
+      ],
+      "quant_tools": [
+        "scan_library",
+        "extract_subject_matte",
+        "concat_clips",
+        "overlay_subject_clip"
+      ],
+      "tool_match": false,
+      "fp16_latency_ms": 2340,
+      "quant_latency_ms": 3477,
+      "fp16_success": true,
+      "quant_success": true
+    },
+    {
+      "case_id": "C20",
+      "input": "三拼小猫，然后导出",
+      "fp16_intent": "smart_collage",
+      "quant_intent": "smart_collage",
+      "intent_match": true,
+      "fp16_tools": [
+        "scan_library",
+        "smart_collage"
+      ],
+      "quant_tools": [
+        "scan_library",
+        "smart_collage"
+      ],
+      "tool_match": true,
+      "fp16_latency_ms": 1897,
+      "quant_latency_ms": 2852,
+      "fp16_success": true,
+      "quant_success": true
+    },
+    {
+      "case_id": "C21",
+      "input": "帮我找五张海边的照片",
+      "fp16_intent": "search_only",
+      "quant_intent": "search_only",
+      "intent_match": true,
+      "fp16_tools": [
+        "search_by_text"
+      ],
+      "quant_tools": [
+        "scan_library"
+      ],
+      "tool_match": false,
+      "fp16_latency_ms": 1485,
+      "quant_latency_ms": 1864,
+      "fp16_success": true,
+      "quant_success": true
+    },
+    {
+      "case_id": "C22",
+      "input": "库里有没有猫的视频？",
+      "fp16_intent": "search_only",
+      "quant_intent": "search_only",
+      "intent_match": true,
+      "fp16_tools": [
+        "scan_library"
+      ],
+      "quant_tools": [
+        "search_by_text"
+      ],
+      "tool_match": false,
+      "fp16_latency_ms": 1514,
+      "quant_latency_ms": 1794,
+      "fp16_success": true,
+      "quant_success": true
+    },
+    {
+      "case_id": "C23",
+      "input": "三拼，左边猫右边狗中间风景",
+      "fp16_intent": "template_collage",
+      "quant_intent": "smart_collage",
+      "intent_match": false,
+      "fp16_tools": [
+        "scan_library",
+        "search_by_text",
+        "smart_collage"
+      ],
+      "quant_tools": [
+        "scan_library",
+        "smart_collage"
+      ],
+      "tool_match": false,
+      "fp16_latency_ms": 2298,
+      "quant_latency_ms": 2524,
+      "fp16_success": true,
+      "quant_success": true
+    },
+    {
+      "case_id": "C24",
+      "input": "做一个四格的猫咪拼贴",
+      "fp16_intent": "template_collage",
+      "quant_intent": "smart_collage",
+      "intent_match": false,
+      "fp16_tools": [
+        "scan_library",
+        "smart_collage"
+      ],
+      "quant_tools": [
+        "scan_library",
+        "smart_collage"
+      ],
+      "tool_match": true,
+      "fp16_latency_ms": 1695,
+      "quant_latency_ms": 2361,
+      "fp16_success": true,
+      "quant_success": true
+    },
+    {
+      "case_id": "C25",
+      "input": "把这三张做个三拼，要好看的",
+      "fp16_intent": "smart_collage",
+      "quant_intent": "smart_collage",
+      "intent_match": true,
+      "fp16_tools": [
+        "scan_library",
+        "smart_collage"
+      ],
+      "quant_tools": [
+        "scan_library",
+        "smart_collage"
+      ],
+      "tool_match": true,
+      "fp16_latency_ms": 1917,
+      "quant_latency_ms": 2604,
+      "fp16_success": true,
+      "quant_success": true
+    },
+    {
+      "case_id": "C26",
+      "input": "帮我选三张最好看的夜景",
+      "fp16_intent": "smart_collage",
+      "quant_intent": "smart_collage",
+      "intent_match": true,
+      "fp16_tools": [
+        "scan_library",
+        "search_by_text"
+      ],
+      "quant_tools": [
+        "scan_library",
+        "smart_collage"
+      ],
+      "tool_match": false,
+      "fp16_latency_ms": 1915,
+      "quant_latency_ms": 2865,
+      "fp16_success": true,
+      "quant_success": true
+    },
+    {
+      "case_id": "C27",
+      "input": "三拼烟花视频",
+      "fp16_intent": "smart_collage",
+      "quant_intent": "smart_collage",
+      "intent_match": true,
+      "fp16_tools": [
+        "scan_library",
+        "smart_collage"
+      ],
+      "quant_tools": [
+        "scan_library",
+        "smart_collage"
+      ],
+      "tool_match": true,
+      "fp16_latency_ms": 1852,
+      "quant_latency_ms": 2321,
+      "fp16_success": true,
+      "quant_success": true
+    },
+    {
+      "case_id": "C28",
+      "input": "拼一个三格的日落风景",
+      "fp16_intent": "smart_collage",
+      "quant_intent": "smart_collage",
+      "intent_match": true,
+      "fp16_tools": [
+        "scan_library",
+        "smart_collage"
+      ],
+      "quant_tools": [
+        "scan_library",
+        "smart_collage"
+      ],
+      "tool_match": true,
+      "fp16_latency_ms": 1949,
+      "quant_latency_ms": 2422,
+      "fp16_success": true,
+      "quant_success": true
+    },
+    {
+      "case_id": "C29",
+      "input": "你 能做什么",
+      "fp16_intent": "conversation",
+      "quant_intent": "conversation",
+      "intent_match": true,
+      "fp16_tools": [],
+      "quant_tools": [],
+      "tool_match": true,
+      "fp16_latency_ms": 1098,
+      "quant_latency_ms": 1601,
+      "fp16_success": true,
+      "quant_success": true
+    },
+    {
+      "case_id": "C30",
+      "input": "三拼冲浪的视频",
+      "fp16_intent": "smart_collage",
+      "quant_intent": "smart_collage",
+      "intent_match": true,
+      "fp16_tools": [
+        "scan_library",
+        "smart_collage"
+      ],
+      "quant_tools": [
+        "scan_library",
+        "smart_collage"
+      ],
+      "tool_match": true,
+      "fp16_latency_ms": 1871,
+      "quant_latency_ms": 2413,
+      "fp16_success": true,
+      "quant_success": true
+    }
+  ],
+  "vram": {
+    "fp16_mb": 14558,
+    "int4_mb": 5302
+  }
+}

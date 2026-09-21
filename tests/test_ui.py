@@ -41,11 +41,7 @@ def test_ui_bootstrap_and_index(tmp_path: Path, monkeypatch) -> None:
 
 
 def test_planner_config_endpoints(monkeypatch) -> None:
-    monkeypatch.setattr(settings, "planner_backend", "auto")
-    monkeypatch.setattr(settings, "qwen_endpoint", None)
-    monkeypatch.setattr(settings, "qwen_auth_token", None)
-    monkeypatch.setattr(settings, "qwen_workspace_id", None)
-    monkeypatch.setattr(settings, "qwen_model", "Qwen/Qwen3-VL-8B")
+    """Planner config endpoints now only manage local model settings (no cloud backend)."""
     monkeypatch.setattr(settings, "local_model_dir", None)
 
     client = TestClient(app)
@@ -54,22 +50,22 @@ def test_planner_config_endpoints(monkeypatch) -> None:
     assert initial.status_code == 200
     initial_payload = initial.json()
     assert "runtime_info" in initial_payload
+    assert initial_payload["planner_backend"] == "local_hf"
 
     updated = client.post(
         "/api/ui/planner-config",
         json={
-            "planner_backend": "endpoint",
-            "qwen_endpoint": "http://planner.test/plan",
-            "qwen_model": "Qwen/Test-Model",
-            "qwen_auth_token": "demo-token",
+            "local_model_dir": "/tmp/test-model",
+            "local_dtype": "float16",
+            "local_quantization": "nf4",
         },
     )
     assert updated.status_code == 200
     updated_payload = updated.json()
-    assert updated_payload["planner_backend"] == "endpoint"
-    assert updated_payload["qwen_endpoint"] == "http://planner.test/plan"
-    assert updated_payload["qwen_model"] == "Qwen/Test-Model"
-    assert updated_payload["qwen_auth_token_configured"] is True
+    assert updated_payload["planner_backend"] == "local_hf"
+    assert updated_payload["local_model_dir"] == "/tmp/test-model"
+    assert updated_payload["local_dtype"] == "float16"
+    assert updated_payload["local_quantization"] == "nf4"
 
     reset = client.delete("/api/ui/planner-config")
     assert reset.status_code == 200

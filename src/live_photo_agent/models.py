@@ -40,58 +40,45 @@ class LayoutRole(str, Enum):
 
 
 class LayoutSlot(BaseModel):
-    """One resolved placement on the canvas.
+    """One resolved placement on the canvas (spatial + temporal v2).
 
-    Coordinates are deterministic percentages derived from the frontend grid
-    (GRID_LAYOUT cols x rows). This is the canonical spatial description shared
-    by forward composition and (future) reverse-engineering of a template.
+    v2 adds: start_time_s, end_time_s, enter/exit_transition, fill_mode.
     """
 
     asset_id: str
     slot_id: str = ""
     role: LayoutRole = LayoutRole.BACKGROUND
-    # Canvas-relative placement, in percent (0-100).
-    # left_pct / top_pct are the LEFT / TOP EDGE of the tile (not its center).
-    # width_pct / height_pct are the tile size. These are the canonical spatial
-    # coordinates consumed by the executor (compose_videos_spatial placements).
+    # Spatial: canvas-relative percentages
     left_pct: float = 0.0
     top_pct: float = 0.0
     width_pct: float = 100.0
     height_pct: float = 100.0
-    # Raw frontend grid box (GRID_LAYOUT cols x rows) that produced the
-    # percentages above. Carried through so the executor / tests can verify the
-    # grid -> percent mapping is lossless and edge-anchored.
     grid_x: int = 0
     grid_y: int = 0
     grid_w: int = 0
     grid_h: int = 0
-    # Lower z draws first (bottom); higher z draws later (top).
     z_index: int = 0
-    # Foreground-only tuning (ignored for background slots).
+    # Temporal (v2)
+    start_time_s: float = 0.0
+    end_time_s: float = 6.0
+    enter_transition_type: str = "fade"
+    enter_transition_ms: int = 300
+    exit_transition_type: str = "fade"
+    exit_transition_ms: int = 300
+    fill_mode: str = "freeze"
+    # Foreground tuning
     anchor: str = "center"
     scale: float = 0.45
     x_offset: int = 0
     y_offset: int = 0
     label: str = ""
-    # Normalized (0-1) subject rectangle from the frontend canvas edit.
-    # When present, the segmentation (grabCut) is constrained to this region
-    # so only the framed subject is cut out and the rest becomes transparent.
     edit_rect: dict[str, float] | None = None
-    # Whether this slot is pinned to the top of the z-order stack.
-    # When True, the resolver will assign it the highest z_index at resolve
-    # time, overriding any user-set z_index. This is an explicit semantic flag
-    # distinct from manually setting z_index (which the user can also do).
     pin_to_top: bool = False
-    # Image processing prompt for this slot. This prompt is carried through
-    # the template to the brain, which can use it to plan image editing tools
-    # (e.g. color enhancement, style transfer, inpainting) for this asset.
-    # The frontend may override this per-slot without mutating the base
-    # template definition; the value here is the resolved (overridden) one.
     image_prompt: str = ""
 
 
 class CompositionTemplate(BaseModel):
-    """Deterministic layout description shared by forward + reverse paths.
+    """Deterministic layout description (spatial + temporal v2).
 
     Forward:  layout_context (grid) -> LayoutResolver -> CompositionTemplate
     Reverse:  decomposed成品 -> CompositionTemplate (future)
@@ -103,6 +90,7 @@ class CompositionTemplate(BaseModel):
     grid_cols: int = 120
     grid_rows: int = 160
     slots: list[LayoutSlot] = Field(default_factory=list)
+    total_duration_s: float = 6.0  # v2: video duration
 
 
 class ToolName(str, Enum):

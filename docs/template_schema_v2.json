@@ -1,0 +1,320 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Live Photo Agent — Collage Template Schema v2",
+  "description": "Template definition with spatial + temporal dimensions. This is the contract between external template authors and the Live Photo Agent.",
+  "type": "object",
+  "required": ["id", "name", "total_duration_s", "canvas_width", "canvas_height", "slots"],
+  "properties": {
+    "id": {
+      "type": "string",
+      "description": "Unique template identifier, e.g. 'T01', 'm16_image_led_cover'",
+      "examples": ["T01", "m16_image_led_cover", "custom_3panel_sequential"]
+    },
+    "name": {
+      "type": "string",
+      "description": "Human-readable template name",
+      "examples": ["三格竖排", "M16 全图封面"]
+    },
+    "description": {
+      "type": "string",
+      "description": "Template description for VLM understanding",
+      "default": ""
+    },
+    "style": {
+      "type": "string",
+      "description": "Visual style category",
+      "enum": ["editorial", "social", "minimal", "cinematic"],
+      "default": "editorial"
+    },
+    "board": {
+      "type": "string",
+      "description": "Target platform (xhs = 小红书, etc.)",
+      "default": "xhs"
+    },
+    "total_duration_s": {
+      "type": "number",
+      "description": "Total video duration in seconds. All slot time windows must be within [0, total_duration_s].",
+      "minimum": 0.5,
+      "maximum": 60.0,
+      "examples": [6.0, 3.0, 10.0]
+    },
+    "canvas_width": {
+      "type": "integer",
+      "description": "Canvas width in pixels",
+      "default": 1080
+    },
+    "canvas_height": {
+      "type": "integer",
+      "description": "Canvas height in pixels",
+      "default": 1440
+    },
+    "layout_type": {
+      "type": "string",
+      "description": "Spatial layout type",
+      "enum": ["vertical", "horizontal", "grid", "free"],
+      "default": "free"
+    },
+    "needs_segmentation": {
+      "type": "boolean",
+      "description": "Whether this template requires subject segmentation (Mask2Former + Cutie). If false, uses direct stacking.",
+      "default": false
+    },
+    "slots": {
+      "type": "array",
+      "description": "Ordered list of slots. Each slot defines spatial placement + temporal window for one asset.",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": ["start_time_s", "end_time_s"],
+        "properties": {
+          "slot_id": {
+            "type": "string",
+            "description": "Slot identifier within the template",
+            "default": ""
+          },
+          "subject_required": {
+            "type": "boolean",
+            "description": "Whether this slot requires a subject (vs background). Used for template matching.",
+            "default": false
+          },
+          "position_preference": {
+            "type": "string",
+            "description": "Preferred position on canvas (for template matching)",
+            "enum": ["upper", "middle", "lower", "left", "right", "any"],
+            "default": "any"
+          },
+          "bg_region": {
+            "type": "string",
+            "description": "Background region for this slot",
+            "enum": ["top_third", "middle_third", "bottom_third", "left_third", "right_third", "full"],
+            "default": "full"
+          },
+          "grid_x": {
+            "type": "integer",
+            "description": "Grid x position (0-119, grid is 120 cols). Used for free layout.",
+            "minimum": 0,
+            "maximum": 119,
+            "default": 0
+          },
+          "grid_y": {
+            "type": "integer",
+            "description": "Grid y position (0-159, grid is 160 rows). Used for free layout.",
+            "minimum": 0,
+            "maximum": 159,
+            "default": 0
+          },
+          "grid_w": {
+            "type": "integer",
+            "description": "Grid width in cells. 0 means 'auto'",
+            "minimum": 0,
+            "maximum": 120,
+            "default": 0
+          },
+          "grid_h": {
+            "type": "integer",
+            "description": "Grid height in cells. 0 means 'auto'",
+            "minimum": 0,
+            "maximum": 160,
+            "default": 0
+          },
+          "z_index": {
+            "type": "integer",
+            "description": "Z-order index. Lower draws first (bottom), higher draws later (top).",
+            "default": 0,
+            "minimum": 0
+          },
+          "pin_to_top": {
+            "type": "boolean",
+            "description": "If true, this slot gets the highest z_index at resolve time.",
+            "default": false
+          },
+          "start_time_s": {
+            "type": "number",
+            "description": "Absolute start time in seconds. When this slot's asset appears on canvas.",
+            "minimum": 0,
+            "examples": [0.0, 1.5, 3.0]
+          },
+          "end_time_s": {
+            "type": "number",
+            "description": "Absolute end time in seconds. When this slot's asset disappears from canvas.",
+            "minimum": 0,
+            "examples": [6.0, 3.5, 6.0]
+          },
+          "enter_transition": {
+            "type": "object",
+            "description": "Transition when asset appears. If null, hard cut.",
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": ["fade", "slide_left", "slide_right", "slide_up", "slide_down", "zoom"],
+                "default": "fade"
+              },
+              "duration_ms": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 2000,
+                "default": 300
+              }
+            }
+          },
+          "exit_transition": {
+            "type": "object",
+            "description": "Transition when asset disappears. If null, hard cut.",
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": ["fade", "slide_left", "slide_right", "slide_up", "slide_down", "zoom"],
+                "default": "fade"
+              },
+              "duration_ms": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 2000,
+                "default": 300
+              }
+            }
+          },
+          "fill_mode": {
+            "type": "string",
+            "description": "How to handle asset shorter than (end_time_s - start_time_s)",
+            "enum": ["freeze", "loop", "trim", "stretch"],
+            "default": "freeze",
+            "enumDescriptions": {
+              "freeze": "Play once, then hold last frame until end_time_s",
+              "loop": "Loop the asset to fill the time window",
+              "trim": "Cut the asset to fit the time window",
+              "stretch": "Slow down playback to exactly fill the time window"
+            }
+          },
+          "image_prompt": {
+            "type": "string",
+            "description": "Image processing prompt for this slot (e.g. color enhancement, style transfer).",
+            "default": ""
+          },
+          "label": {
+            "type": "string",
+            "description": "Display label for this slot in the UI.",
+            "default": ""
+          }
+        }
+      }
+    }
+  },
+  "examples": [
+    {
+      "id": "T02_v2",
+      "name": "三格竖排（时序）",
+      "description": "三个素材上下排列，依次出现",
+      "total_duration_s": 6.0,
+      "canvas_width": 1440,
+      "canvas_height": 1920,
+      "layout_type": "vertical",
+      "needs_segmentation": false,
+      "slots": [
+        {
+          "subject_required": true,
+          "position_preference": "upper",
+          "bg_region": "top_third",
+          "start_time_s": 0.0,
+          "end_time_s": 6.0,
+          "enter_transition": {"type": "fade", "duration_ms": 300},
+          "exit_transition": null,
+          "fill_mode": "freeze"
+        },
+        {
+          "subject_required": false,
+          "position_preference": "middle",
+          "bg_region": "middle_third",
+          "start_time_s": 0.0,
+          "end_time_s": 6.0,
+          "enter_transition": {"type": "fade", "duration_ms": 300},
+          "exit_transition": null,
+          "fill_mode": "freeze"
+        },
+        {
+          "subject_required": true,
+          "position_preference": "lower",
+          "bg_region": "bottom_third",
+          "start_time_s": 0.0,
+          "end_time_s": 6.0,
+          "enter_transition": {"type": "fade", "duration_ms": 300},
+          "exit_transition": null,
+          "fill_mode": "freeze"
+        }
+      ]
+    },
+    {
+      "id": "sequential_3panel",
+      "name": "三格依次出现",
+      "description": "三个素材各占2秒，依次出现",
+      "total_duration_s": 6.0,
+      "canvas_width": 1080,
+      "canvas_height": 1440,
+      "layout_type": "vertical",
+      "needs_segmentation": false,
+      "slots": [
+        {
+          "position_preference": "upper",
+          "bg_region": "top_third",
+          "start_time_s": 0.0,
+          "end_time_s": 2.0,
+          "enter_transition": {"type": "fade", "duration_ms": 200},
+          "exit_transition": {"type": "fade", "duration_ms": 200},
+          "fill_mode": "trim"
+        },
+        {
+          "position_preference": "middle",
+          "bg_region": "middle_third",
+          "start_time_s": 2.0,
+          "end_time_s": 4.0,
+          "enter_transition": {"type": "slide_up", "duration_ms": 300},
+          "exit_transition": {"type": "fade", "duration_ms": 200},
+          "fill_mode": "trim"
+        },
+        {
+          "position_preference": "lower",
+          "bg_region": "bottom_third",
+          "start_time_s": 4.0,
+          "end_time_s": 6.0,
+          "enter_transition": {"type": "slide_up", "duration_ms": 300},
+          "exit_transition": {"type": "fade", "duration_ms": 200},
+          "fill_mode": "trim"
+        }
+      ]
+    },
+    {
+      "id": "overlap_dissolve",
+      "name": "交叉溶解",
+      "description": "两个素材空间不重叠，时间有1秒重叠交叉溶解",
+      "total_duration_s": 5.0,
+      "canvas_width": 1080,
+      "canvas_height": 1440,
+      "layout_type": "horizontal",
+      "needs_segmentation": false,
+      "slots": [
+        {
+          "grid_x": 0,
+          "grid_y": 0,
+          "grid_w": 60,
+          "grid_h": 160,
+          "start_time_s": 0.0,
+          "end_time_s": 3.0,
+          "enter_transition": {"type": "fade", "duration_ms": 300},
+          "exit_transition": {"type": "fade", "duration_ms": 500},
+          "fill_mode": "freeze"
+        },
+        {
+          "grid_x": 60,
+          "grid_y": 0,
+          "grid_w": 60,
+          "grid_h": 160,
+          "start_time_s": 2.0,
+          "end_time_s": 5.0,
+          "enter_transition": {"type": "fade", "duration_ms": 500},
+          "exit_transition": {"type": "fade", "duration_ms": 300},
+          "fill_mode": "freeze"
+        }
+      ]
+    }
+  ]
+}

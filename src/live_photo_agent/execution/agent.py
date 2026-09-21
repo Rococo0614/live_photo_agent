@@ -346,7 +346,7 @@ class LivePhotoAgent:
             required_context=["planner_backend_config"],
             need_clarification=True,
             clarification_questions=[
-                "请先配置规划后端：设置 LPA_QWEN_ENDPOINT（远端）或 LPA_LOCAL_MODEL_DIR（本地模型）后再重试。"
+                "请先配置本地规划模型：设置 LPA_LOCAL_MODEL_DIR 指向本地 Qwen2.5-7B-Instruct 模型目录后再重试。"
             ],
             blocking_missing_info=[message],
             tool_calls=[],
@@ -368,7 +368,7 @@ class LivePhotoAgent:
             context=self._serialize_context(context),
             tool_results=[],
             final_response=(
-                "规划大脑当前不可用，未执行任何工具。请先配置 LPA_QWEN_ENDPOINT 或 LPA_LOCAL_MODEL_DIR 后再试。"
+                "规划大脑当前不可用，未执行任何工具。请先配置 LPA_LOCAL_MODEL_DIR 指向本地 Qwen2.5-7B-Instruct 模型目录后再试。"
             ),
             memory_updates=[],
             review="",
