@@ -206,6 +206,19 @@ class L2VerticalTools:
         template_id = str(call.arguments.get("template_id", ""))
         template_slots = call.arguments.get("template_slots", [])
 
+        # DST slot inheritance: resolve asset_ids to file paths
+        if not asset_paths:
+            asset_ids = call.arguments.get("asset_ids", []) or call.arguments.get("selected_asset_ids", [])
+            if not asset_ids:
+                # Try dialog_state from context
+                dialog_state = context.get("dialog_state", {})
+                if isinstance(dialog_state, dict):
+                    asset_ids = dialog_state.get("last_asset_ids", [])
+            if asset_ids:
+                library_root = Path(str(call.arguments.get("library_root", context.get("library_root", "data/live_photo"))))
+                asset_paths = self._resolve_asset_paths(asset_ids, library_root)
+                print(f"  [template_collage] Resolved {len(asset_paths)} paths from asset_ids: {asset_ids}")
+
         if not asset_paths:
             assets = self._preferred_assets(context)
             asset_paths = [str(a.image_path) for a in assets]
@@ -356,7 +369,7 @@ class L2VerticalTools:
             t = fi / fps  # current time in seconds
             canvas = np.zeros((canvas_h, canvas_w, 3), dtype=np.uint8)
 
-            for idx, (p, frames) in enumerate(zip(caps, asset_frames)):
+            for idx, ((p, _cap), frames) in enumerate(zip(caps, asset_frames)):
                 start_s = p["start_s"]
                 end_s = p["end_s"]
 
@@ -486,6 +499,19 @@ class L2VerticalTools:
             return matched
         return self._get_assets(context)
 
+    def _resolve_asset_paths(self, asset_ids: list[str], library_root: Path) -> list[str]:
+        """Resolve asset_ids to mp4 file paths in the library."""
+        paths = []
+        for aid in asset_ids:
+            mp4 = library_root / f"{aid}.mp4"
+            if mp4.exists():
+                paths.append(str(mp4))
+                continue
+            jpg = library_root / f"{aid}.jpg"
+            if jpg.exists():
+                paths.append(str(jpg))
+        return paths
+
     # ------------------------------------------------------------------
     # Smart Collage: search + template match + composition
     # ------------------------------------------------------------------
@@ -578,15 +604,27 @@ class L2VerticalTools:
 
         print(f"  [smart_collage] Index loaded: {len(index_rows)} assets")
 
-        # Step 0b: Search K assets
-        searcher = AssetSearcher(index_rows=index_rows, db_path=str(db_path))
-        results = searcher.search(query, k=k, require_video=True)
-        print(f"  [smart_collage] Search '{query}' → {len(results)} results")
-        for r in results:
-            print(f"    {r['asset_id']}: score={r['score']:.3f} summary={r.get('content_summary', '')[:50]}")
-
-        # 释放搜索模型, 回收 GPU 显存 (防止后续 collage pipeline OOM)
-        searcher.release_embedder()
+        # Step 0b: Search K assets — or use pre-selected assets from DST (refine intent)
+        pre_selected = call.arguments.get("asset_ids", []) or call.arguments.get("selected_asset_ids", [])
+        if pre_selected:
+            # DST slot inheritance: skip search, use pre-selected assets directly
+            print(f"  [smart_collage] Using {len(pre_selected)} pre-selected assets (DST inheritance)")
+            results = [r for r in index_rows if r.get("asset_id") in pre_selected]
+            # Reorder to match the pre_selected order
+            results = sorted(results, key=lambda r: pre_selected.index(r["asset_id"]) if r["asset_id"] in pre_selected else 999)
+            # Limit to k
+            results = results[:k]
+            print(f"  [smart_collage] Pre-selected → {len(results)} results")
+            for r in results:
+                print(f"    {r.get('asset_id', '?')}: score=N/A (pre-selected) summary={r.get('content_summary', '')[:50]}")
+        else:
+            searcher = AssetSearcher(index_rows=index_rows, db_path=str(db_path))
+            results = searcher.search(query, k=k, require_video=True)
+            print(f"  [smart_collage] Search '{query}' → {len(results)} results")
+            for r in results:
+                print(f"    {r['asset_id']}: score={r['score']:.3f} summary={r.get('content_summary', '')[:50]}")
+            # 释放搜索模型, 回收 GPU 显存
+            searcher.release_embedder()
 
         if not results:
             return ToolResult(
@@ -773,7 +811,9 @@ class L2VerticalTools:
                 )
             final_video = collage_result.payload.get("final_video", "")
         except Exception as e:
+            import traceback
             print(f"  [smart_collage] Collage failed: {e}")
+            traceback.print_exc()
             final_video = ""
 
         # Save recommendations

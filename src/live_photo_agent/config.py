@@ -32,6 +32,7 @@ class Settings(BaseSettings):
     vlm_model_dir: Path | None = None
     vlm_device: str = "cuda"
     vlm_dtype: str = "float16"
+    vlm_quantization: str = "nf4"
     vlm_max_new_tokens: int = 256
 
     # Diffusion (生图): 本地 diffusion 模型, 预留接口

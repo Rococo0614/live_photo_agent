@@ -561,86 +561,103 @@ class QwenPlanner:
             }
             for spec in TOOL_SPECS
         ]
+        messages: list[dict[str, str]] = [
+            {
+                "role": "system",
+                "content": (
+                    "You are the planning brain of a live photo agent.\n"
+                    "\n"
+                    "## Intent Labels\n"
+                    "You must pick one of these exact intent labels:\n"
+                    "- smart_collage: User wants a 3-panel collage from searched assets (三拼, 拼贴, 三格)\n"
+                    "- template_collage: User wants a specific layout collage (左右拼, 上下拼, 横排, 竖排)\n"
+                    "- triptych_export: User wants to export a triptych video (导出, 三拼导出)\n"
+                    "- subject_overlay_composite: User wants to cut out a subject and overlay it (抠图, 叠加, 抠出来贴到)\n"
+                    "- search_only: User only wants to search/browse assets (找, 看看, 有没有, 选)\n"
+                    "- conversation: User is chatting, asking questions, or greeting (你好, 你能做什么, 谢谢)\n"
+                    "\n"
+                    "## Key Tool Selection Rules\n"
+                    "- '三拼XXX' → smart_collage (query=XXX, k=3). Do NOT also call search_by_text — smart_collage does its own search internally.\n"
+                    "- '左右拼/上下拼' with selected assets → template_collage\n"
+                    "- '导出' → triptych_export (scan_library → concat_clips → export_mp4)\n"
+                    "- '抠图/叠加' → subject_overlay_composite\n"
+                    "- '找/有没有/看看' → search_by_text only\n"
+                    "- '你好/谢谢/你能做什么' → conversation (no tools)\n"
+                    "- For smart_collage, the tool_calls should be: [{tool:scan_library}, {tool:smart_collage, query:XXX, k:3}]. Nothing else.\n"
+                    "\n"
+                    "## Output Rules\n"
+                    "- Return ONLY valid JSON matching the ExecutionPlan schema.\n"
+                    "- intent MUST be one of the exact labels above (not a description).\n"
+                    "- Plan only the tools required; never enumerate the whole catalog.\n"
+                    "- Every tool_calls[].arguments must be concrete values (not null, '' or {}).\n"
+                    "- smart_collage is a complete pipeline: search + template match + VLM score + compose. Do NOT decompose it into L0 tools.\n"
+                    "- No prose, no markdown, no code fences.\n"
+                    "\n"
+                    "## Examples\n"
+                    '{"user_goal":"三拼小猫","intent":"smart_collage","selected_asset_ids":[],"required_context":[],"need_clarification":false,"clarification_questions":[],"blocking_missing_info":[],"tool_calls":[{"tool":"scan_library","reason":"scan","arguments":{}},{"tool":"smart_collage","reason":"search and collage","arguments":{"query":"小猫","k":3}}]}\n'
+                    '{"user_goal":"你好","intent":"conversation","selected_asset_ids":[],"required_context":[],"need_clarification":false,"clarification_questions":[],"blocking_missing_info":[],"tool_calls":[]}\n'
+                    '{"user_goal":"三拼导出","intent":"triptych_export","selected_asset_ids":[],"required_context":[],"need_clarification":false,"clarification_questions":[],"blocking_missing_info":[],"tool_calls":[{"tool":"scan_library","reason":"scan","arguments":{}},{"tool":"concat_clips","reason":"build timeline","arguments":{}},{"tool":"export_mp4","reason":"export","arguments":{}}]}\n'
+                    '{"user_goal":"换个模板","intent":"smart_collage","selected_asset_ids":["cat_1","cat_2","cat_3"],"required_context":[],"need_clarification":false,"clarification_questions":[],"blocking_missing_info":[],"tool_calls":[{"tool":"smart_collage","reason":"reuse pre-selected assets, change template","arguments":{"query":"cat","k":3,"asset_ids":["cat_1","cat_2","cat_3"],"exclude_template_id":"T07"}}]}\n'
+                    "\n"
+                    "## Slot Inheritance\n"
+                    "If selected_asset_ids is non-empty, the user has already chosen assets (possibly from a previous turn via dialog state tracking). In this case:\n"
+                    "- For smart_collage: still call scan_library + smart_collage, but smart_collage will use the pre-selected assets instead of searching.\n"
+                    "- For template_collage: use the pre-selected assets directly with the requested template.\n"
+                    "- Do NOT call search_by_text when selected_asset_ids is already provided.\n"
+                ),
+            },
+        ]
+
+        # Insert conversation history between system and current user message
+        history = request.conversation_history or []
+        if history:
+            for turn in history[-6:]:  # last 3 turns (user+assistant = 6 messages)
+                if isinstance(turn, dict):
+                    role = str(turn.get("role", "user"))
+                    text = str(turn.get("text", ""))
+                    if text:
+                        messages.append({"role": role, "content": text})
+
+        messages.append({
+            "role": "user",
+            "content": json.dumps({
+                "request": {
+                    "text": request.text,
+                    "selected_asset_ids": request.selected_asset_ids,
+                    "guided_tool_names": [tool.value for tool in request.guided_tool_names],
+                    "library_root": str(request.library_root),
+                    "input_video_paths": [str(p) for p in request.input_video_paths],
+                    "input_image_paths": [str(p) for p in request.input_image_paths],
+                    "layout_context": request.layout_context,
+                    "layout_assets": layout_assets,
+                    "edit_directives": edit_directives,
+                    "has_canvas_edits": bool(edit_directives),
+                    "operation_log": request.operation_log,
+                },
+                "library_summary": library_summary,
+                "tool_catalog": tool_catalog,
+                "execution_plan_schema": {
+                    "user_goal": "string",
+                    "intent": "string (must be one of: smart_collage, template_collage, triptych_export, subject_overlay_composite, search_only, conversation)",
+                    "selected_asset_ids": ["string"],
+                    "required_context": ["string"],
+                    "need_clarification": "boolean(default=false)",
+                    "clarification_questions": ["string"],
+                    "blocking_missing_info": ["string"],
+                    "tool_calls": [
+                        {
+                            "tool": tool_choices,
+                            "reason": "string",
+                            "arguments": {"key": "value"},
+                        }
+                    ],
+                },
+            }, ensure_ascii=False),
+        })
+
         return {
             "response_format": {"type": "json_object"},
-            "messages": [
-                {
-                    "role": "system",
-                    "content": (
-                        "You are the planning brain of a live photo agent.\n"
-                        "\n"
-                        "## Intent Labels\n"
-                        "You must pick one of these exact intent labels:\n"
-                        "- smart_collage: User wants a 3-panel collage from searched assets (三拼, 拼贴, 三格)\n"
-                        "- template_collage: User wants a specific layout collage (左右拼, 上下拼, 横排, 竖排)\n"
-                        "- triptych_export: User wants to export a triptych video (导出, 三拼导出)\n"
-                        "- subject_overlay_composite: User wants to cut out a subject and overlay it (抠图, 叠加, 抠出来贴到)\n"
-                        "- search_only: User only wants to search/browse assets (找, 看看, 有没有, 选)\n"
-                        "- conversation: User is chatting, asking questions, or greeting (你好, 你能做什么, 谢谢)\n"
-                        "\n"
-                        "## Key Tool Selection Rules\n"
-                        "- '三拼XXX' → smart_collage (query=XXX, k=3). Do NOT also call search_by_text — smart_collage does its own search internally.\n"
-                        "- '左右拼/上下拼' with selected assets → template_collage\n"
-                        "- '导出' → triptych_export (scan_library → concat_clips → export_mp4)\n"
-                        "- '抠图/叠加' → subject_overlay_composite\n"
-                        "- '找/有没有/看看' → search_by_text only\n"
-                        "- '你好/谢谢/你能做什么' → conversation (no tools)\n"
-                        "- For smart_collage, the tool_calls should be: [{tool:scan_library}, {tool:smart_collage, query:XXX, k:3}]. Nothing else.\n"
-                        "\n"
-                        "## Output Rules\n"
-                        "- Return ONLY valid JSON matching the ExecutionPlan schema.\n"
-                        "- intent MUST be one of the exact labels above (not a description).\n"
-                        "- Plan only the tools required; never enumerate the whole catalog.\n"
-                        "- Every tool_calls[].arguments must be concrete values (not null, '' or {}).\n"
-                        "- smart_collage is a complete pipeline: search + template match + VLM score + compose. Do NOT decompose it into L0 tools.\n"
-                        "- No prose, no markdown, no code fences.\n"
-                        "\n"
-                        "## Examples\n"
-                        '{"user_goal":"三拼小猫","intent":"smart_collage","selected_asset_ids":[],"required_context":[],"need_clarification":false,"clarification_questions":[],"blocking_missing_info":[],"tool_calls":[{"tool":"scan_library","reason":"scan","arguments":{}},{"tool":"smart_collage","reason":"search and collage","arguments":{"query":"小猫","k":3}}]}\n'
-                        '{"user_goal":"你好","intent":"conversation","selected_asset_ids":[],"required_context":[],"need_clarification":false,"clarification_questions":[],"blocking_missing_info":[],"tool_calls":[]}\n'
-                        '{"user_goal":"三拼导出","intent":"triptych_export","selected_asset_ids":[],"required_context":[],"need_clarification":false,"clarification_questions":[],"blocking_missing_info":[],"tool_calls":[{"tool":"scan_library","reason":"scan","arguments":{}},{"tool":"concat_clips","reason":"build timeline","arguments":{}},{"tool":"export_mp4","reason":"export","arguments":{}}]}\n'
-                    ),
-                },
-                {
-                    "role": "user",
-                    "content": json.dumps(
-                        {
-                            "request": {
-                                "text": request.text,
-                                "selected_asset_ids": request.selected_asset_ids,
-                                "guided_tool_names": [tool.value for tool in request.guided_tool_names],
-                                "library_root": str(request.library_root),
-                                "input_video_paths": [str(p) for p in request.input_video_paths],
-                                "input_image_paths": [str(p) for p in request.input_image_paths],
-                                "layout_context": request.layout_context,
-                                "layout_assets": layout_assets,
-                                "edit_directives": edit_directives,
-                                "has_canvas_edits": bool(edit_directives),
-                                "operation_log": request.operation_log,
-                            },
-                            "library_summary": library_summary,
-                            "tool_catalog": tool_catalog,
-                            "execution_plan_schema": {
-                                "user_goal": "string",
-                                "intent": "string (must be one of: smart_collage, template_collage, triptych_export, subject_overlay_composite, search_only, conversation)",
-                                "selected_asset_ids": ["string"],
-                                "required_context": ["string"],
-                                "need_clarification": "boolean(default=false)",
-                                "clarification_questions": ["string"],
-                                "blocking_missing_info": ["string"],
-                                "tool_calls": [
-                                    {
-                                        "tool": tool_choices,
-                                        "reason": "string",
-                                        "arguments": {"key": "value"},
-                                    }
-                                ],
-                            },
-                        },
-                        ensure_ascii=False,
-                    ),
-                },
-            ],
+            "messages": messages,
         }
 
     def _extract_layout_assets(self, layout_context: list[dict[str, object]]) -> list[dict[str, object]]:

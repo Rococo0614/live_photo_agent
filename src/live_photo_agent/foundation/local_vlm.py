@@ -5,6 +5,7 @@
 
 模型: Qwen2.5-VL-7B-Instruct (默认)，通过 LPA_VLM_MODEL_DIR 配置。
 按需加载，使用完毕后由调用方释放 (release_runtime)。
+支持 NF4 int4 量化 (~5GB VRAM) 或 fp16 (~15GB VRAM)。
 """
 from __future__ import annotations
 
@@ -56,14 +57,37 @@ def get_runtime() -> LocalVLMRuntime:
     dtype = dtype_map.get(dtype_raw, torch.float16)
 
     model_path = Path(model_dir)
-    print(f"  [local_vlm] Loading VLM from {model_path} (dtype={dtype_raw})...")
+    quantization = settings.vlm_quantization.strip().lower() if hasattr(settings, "vlm_quantization") else "none"
+    print(f"  [local_vlm] Loading VLM from {model_path} (dtype={dtype_raw}, quantization={quantization})...")
 
     processor = AutoProcessor.from_pretrained(str(model_path), trust_remote_code=True)
+
+    # NF4 int4 quantization (same as planner)
+    quant_config = None
+    if quantization in ("4bit", "nf4", "bitsandbytes", "int4"):
+        from transformers import BitsAndBytesConfig
+        quant_config = BitsAndBytesConfig(
+            load_in_4bit=True,
+            bnb_4bit_compute_dtype=dtype,
+            bnb_4bit_quant_type="nf4",
+            bnb_4bit_use_double_quant=True,
+            bnb_4bit_quant_storage=torch.uint8,
+        )
+        load_kwargs = {
+            "quantization_config": quant_config,
+            "device_map": settings.vlm_device,
+            "trust_remote_code": True,
+        }
+    else:
+        load_kwargs = {
+            "torch_dtype": dtype,
+            "device_map": settings.vlm_device,
+            "trust_remote_code": True,
+        }
+
     model = AutoModelForImageTextToText.from_pretrained(
         str(model_path),
-        dtype=dtype,
-        device_map=settings.vlm_device,
-        trust_remote_code=True,
+        **load_kwargs,
     )
 
     _runtime = LocalVLMRuntime(model=model, processor=processor)

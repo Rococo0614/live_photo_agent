@@ -1025,6 +1025,7 @@
   </style>
 </head>
 <body>
+    <div id="debug-bar" style="position:fixed;top:0;left:0;right:0;z-index:9999;background:#1a1a2e;color:#0f0;font-size:11px;padding:2px 8px;font-family:monospace;pointer-events:none;"></div>
   <div class="shell">
     <section class="hero">
       <div class="panel hero-copy">
@@ -1069,42 +1070,7 @@
         <div id="albumList" class="album-list"></div>
 
         <details class="config-panel">
-          <summary class="section-title" style="margin: 0; cursor: pointer;">大脑配置</summary>
-          <div class="field" style="margin: 0;">
-            <label for="plannerBackendSelect">Backend</label>
-            <select id="plannerBackendSelect">
-              <option value="auto">auto</option>
-              <option value="endpoint">endpoint</option>
-              <option value="local_hf">local_hf</option>
-            </select>
-          </div>
-          <div class="field" style="margin: 0;">
-            <label for="plannerModelInput">Model</label>
-            <input id="plannerModelInput" placeholder="Qwen/Qwen3-VL-8B">
-          </div>
-          <div class="field" style="margin: 0;">
-            <label for="plannerEndpointInput">Endpoint URL</label>
-            <input id="plannerEndpointInput" placeholder="https://.../chat/completions">
-          </div>
-          <div class="field" style="margin: 0;">
-            <label for="plannerTokenInput">Endpoint Token</label>
-            <input id="plannerTokenInput" type="password" placeholder="可选，留空不改">
-            <small id="plannerTokenHint" style="opacity:.8"></small>
-          </div>
-          <div class="field" style="margin: 0;">
-            <label for="plannerWorkspaceInput">Workspace ID</label>
-            <input id="plannerWorkspaceInput" placeholder="可选">
-          </div>
-          <div class="config-inline">
-            <div class="field" style="margin: 0;">
-              <label for="plannerTimeoutInput">Timeout(s)</label>
-              <input id="plannerTimeoutInput" type="number" step="1" min="1" placeholder="60">
-            </div>
-            <div class="field" style="margin: 0;">
-              <label for="plannerMaxTokensInput">Max New Tokens</label>
-              <input id="plannerMaxTokensInput" type="number" step="1" min="1" placeholder="384">
-            </div>
-          </div>
+          <summary class="section-title" style="margin: 0; cursor: pointer;">大脑配置 (本地 NF4)</summary>
           <div class="field" style="margin: 0;">
             <label for="plannerLocalModelDirInput">Local Model Dir</label>
             <input id="plannerLocalModelDirInput" placeholder="/path/to/local/model">
@@ -1118,6 +1084,10 @@
               <label for="plannerLocalDtypeInput">Local DType</label>
               <input id="plannerLocalDtypeInput" placeholder="float32/float16/bfloat16/auto">
             </div>
+          </div>
+          <div class="field" style="margin: 0;">
+            <label for="plannerMaxTokensInput">Max New Tokens</label>
+            <input id="plannerMaxTokensInput" type="number" step="1" min="1" placeholder="768">
           </div>
           <div class="controls">
             <button id="plannerApplyButton">应用配置</button>
@@ -1239,11 +1209,8 @@
           </div>
           <div class="controls" style="margin-top: 12px; display: flex; gap: 8px; align-items: center;">
             <select id="parseBackendSelect" style="padding: 8px 12px; border-radius: 8px; border: 1px solid var(--line-color); background: var(--card-bg); color: var(--text);">
-              <option value="dino_base">Grounding DINO Base (精准)</option>
-              <option value="dino">Grounding DINO Tiny (快速)</option>
-              <option value="cv">CV (快速版面检测)</option>
+              <option value="vlm">Qwen2.5-VL 本地 (通用)</option>
               <option value="dots_mocr">dots.mocr (版面检测)</option>
-              <option value="vlm">Qwen2.5-VL (通用)</option>
             </select>
             <button id="parseAnalyzeBtn" class="primary" type="button" disabled>解析版面</button>
           </div>
@@ -1398,6 +1365,16 @@
   </div>
 
   <script>
+    window.addEventListener('error', (e) => {
+      console.error('[GLOBAL ERROR]', e.message, 'at', e.filename + ':' + e.lineno + ':' + e.colno);
+      const dbg = document.getElementById('debug-bar');
+      if (dbg) dbg.textContent = `[ERROR] ${e.message} (${e.filename}:${e.lineno})`;
+    });
+    window.addEventListener('unhandledrejection', (e) => {
+      console.error('[UNHANDLED REJECTION]', e.reason);
+      const dbg = document.getElementById('debug-bar');
+      if (dbg) dbg.textContent = `[REJECTION] ${e.reason}`;
+    });
     const state = {
       bootstrap: null,
       selectedAssetIds: new Set(),
@@ -1448,13 +1425,6 @@
       libraryRootInput: document.getElementById('libraryRootInput'),
       albumSelect: document.getElementById('albumSelect'),
       albumList: document.getElementById('albumList'),
-      plannerBackendSelect: document.getElementById('plannerBackendSelect'),
-      plannerModelInput: document.getElementById('plannerModelInput'),
-      plannerEndpointInput: document.getElementById('plannerEndpointInput'),
-      plannerTokenInput: document.getElementById('plannerTokenInput'),
-      plannerTokenHint: document.getElementById('plannerTokenHint'),
-      plannerWorkspaceInput: document.getElementById('plannerWorkspaceInput'),
-      plannerTimeoutInput: document.getElementById('plannerTimeoutInput'),
       plannerMaxTokensInput: document.getElementById('plannerMaxTokensInput'),
       plannerLocalModelDirInput: document.getElementById('plannerLocalModelDirInput'),
       plannerLocalDeviceInput: document.getElementById('plannerLocalDeviceInput'),
@@ -1551,6 +1521,7 @@
     };
 
     let customTemplates = [];
+    let v2Templates = [];
     let parseImageBase64 = '';
     let parseLayoutItems = [];
     let parseActiveSlotId = '';
@@ -1762,32 +1733,15 @@
 
     function populatePlannerConfigForm(config) {
       const data = config ?? {};
-      els.plannerBackendSelect.value = data.planner_backend ?? 'auto';
-      els.plannerModelInput.value = data.qwen_model ?? '';
-      els.plannerEndpointInput.value = data.qwen_endpoint ?? '';
-      els.plannerTokenInput.value = '';
-      els.plannerWorkspaceInput.value = data.qwen_workspace_id ?? '';
-      els.plannerTimeoutInput.value = data.qwen_timeout_seconds ?? '';
       els.plannerMaxTokensInput.value = data.local_max_new_tokens ?? '';
       els.plannerLocalModelDirInput.value = data.local_model_dir ?? '';
       els.plannerLocalDeviceInput.value = data.local_device ?? '';
       els.plannerLocalDtypeInput.value = data.local_dtype ?? '';
 
-      // token 框留空是常态：若已通过 LPA_QWEN_AUTH_TOKEN 或 DASHSCOPE_API_KEY
-      // 等环境变量配置，这里只提示，不回显明文，避免用户误以为没生效而重填。
-      if (data.qwen_auth_token_configured && els.plannerTokenHint) {
-        els.plannerTokenHint.textContent = '（已通过环境变量配置，无需填写；留空即沿用）';
-        els.plannerTokenHint.style.color = '#3a7d44';
-      } else if (els.plannerTokenHint) {
-        els.plannerTokenHint.textContent = '（留空则使用 LPA_QWEN_AUTH_TOKEN / DASHSCOPE_API_KEY 环境变量）';
-        els.plannerTokenHint.style.color = '';
-      }
-
       els.plannerConfigPreview.textContent = JSON.stringify({
         runtime_info: data.runtime_info,
-        qwen_endpoint: data.qwen_endpoint,
-        qwen_auth_token_configured: data.qwen_auth_token_configured,
         local_model_dir: data.local_model_dir,
+        local_quantization: data.local_quantization,
       }, null, 2);
     }
 
@@ -1804,26 +1758,13 @@
 
     async function applyPlannerConfig() {
       const payload = {
-        planner_backend: els.plannerBackendSelect.value,
-        qwen_model: els.plannerModelInput.value.trim(),
-        qwen_endpoint: els.plannerEndpointInput.value.trim(),
-        qwen_workspace_id: els.plannerWorkspaceInput.value.trim(),
         local_model_dir: els.plannerLocalModelDirInput.value.trim(),
         local_device: els.plannerLocalDeviceInput.value.trim(),
         local_dtype: els.plannerLocalDtypeInput.value.trim(),
       };
-      const timeout = Number(els.plannerTimeoutInput.value);
       const maxTokens = Number(els.plannerMaxTokensInput.value);
-      if (!Number.isNaN(timeout) && timeout > 0) {
-        payload.qwen_timeout_seconds = timeout;
-      }
       if (!Number.isNaN(maxTokens) && maxTokens > 0) {
         payload.local_max_new_tokens = maxTokens;
-      }
-
-      const token = els.plannerTokenInput.value.trim();
-      if (token) {
-        payload.qwen_auth_token = token;
       }
 
       const response = await fetch('/api/ui/planner-config', {
@@ -3243,7 +3184,6 @@
     }
 
     // v2: 从后端 /api/templates 加载带时间窗口的模板
-    let v2Templates = [];
     async function loadV2TemplatesAsync() {
       try {
         const resp = await fetch('/api/templates');
@@ -3292,9 +3232,10 @@
         els.viewGenerateBtn.classList.add('active');
       }
     }
-    els.viewGenerateBtn.addEventListener('click', () => switchView('generate'));
-    els.viewParseBtn.addEventListener('click', () => switchView('parse'));
-    els.viewChatBtn.addEventListener('click', () => switchView('chat'));
+    els.viewGenerateBtn.addEventListener('click', () => { console.log('[CLICK] generate'); switchView('generate'); });
+    els.viewParseBtn.addEventListener('click', () => { console.log('[CLICK] parse'); switchView('parse'); });
+    els.viewChatBtn.addEventListener('click', () => { console.log('[CLICK] chat'); switchView('chat'); });
+    console.log('[INIT] view tab listeners bound OK');
 
     // --- Smart Collage Chat ---
     function addChatMessage(text, type) {
@@ -3476,14 +3417,17 @@
         // 记录对话历史，让下一次请求有上下文
         let historyEntry = { role: 'user', text: query };
         if (intent !== 'conversation' && toolCalls.length > 0) {
-          // 记录工具执行结果
+          // 记录工具执行结果，特别是搜索到的 asset_ids
           const tr = toolResults.find(t => t.tool === 'smart_collage');
           if (tr && tr.success) {
             const p = tr.payload || {};
+            const searchResults = p.search_results || [];
             historyEntry.result = {
               intent: intent,
               final_video: p.final_video || finalVideo || '',
               selected_template: p.selected_template || {},
+              asset_ids: searchResults.map(r => r.asset_id),
+              query: p.selected_template?.query || query,
             };
           }
         }
@@ -3518,8 +3462,8 @@
 
     // --- Template parsing ---
     function loadCustomTemplates() {
-      fetch('/api/template/list').then(r => r.json()).then(data => {
-        customTemplates = data.templates || [];
+      fetch('/api/templates').then(r => r.json()).then(data => {
+        customTemplates = (data.templates || []).filter(t => t.style === 'custom');
         renderCustomTemplateList();
       }).catch(() => {
         customTemplates = [];

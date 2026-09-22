@@ -10,6 +10,7 @@ from ..foundation import LibraryService, MemoryService
 from ..foundation.layout_resolver import LayoutResolver
 from ..foundation.state import FoundationLayer
 from ..models import AgentRequest, AgentResponse, ExecutionPlan, ToolCall, ToolName, ToolResult
+from .dialog_state import DialogState, is_refine_intent
 from .flow import InputFlowLayer
 from .input_preprocessor import InputPreprocessor
 from .langgraph_runner import PlannerGraphRunner, PlannerUnavailableError
@@ -31,11 +32,26 @@ class LivePhotoAgent:
         self.input_flow_layer = InputFlowLayer()
         self.input_preprocessor = InputPreprocessor()
         self.graph_runner = PlannerGraphRunner(max_replans=1)
+        # Dialog state tracking: persists across turns within a session
+        self._dialog_state = DialogState()
 
     def execute(self, request: AgentRequest) -> AgentResponse:
         request_start = perf_counter()
         logger.info("[TIMER] execute start text=%r", str(request.text)[:80])
         request = self._apply_retry_feedback(request)
+
+        # --- Dialog State Tracking (DST) ---
+        # Detect refine intent and inject inherited slots BEFORE planner
+        is_refine = self._dialog_state.is_refine(str(request.text))
+        if is_refine:
+            inherited_ids = self._dialog_state.get_inherited_asset_ids()
+            if inherited_ids and not request.selected_asset_ids:
+                request.selected_asset_ids = inherited_ids
+                logger.info(
+                    "[DST] refine detected: inheriting %d asset_ids from previous turn",
+                    len(inherited_ids),
+                )
+        dialog_context = self._dialog_state.to_summary()
 
         tracer = get_tracer()
         with tracer.start_run(request) as trace:
@@ -73,6 +89,8 @@ class LivePhotoAgent:
                 "reusable_strategies": reusable_strategies,
                 "retry_of_run_id": request.retry_of_run_id,
                 "conversation_history": runtime_request.conversation_history,
+                "dialog_state": dialog_context,
+                "is_refine": is_refine,
             }
 
             graph_run_start = perf_counter()
@@ -183,6 +201,23 @@ class LivePhotoAgent:
 
             # Cleanup residual subject_mattes that weren't consumed by overlay.
             self._cleanup_residual_temp_files(context)
+
+            # --- Update Dialog State from this turn's results ---
+            tool_results_for_dst = [
+                {"payload": tr.payload if hasattr(tr, "payload") else tr.get("payload", {})}
+                for tr in tool_results
+            ]
+            self._dialog_state.last_query = str(runtime_request.text)
+            self._dialog_state.update_from_results(
+                plan_intent=plan.intent,
+                tool_results=tool_results_for_dst,
+            )
+            logger.info(
+                "[DST] state updated: intent=%s asset_ids=%d template=%s",
+                self._dialog_state.last_intent,
+                len(self._dialog_state.last_asset_ids),
+                self._dialog_state.last_template_id,
+            )
 
             response = AgentResponse(
                 plan=plan,
@@ -466,6 +501,8 @@ class LivePhotoAgent:
                     error_msg = payload["message"]
                 elif payload.get("error") and not payload.get("final_video"):
                     error_msg = payload["error"]
+            else:
+                logger.warning("Unexpected payload type for %s: %s", type(tr).__name__, type(payload).__name__)
 
         if final_video:
             return f"拼贴完成！视频已生成: {final_video}"

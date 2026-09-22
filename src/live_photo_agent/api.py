@@ -85,6 +85,21 @@ def health() -> dict[str, str]:
     return {"status": "ok"}
 
 
+@app.get("/api/dialog-state")
+def dialog_state() -> dict[str, object]:
+    """Debug endpoint: check DST state for multi-turn conversation."""
+    ds = agent._dialog_state
+    return {
+        "turn_count": ds.turn_count,
+        "last_intent": ds.last_intent,
+        "last_query": ds.last_query,
+        "last_asset_ids": ds.last_asset_ids,
+        "last_template_id": ds.last_template_id,
+        "last_template_name": ds.last_template_name,
+        "last_final_video": ds.last_final_video,
+    }
+
+
 @app.get("/api/templates")
 def list_templates() -> dict[str, object]:
     """List all available collage templates (v2: with time windows).
@@ -111,6 +126,29 @@ def get_template(template_id: str) -> dict[str, object]:
         from fastapi import HTTPException
         raise HTTPException(status_code=404, detail=f"Template '{template_id}' not found")
     return t.to_dict()
+
+
+class TemplateParseRequest(BaseModel):
+    image_base64: str
+    image_name: str = ""
+    grid_cols: int = 3
+    grid_rows: int = 4
+    backend: str = "vlm"
+
+
+@app.post("/api/template/parse")
+def parse_template(req: TemplateParseRequest) -> dict[str, object]:
+    """Parse an image into a template definition using local VLM."""
+    import base64
+    from .foundation.template_parser import parse_image_to_template
+    image_bytes = base64.b64decode(req.image_base64)
+    template = parse_image_to_template(
+        image_bytes,
+        image_name=req.image_name,
+        grid_cols=req.grid_cols,
+        grid_rows=req.grid_rows,
+    )
+    return {"template": template}
 
 
 @app.get("/", response_class=HTMLResponse)
@@ -172,6 +210,11 @@ def execute_agent(request: AgentRequest) -> AgentResponse:
     request.library_root = Path(request.library_root) if isinstance(request.library_root, str) else request.library_root
     request.input_image_paths = [Path(p) if isinstance(p, str) else p for p in request.input_image_paths]
     request.input_video_paths = [Path(p) if isinstance(p, str) else p for p in request.input_video_paths]
+    # Debug: log DST state and request info
+    ds = agent._dialog_state
+    is_refine = ds.is_refine(str(request.text))
+    print(f"  [API] text={request.text!r} selected_asset_ids={request.selected_asset_ids} "
+          f"is_refine={is_refine} dst_turns={ds.turn_count} dst_assets={len(ds.last_asset_ids)}")
     return agent.execute(request)
 
 
