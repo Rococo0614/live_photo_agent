@@ -34,6 +34,7 @@ class Settings(BaseSettings):
     vlm_dtype: str = "float16"
     vlm_quantization: str = "nf4"
     vlm_max_new_tokens: int = 256
+    vlm_template_score_candidate_limit: int = 3
 
     # Diffusion (生图): 本地 diffusion 模型, 预留接口
     diffusion_model_dir: Path | None = None

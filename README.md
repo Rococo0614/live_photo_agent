@@ -1,6 +1,14 @@
 # Live Photo Agent
 
-这是一个面向 Live Photo 场景的 Agent 项目，核心目标是把以下流程串起来：
+这是一个面向单用户本地设备的 Live Photo 助手。项目不是让大模型自由编排所有媒体工具，而是提供三条明确的工作流：
+
+1. **正向生成**：用户在画布中选择素材、套用模板并调整空间位置；后台严格按布局执行。
+2. **模板解析**：上传完整 Live Photo，解析空间布局和粗粒度时间窗口，保存为可复用模板。
+3. **智能拼贴**：自然语言搜索素材，从统一模板库中选择已有模板并生成；生成后可在当前会话中替换 slot 素材或更换模板。
+
+第一版只支持固定媒体处理（调色、调速、裁剪、稳定、主体抠像叠加等）。任意视频扩散、inpainting 和生成式改造暂不属于可执行能力。
+
+底层仍保留 Agent/工具接口，主要用于第三路的自然语言解析、素材检索和评测：
 
 1. 后台扫描相册中的所有 Live Photo 与用户选中的 Live Photo
 2. 接收用户文字输入，后续可扩展为语音转文字输入
@@ -9,16 +17,18 @@
 5. 按规划挑选工具并执行
 6. 生成结果、沉淀记忆、输出复盘
 
-当前实现同时支持 planner 评测、真实工具执行、以及图像质量打分扩展（CLIPIQA/MUSIQ）。
+当前实现同时支持本地 planner 评测、真实工具执行、统一模板库和图像质量打分扩展（CLIPIQA/MUSIQ）。
 
 ## 项目结构
 
 - `src/live_photo_agent/api.py`: FastAPI 入口
 - `src/live_photo_agent/orchestrator.py`: 主流程编排
-- `src/live_photo_agent/brain.py`: 规划大脑适配层（支持 endpoint/local_hf 可插拔后端）
+- `src/live_photo_agent/brain.py`: 本地规划大脑和第三路聊天命令解析
 - `src/live_photo_agent/tools.py`: 工具注册与执行
 - `src/live_photo_agent/library.py`: 相册扫描与素材索引
 - `src/live_photo_agent/memory.py`: 记忆与复盘
+- `src/live_photo_agent/foundation/retrieval/template_library.py`: 内置和自定义模板的唯一来源
+- `src/live_photo_agent/execution/direct_layout.py`: 第一路确定性布局执行器
 
 ## 快速开始
 
@@ -37,7 +47,7 @@ ffmpeg -encoders | grep libx264   # 无输出则需先安装
 conda env create -f environment.gpu.yml
 conda activate live-photo-agent
 
-# Option A2: conda CPU profile (无显卡机器 / 仅调用云端 endpoint)
+# Option A2: conda CPU profile (无显卡机器 / 本地 CPU 推理)
 conda env create -f environment.cpu.yml
 conda activate live-photo-agent-cpu
 
@@ -59,13 +69,12 @@ uvicorn live_photo_agent.api:app --reload
 ### 2) 环境说明
 
 - `environment.gpu.yml`（env 名 `live-photo-agent`）: 本地 GPU 推理，CUDA 12.8 wheel。
-- `environment.cpu.yml`（env 名 `live-photo-agent-cpu`）: 无显卡机器，CPU 推理与 endpoint 调用均可。
+- `environment.cpu.yml`（env 名 `live-photo-agent-cpu`）: 无显卡机器，CPU 推理。
 - 两个 profile 都固定了 `torch`/`torchvision` 兼容组合。
 - **CUDA 版本下限**：`torch` 必须是 **cu128 及以上**。Blackwell 显卡（RTX 50xx）算力为 `sm_120`，
   任何 cu121 wheel 都不含该架构，跑 CUDA kernel 会直接报
   `no kernel image is available for execution on the device`。
-- **transformers 版本下限**：加载 `Qwen/Qwen3-VL-8B`（见 `config.py` 的 `qwen_model`）
-  需要 **>=4.57**，`qwen3_vl` 架构在 4.57.0 才合入，更早版本会 `KeyError: 'qwen3_vl'`。
+- **transformers 版本下限**：本地 VLM 使用 Qwen2.5-VL 时，应使用与模型仓库兼容的 transformers 版本。
 - `ffmpeg` 不从 conda `defaults` 安装：该 channel 的构建剥离了 GPL 组件、不含 `libx264`，
   会导致 L0 的 trim/concat/export 失败。请用系统 ffmpeg 或 conda-forge 版本。
 - IQA 评测依赖（`pip install -e .[iqa]`）与新版 `torch` 可能冲突，需要时再单独安装。
@@ -126,7 +135,7 @@ python -m live_photo_agent.offline_preprocess_cli \
 预处理索引采用分层摘要：
 
 1. `technical_signals`：文件指纹、图片尺寸/亮度/清晰度、视频时长/FPS/编码等标准信息。
-2. `coarse_semantics` / `semantic_signals`：由 prompt-based VLM 语义分析器生成，包含场景、主体、动作、声音和可检索摘要；若配置 `LPA_VLM_ENDPOINT`，会把图片内容送给大模型并产出结构化语义。当前实现默认以端点推理为主，若端点不可用则保留基础摘要内容。
+2. `coarse_semantics` / `semantic_signals`：由本地量化 VLM 语义分析器生成，包含场景、主体、动作、声音和可检索摘要；模型按需加载，索引优先复用已有摘要。
 3. `provenance`：记录各层生产者和版本，支持按模型、Prompt 与资产指纹增量更新。
 
 相册重新扫描只刷新技术层；资产指纹未变化时会保留已有语义层，文件变化后则使旧语义结果失效。运行时检索会优先使用这些语义字段来匹配用户需求。
@@ -216,23 +225,11 @@ Notes:
   - `data/live_photo_decoded` (decoded jpg/mp4 pairs)
   - `data/repacked` (repacked outputs)
 
-## Planner backend (plug-and-play)
+## Local planner and VLM
 
-Planner supports two backends and can switch by environment variable:
+当前运行时只保留本地 Hugging Face 模型路径。Planner 和内容总结 VLM 分别按需加载，均支持 NF4 量化；模型路径和设备配置建议放在本地 `.env` 中，仓库只提交 `.env.example`。
 
-- `endpoint`: call remote/local HTTP inference endpoint.
-- `local_hf`: run local Hugging Face model directly in process.
-- `auto` (default): prefer endpoint when `LPA_QWEN_ENDPOINT` is set, otherwise use `local_hf` when `LPA_LOCAL_MODEL_DIR` is set.
-
-Endpoint mode example:
-
-```bash
-export LPA_PLANNER_BACKEND=endpoint
-export LPA_QWEN_ENDPOINT='http://127.0.0.1:8000/v1/chat/completions'
-export LPA_QWEN_MODEL='Qwen/Qwen3-4B-Instruct-2507'
-```
-
-Local HF mode example:
+Local HF example:
 
 ```bash
 export LPA_PLANNER_BACKEND=local_hf
@@ -240,8 +237,6 @@ export LPA_LOCAL_MODEL_DIR='/home/vivo/live_photo_agent/models/qwen/Qwen--Qwen3-
 export LPA_LOCAL_DEVICE=cpu
 export LPA_LOCAL_DTYPE=float32
 ```
-
-Both modes share the same planner contract and execution flow.
 
 ## IQA 质量评估（开源默认可用）
 

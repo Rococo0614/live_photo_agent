@@ -152,12 +152,20 @@ class AgentRequest(BaseModel):
     user_id: str
     text: str
     library_root: str | Path  # Accept both str and Path
+    # Request entry point.  The UI has three distinct workflows; keeping the
+    # mode explicit prevents a canvas request from being sent through the
+    # free-form planner used by the chat workflow.
+    mode: str = "agent"  # layout | chat | agent (legacy)
     selected_asset_ids: list[str] = Field(default_factory=list)
     guided_tool_names: list[ToolName] = Field(default_factory=list)
     input_image_paths: list[str | Path] = Field(default_factory=list)
     input_video_paths: list[str | Path] = Field(default_factory=list)
     layout_context: list[dict[str, object]] = Field(default_factory=list)
     operation_log: list[dict[str, object]] = Field(default_factory=list)
+    # Structured, whitelisted media operations extracted from natural
+    # language.  These are intentionally separate from planner tool_calls:
+    # the layout itself remains authoritative and is never re-planned.
+    processing_directives: list[dict[str, object]] = Field(default_factory=list)
     # Human-in-the-loop redo: set when resubmitting a rejected run. The planner
     # sees retry_feedback appended to the request text so it can correct course.
     retry_of_run_id: str = ""

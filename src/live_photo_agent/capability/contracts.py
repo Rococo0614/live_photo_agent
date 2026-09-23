@@ -284,7 +284,7 @@ TOOL_CONTRACTS: dict[ToolName, ToolContract] = {
             "Composite a previously extracted subject matte (context.subject_mattes) onto the "
             "current timeline/canvas at a chosen anchor position and scale."
         ),
-        allowed_arguments=("foreground_asset_id", "anchor", "scale", "x_offset", "y_offset", "fit_mode"),
+        allowed_arguments=("foreground_asset_id", "anchor", "scale", "x_offset", "y_offset", "fit_mode", "placement"),
         output_fields=("overlay_applied", "output_path"),
         preconditions=("context.timeline exists", "context.subject_mattes contains foreground_asset_id"),
         side_effects=("context.timeline overwritten", "context.subject_overlay overwritten", "writes composited video file"),
@@ -438,6 +438,7 @@ class CapabilityLayer:
                 "x_offset": "int(default=0)",
                 "y_offset": "int(default=0)",
                 "fit_mode": "string(default=loop, options=loop|trim)",
+                "placement": "object{left,top,width,height}%?",
             },
         }
         return schemas.get(tool, {})

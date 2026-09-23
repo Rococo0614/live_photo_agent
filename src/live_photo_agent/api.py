@@ -96,6 +96,8 @@ def dialog_state() -> dict[str, object]:
         "last_asset_ids": ds.last_asset_ids,
         "last_template_id": ds.last_template_id,
         "last_template_name": ds.last_template_name,
+        "last_assignment": ds.last_assignment,
+        "last_recommendations": ds.last_recommendations,
         "last_final_video": ds.last_final_video,
     }
 
@@ -129,7 +131,10 @@ def get_template(template_id: str) -> dict[str, object]:
 
 
 class TemplateParseRequest(BaseModel):
-    image_base64: str
+    # ``image_base64`` is kept for old clients.  New clients may upload a
+    # complete single-file Live Photo through ``media_base64``.
+    image_base64: str = ""
+    media_base64: str = ""
     image_name: str = ""
     grid_cols: int = 3
     grid_rows: int = 4
@@ -138,17 +143,60 @@ class TemplateParseRequest(BaseModel):
 
 @app.post("/api/template/parse")
 def parse_template(req: TemplateParseRequest) -> dict[str, object]:
-    """Parse an image into a template definition using local VLM."""
+    """Parse an image or a complete single-file Live Photo into a template."""
     import base64
+    import tempfile
+    from .capability.live_photo_cli import is_live_photo_container, unpack_motion_photo
     from .foundation.template_parser import parse_image_to_template
-    image_bytes = base64.b64decode(req.image_base64)
-    template = parse_image_to_template(
-        image_bytes,
-        image_name=req.image_name,
-        grid_cols=req.grid_cols,
-        grid_rows=req.grid_rows,
-    )
+
+    encoded = req.media_base64 or req.image_base64
+    if not encoded:
+        raise HTTPException(status_code=400, detail="media_base64 or image_base64 is required")
+    media_bytes = base64.b64decode(encoded)
+    suffix = Path(req.image_name or "upload.jpg").suffix or ".jpg"
+    video_path: Path | None = None
+    image_bytes = media_bytes
+    with tempfile.TemporaryDirectory(prefix="template-parse-") as tmp_dir:
+        raw_path = Path(tmp_dir) / f"input{suffix}"
+        raw_path.write_bytes(media_bytes)
+        if raw_path.suffix.lower() in {".jpg", ".jpeg"} and is_live_photo_container(raw_path):
+            unpacked_image, unpacked_video = unpack_motion_photo(raw_path, out_dir=Path(tmp_dir) / "unpacked")
+            image_bytes = unpacked_image.read_bytes()
+            video_path = unpacked_video
+        template = parse_image_to_template(
+            image_bytes,
+            image_name=req.image_name,
+            grid_cols=req.grid_cols,
+            grid_rows=req.grid_rows,
+            video_path=video_path,
+        )
     return {"template": template}
+
+
+class TemplateSaveRequest(BaseModel):
+    template: dict[str, object]
+
+
+@app.post("/api/template/save")
+def save_template(req: TemplateSaveRequest) -> dict[str, object]:
+    """Save a parsed/custom template into the shared local template library."""
+    from .foundation.retrieval.template_library import TemplateLibrary
+
+    try:
+        template = TemplateLibrary().save_template_dict(req.template)
+    except (TypeError, ValueError, KeyError) as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return {"template": template.to_dict()}
+
+
+@app.delete("/api/templates/{template_id}")
+def delete_template(template_id: str) -> dict[str, object]:
+    from .foundation.retrieval.template_library import TemplateLibrary
+
+    deleted = TemplateLibrary().delete_template(template_id)
+    if not deleted:
+        raise HTTPException(status_code=404, detail=f"Custom template '{template_id}' not found")
+    return {"deleted": template_id}
 
 
 @app.get("/", response_class=HTMLResponse)

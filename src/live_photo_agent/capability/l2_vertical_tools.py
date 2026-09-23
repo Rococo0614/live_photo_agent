@@ -526,6 +526,10 @@ class L2VerticalTools:
         k = int(call.arguments.get("k", 3))
         template_id = call.arguments.get("template_id")
         exclude_template_id = call.arguments.get("exclude_template_id")
+        requested_assignment = call.arguments.get("assignment", [])
+        replace_slot_index = call.arguments.get("replace_slot_index")
+        replace_query = str(call.arguments.get("replace_query", "")).strip()
+        replacement_asset_id = ""
         # All intermediate/output files go to .agent_work, NOT the library
         from ..config import settings
         raw_output = str(call.arguments.get("output_dir", ""))
@@ -604,8 +608,39 @@ class L2VerticalTools:
 
         print(f"  [smart_collage] Index loaded: {len(index_rows)} assets")
 
-        # Step 0b: Search K assets — or use pre-selected assets from DST (refine intent)
-        pre_selected = call.arguments.get("asset_ids", []) or call.arguments.get("selected_asset_ids", [])
+        # Step 0b: Search K assets — or use pre-selected assets from the
+        # current chat result.  A replacement is deliberately local: the
+        # existing template and all other slot assignments stay unchanged.
+        pre_selected = list(call.arguments.get("asset_ids", []) or call.arguments.get("selected_asset_ids", []))
+        if replace_query and pre_selected:
+            try:
+                target_index = int(replace_slot_index)
+            except (TypeError, ValueError):
+                target_index = -1
+            if target_index < 0 or target_index >= len(pre_selected):
+                return ToolResult(
+                    tool=call.tool,
+                    success=False,
+                    payload={"error": "invalid_replace_slot", "error_code": "invalid_replace_slot"},
+                )
+            replacement_searcher = AssetSearcher(index_rows=index_rows, db_path=str(db_path))
+            replacement_candidates = replacement_searcher.search(replace_query, k=max(k, 10), require_video=True)
+            replacement_searcher.release_embedder()
+            current_ids = set(str(item) for item in pre_selected)
+            replacement = next(
+                (row.get("asset_id") for row in replacement_candidates if row.get("asset_id") not in current_ids),
+                None,
+            )
+            if not replacement:
+                return ToolResult(
+                    tool=call.tool,
+                    success=False,
+                    payload={"error": "no_replacement_asset", "error_code": "no_matching_assets"},
+                )
+            pre_selected[target_index] = str(replacement)
+            replacement_asset_id = str(replacement)
+            print(f"  [smart_collage] Replaced slot {target_index} with {replacement}")
+
         if pre_selected:
             # DST slot inheritance: skip search, use pre-selected assets directly
             print(f"  [smart_collage] Using {len(pre_selected)} pre-selected assets (DST inheritance)")
@@ -634,11 +669,39 @@ class L2VerticalTools:
             )
 
         # Step 0c: Template match
-        template_dir = output_dir / "templates"
-        library = TemplateLibrary(template_dir=template_dir if template_dir.exists() else None)
+        # All workflows share the same template repository.  Output folders
+        # are for render artefacts only and must not silently become a second
+        # template library.
+        library = TemplateLibrary()
         matcher = TemplateMatcher(library)
 
-        candidates = matcher.match(results, preferred_template_id=str(template_id) if template_id else None)
+        if replacement_asset_id and isinstance(requested_assignment, list):
+            requested_assignment = [dict(item) for item in requested_assignment if isinstance(item, dict)]
+            try:
+                target_index = int(replace_slot_index)
+            except (TypeError, ValueError):
+                target_index = -1
+            for item in requested_assignment:
+                try:
+                    item_index = int(item.get("slot_index", -1))
+                except (TypeError, ValueError):
+                    item_index = -1
+                if item_index == target_index:
+                    item["asset_id"] = replacement_asset_id
+
+        if template_id and isinstance(requested_assignment, list) and requested_assignment:
+            fixed_template = library.get(str(template_id))
+            if fixed_template is not None and fixed_template.slot_count == len(results):
+                candidates = [{
+                    "template": fixed_template.to_dict(),
+                    "score": 1.0,
+                    "assignment": requested_assignment,
+                    "reason": "preserve current template and slot assignment",
+                }]
+            else:
+                candidates = []
+        else:
+            candidates = matcher.match(results, preferred_template_id=str(template_id) if template_id else None)
         
         # Exclude previously used template if requested (e.g. user said "换个模板")
         if exclude_template_id:
@@ -673,8 +736,21 @@ class L2VerticalTools:
         # Step 0d: VLM score
         scorer = VLMScorer()
         scored_candidates = []
-        for c in candidates:
-            score_result = scorer.score(results, c["template"], c["assignment"])
+        # The index/matcher already narrows candidates using cached content
+        # summaries and slot constraints.  Only a small top slice needs a
+        # live VLM call; scoring every template made local chat needlessly
+        # slow and repeatedly competed for VRAM with the planner.
+        from ..config import settings
+        score_limit = max(0, int(settings.vlm_template_score_candidate_limit))
+        for index, c in enumerate(candidates):
+            if index < score_limit:
+                score_result = scorer.score(results, c["template"], c["assignment"])
+            else:
+                score_result = {
+                    "score": float(c.get("score", 0.0)),
+                    "reason": "index_match_only",
+                    "details": {"method": "index_match"},
+                }
             scored_candidates.append({
                 **c,
                 "vlm_score": score_result["score"],
@@ -847,6 +923,7 @@ class L2VerticalTools:
             "search_results": results,
             "recommendations": recommendations,
             "selected_template": selected_template,
+            "assignment": assignment,
             "final_video": final_video,
         }
 
@@ -857,6 +934,7 @@ class L2VerticalTools:
                 "recommendations": recommendations,
                 "final_video": final_video,
                 "selected_template": selected_template,
+                "assignment": assignment,
                 "search_results": [{"asset_id": r["asset_id"], "score": r["score"],
                                     "content_summary": r.get("content_summary", "")} for r in results],
             },

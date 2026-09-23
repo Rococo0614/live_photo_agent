@@ -29,6 +29,8 @@ class DialogState:
     last_asset_ids: list[str] = field(default_factory=list)
     last_template_id: str = ""
     last_template_name: str = ""
+    last_assignment: list[dict[str, Any]] = field(default_factory=list)
+    last_recommendations: list[dict[str, Any]] = field(default_factory=list)
     last_final_video: str = ""
     last_search_results: list[dict[str, Any]] = field(default_factory=list)
     turn_count: int = 0
@@ -55,6 +57,18 @@ class DialogState:
                 self.last_template_id = selected.get("id", "")
                 self.last_template_name = selected.get("name", "")
 
+            assignment = payload.get("assignment", [])
+            if isinstance(assignment, list):
+                self.last_assignment = [
+                    dict(item) for item in assignment if isinstance(item, dict)
+                ]
+
+            recommendations = payload.get("recommendations", [])
+            if isinstance(recommendations, list):
+                self.last_recommendations = [
+                    dict(item) for item in recommendations if isinstance(item, dict)
+                ]
+
             # Extract final_video
             if payload.get("final_video"):
                 self.last_final_video = payload["final_video"]
@@ -77,6 +91,8 @@ class DialogState:
             "last_asset_ids": self.last_asset_ids,
             "last_template_id": self.last_template_id,
             "last_template_name": self.last_template_name,
+            "last_assignment": self.last_assignment,
+            "last_recommendations": self.last_recommendations,
             "last_final_video": self.last_final_video,
             "turn_count": self.turn_count,
         }

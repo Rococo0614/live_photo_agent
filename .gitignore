@@ -1,33 +1,56 @@
 # ===== Python =====
 __pycache__/
 *.py[cod]
+*$py.class
 *.egg-info/
+.eggs/
 .venv/
 venv/
+env/
+.env/
 .conda/
 *.egg
 build/
 dist/
+pip-wheel-metadata/
 
 # ===== 测试与缓存 =====
 .pytest_cache/
+.hypothesis/
 .mypy_cache/
 .ruff_cache/
+.pyright/
+.pyre/
+.tox/
+.nox/
 .coverage
+.coverage.*
 htmlcov/
-.hypothesis/
 .deepeval/
+.cache/
+.ipynb_checkpoints/
 
 # ===== 环境与密钥 =====
 .env
 .env.*
 !.env.example
+*.pem
+*.key
+*.p12
+*.pfx
+*.jks
+*.keystore
 
 # ===== IDE / 编辑器 =====
 .idea/
 .vscode/
 *.swp
 *.swo
+
+# ===== 操作系统 =====
+.DS_Store
+Thumbs.db
+Desktop.ini
 
 # ===== 运行产物（agent / 服务 / 索引） =====
 .agent_memory.json
@@ -39,6 +62,7 @@ htmlcov/
 .graph_runs.jsonl
 .live_photo_motion_cache/
 .agent_work/
+.custom_templates.json
 .device_plan.json
 .server.log
 .server.pid
@@ -58,14 +82,16 @@ comparison_report/
 model_test_files/
 
 # ===== Android 二进制与构建产物 =====
-android/app/libs/
-android/app/src/main/jniLibs/
+# app/libs/ 与 app/src/main/jniLibs/ 是项目依赖的私有 SDK，按
+# android/docs/vendored_binaries.md 说明应随仓提交，因此不要忽略。
 android/app/build/
 android/build/
 android/.gradle/
 android/local.properties
 android/app/release/
 android/.cxx/
+*.apk
+*.aab
 
 # ===== 测试产物 =====
 tests/_last_plan_raw_output.txt

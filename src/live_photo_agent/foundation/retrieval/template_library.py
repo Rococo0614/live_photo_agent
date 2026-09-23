@@ -16,6 +16,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
+from ...config import settings
+
 
 @dataclass
 class Transition:
@@ -125,11 +127,14 @@ class TemplateLibrary:
     """模板库: 管理预定义模板, 支持热插拔。"""
 
     def __init__(self, template_dir: Path | None = None) -> None:
-        self.template_dir = template_dir
+        # There is one local template store for all three UI workflows.  The
+        # frontend no longer owns a second, divergent template list.
+        self.template_dir = template_dir or (settings.agent_work_dir / "templates")
         self._templates: dict[str, CollageTemplate] = {}
         self._load_builtin()
-        if template_dir and template_dir.exists():
-            self._load_from_dir(template_dir)
+        if self.template_dir.exists():
+            self._load_from_dir(self.template_dir)
+        self._load_legacy_custom_file()
 
     def _load_builtin(self) -> None:
         """加载内置模板 (v2: 带时间窗口)。"""
@@ -249,8 +254,110 @@ class TemplateLibrary:
                 total_duration_s=6.0,
             ),
         ]
+
+        # Templates previously embedded only in ui.html.  Keeping them here
+        # makes the first, second and third workflows use the same IDs and
+        # slot geometry.  The old T01-T07 definitions above remain as aliases
+        # for existing callers and saved plans.
+        builtins.extend(
+            [
+                self._grid_template(
+                    "m16_image_led_cover", "M16 全图封面", 1,
+                    [(0, 0, 120, 160)], description="单素材全画布封面",
+                ),
+                self._grid_template(
+                    "m07_field_ledger", "M07 上图下文", 2,
+                    [(6, 6, 108, 66), (6, 78, 108, 76)], description="上下两格",
+                ),
+                self._grid_template(
+                    "m14_vertical_pipeline", "M14 三段流程", 3,
+                    [(8, 8, 104, 44), (8, 58, 104, 44), (8, 108, 104, 44)],
+                    description="三段竖向拼板",
+                ),
+                self._grid_template(
+                    "s09_kpi_tower", "S09 KPI 三栏", 3,
+                    [(6, 12, 34, 136), (43, 12, 34, 136), (80, 12, 34, 136)],
+                    description="三栏竖向拼板", style="swiss",
+                ),
+                self._grid_template(
+                    "s10_hbar_chart", "S10 条形四段", 4,
+                    [(8, 14, 104, 24), (8, 46, 104, 24), (8, 78, 104, 24), (8, 110, 104, 24)],
+                    description="四段横向拼板", style="swiss",
+                ),
+                self._grid_template(
+                    "live_single_focus", "Live 单视频", 1,
+                    [(5, 10, 110, 138)], description="单个 Live Photo 主画面", style="live",
+                ),
+                self._grid_template(
+                    "live_two_stack", "Live 二宫格上下", 2,
+                    [(5, 10, 110, 64), (5, 86, 110, 64)], description="两个 Live Photo 上下排列", style="live",
+                ),
+                self._grid_template(
+                    "live_three_stack", "Live 三宫格上下", 3,
+                    [(5, 8, 110, 46), (5, 58, 110, 46), (5, 108, 110, 46)], description="三个 Live Photo 上下排列", style="live",
+                ),
+                self._grid_template(
+                    "live_four_grid", "Live 四宫格", 4,
+                    [(6, 10, 52, 66), (62, 10, 52, 66), (6, 84, 52, 66), (62, 84, 52, 66)], description="四个 Live Photo 四宫格", style="live",
+                ),
+                self._grid_template(
+                    "matrix_three_by_two", "3x2 材料拼板", 6,
+                    [(6, 16, 34, 34), (43, 16, 34, 34), (80, 16, 34, 34),
+                     (6, 56, 34, 34), (43, 56, 34, 34), (80, 56, 34, 34)],
+                    description="六格材料拼板", style="swiss",
+                ),
+                self._grid_template(
+                    "live_overlay_top", "Live 重叠置顶", 2,
+                    [(0, 0, 120, 160), (10, 90, 60, 50)],
+                    description="背景 Live Photo + 主体抠像叠加",
+                    style="live", needs_segmentation=True, pinned_indices=(1,),
+                ),
+            ]
+        )
         for t in builtins:
             self._templates[t.id] = t
+
+    @staticmethod
+    def _grid_template(
+        template_id: str,
+        name: str,
+        slot_count: int,
+        boxes: list[tuple[int, int, int, int]],
+        *,
+        description: str = "",
+        style: str = "editorial",
+        needs_segmentation: bool = False,
+        pinned_indices: tuple[int, ...] = (),
+    ) -> CollageTemplate:
+        slots = [
+            SlotConstraint(
+                grid_x=x,
+                grid_y=y,
+                grid_w=w,
+                grid_h=h,
+                z_index=index,
+                pin_to_top=index in pinned_indices,
+                subject_required=needs_segmentation and index in pinned_indices,
+                start_time_s=0.0,
+                end_time_s=6.0,
+                fill_mode="freeze",
+            )
+            for index, (x, y, w, h) in enumerate(boxes)
+        ]
+        return CollageTemplate(
+            id=template_id,
+            name=name,
+            description=description,
+            slot_count=slot_count,
+            slots=slots,
+            canvas_width=1080,
+            canvas_height=1440,
+            layout_type="grid",
+            needs_segmentation=needs_segmentation,
+            total_duration_s=6.0,
+            style=style,
+            board="xhs",
+        )
 
     def _load_from_dir(self, template_dir: Path) -> None:
         """从目录加载自定义模板 (热插拔, v2 格式)。"""
@@ -264,6 +371,23 @@ class TemplateLibrary:
             except Exception as e:
                 print(f"  [template] FAILED to load {json_path}: {e}")
 
+    def _load_legacy_custom_file(self) -> None:
+        """Read the old root JSON file once, without making it the source of truth."""
+        legacy_path = settings.workspace_dir / ".custom_templates.json"
+        if not legacy_path.exists():
+            return
+        try:
+            data = json.loads(legacy_path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            return
+        rows = data if isinstance(data, list) else data.get("templates", []) if isinstance(data, dict) else []
+        for row in rows:
+            if not isinstance(row, dict):
+                continue
+            template = self._parse_template_dict(row)
+            if template:
+                self._templates[template.id] = template
+
     def _parse_template_dict(self, data: dict[str, Any]) -> CollageTemplate | None:
         """Parse a template dict (supports v1 and v2 format)."""
         slots: list[SlotConstraint] = []
@@ -274,10 +398,10 @@ class TemplateLibrary:
                 subject_required=s.get("subject_required", False),
                 position_preference=s.get("position_preference", "any"),
                 bg_region=s.get("bg_region", "full"),
-                grid_x=s.get("grid_x", 0),
-                grid_y=s.get("grid_y", 0),
-                grid_w=s.get("grid_w", 0),
-                grid_h=s.get("grid_h", 0),
+                grid_x=s.get("grid_x", s.get("gx", 0)),
+                grid_y=s.get("grid_y", s.get("gy", 0)),
+                grid_w=s.get("grid_w", s.get("gw", 0)),
+                grid_h=s.get("grid_h", s.get("gh", 0)),
                 z_index=s.get("z_index", 0),
                 pin_to_top=s.get("pin_to_top", False),
                 start_time_s=s.get("start_time_s", 0.0),
@@ -327,3 +451,24 @@ class TemplateLibrary:
         path.write_text(json.dumps(template.to_dict(), indent=2, ensure_ascii=False))
         self._templates[template.id] = template
         return path
+
+    def save_template_dict(self, data: dict[str, Any]) -> CollageTemplate:
+        template = self._parse_template_dict(data)
+        if template is None:
+            raise ValueError("Invalid template: id, name and slots are required")
+        self.save_template(template)
+        return template
+
+    def delete_template(self, template_id: str) -> bool:
+        """Delete a custom template, never a built-in one."""
+        if template_id not in self._templates:
+            return False
+        if not template_id.startswith("custom_"):
+            return False
+        self._templates.pop(template_id, None)
+        path = self.template_dir / f"{template_id}.json"
+        try:
+            path.unlink()
+        except FileNotFoundError:
+            pass
+        return True

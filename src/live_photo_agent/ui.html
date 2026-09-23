@@ -1135,8 +1135,8 @@
               <div class="micro" style="margin-bottom: 10px;">框选区域编辑</div>
               <div class="canvas-editor-controls">
                 <div class="field">
-                  <label for="canvasPromptInput">选区编辑提示（仅作用于框选区域）</label>
-                  <textarea id="canvasPromptInput" placeholder="例如：把选区中的人物改成电影感光影。需先在画布上框选区域。" style="min-height: 80px;"></textarea>
+                  <label for="canvasPromptInput">局部处理说明（当前支持主体抠像）</label>
+                  <textarea id="canvasPromptInput" placeholder="例如：把框选区域中的人物抠出来并叠加。扩散填充和任意生成式修改暂不支持。" style="min-height: 80px;"></textarea>
                 </div>
                 <div class="controls">
                   <button id="canvasPreviewButton" class="primary" type="button">保存编辑到布局</button>
@@ -1148,8 +1148,8 @@
               <div class="micro" style="margin-bottom: 10px;">素材属性</div>
               <div class="canvas-editor-controls">
                 <div class="field">
-                  <label for="imagePromptInput">整图处理提示（作用于整张素材）</label>
-                  <textarea id="imagePromptInput" placeholder="例如：增强色彩饱和度，暖色调风格。该 prompt 会对整张图片生效。" style="min-height: 80px;"></textarea>
+                    <label for="imagePromptInput">素材处理说明（白名单操作）</label>
+                    <textarea id="imagePromptInput" placeholder="例如：暖色、增强饱和度、1.2 倍速、稳定。任意视频扩散编辑暂不支持。" style="min-height: 80px;"></textarea>
                 </div>
               </div>
             </div>
@@ -1200,17 +1200,17 @@
         <div class="result-card">
           <div class="micro" style="margin-bottom: 10px;">上传图片</div>
           <div class="parse-upload-area" id="parseUploadArea">
-            <input type="file" id="parseFileInput" accept="image/*" style="display: none;">
+            <input type="file" id="parseFileInput" accept="image/*,video/mp4,.jpg,.jpeg" style="display: none;">
             <div id="parseUploadPlaceholder" class="parse-upload-placeholder">
               <p>点击或拖拽上传一张成品图片</p>
               <p class="micro">VLM 将分析其版面结构并生成可复用的模板</p>
             </div>
             <img id="parseUploadPreview" style="display: none; max-width: 100%; max-height: 300px; border-radius: 12px;">
+            <video id="parseUploadVideoPreview" controls muted playsinline style="display: none; max-width: 100%; max-height: 300px; border-radius: 12px;"></video>
           </div>
           <div class="controls" style="margin-top: 12px; display: flex; gap: 8px; align-items: center;">
             <select id="parseBackendSelect" style="padding: 8px 12px; border-radius: 8px; border: 1px solid var(--line-color); background: var(--card-bg); color: var(--text);">
               <option value="vlm">Qwen2.5-VL 本地 (通用)</option>
-              <option value="dots_mocr">dots.mocr (版面检测)</option>
             </select>
             <button id="parseAnalyzeBtn" class="primary" type="button" disabled>解析版面</button>
           </div>
@@ -1399,20 +1399,10 @@
       xhs: { key: 'xhs', label: 'XHS 3:4', width: 1080, height: 1440, ratio: '3 / 4' },
     };
 
-    const TEMPLATE_LIBRARY = [
-      { id: 'm16_image_led_cover', name: 'M16 全图封面', style: 'editorial', board: 'xhs', slots: [{ gx: 0, gy: 0, gw: 120, gh: 160 }] },
-      { id: 'm07_field_ledger', name: 'M07 上图下文', style: 'editorial', board: 'xhs', slots: [{ gx: 6, gy: 6, gw: 108, gh: 66 }, { gx: 6, gy: 78, gw: 108, gh: 76 }] },
-      { id: 'm14_vertical_pipeline', name: 'M14 三段流程', style: 'editorial', board: 'xhs', slots: [{ gx: 8, gy: 8, gw: 104, gh: 44 }, { gx: 8, gy: 58, gw: 104, gh: 44 }, { gx: 8, gy: 108, gw: 104, gh: 44 }] },
-      { id: 's09_kpi_tower', name: 'S09 KPI 三栏', style: 'swiss', board: 'xhs', slots: [{ gx: 6, gy: 12, gw: 34, gh: 136 }, { gx: 43, gy: 12, gw: 34, gh: 136 }, { gx: 80, gy: 12, gw: 34, gh: 136 }] },
-      { id: 's10_hbar_chart', name: 'S10 条形四段', style: 'swiss', board: 'xhs', slots: [{ gx: 8, gy: 14, gw: 104, gh: 24 }, { gx: 8, gy: 46, gw: 104, gh: 24 }, { gx: 8, gy: 78, gw: 104, gh: 24 }, { gx: 8, gy: 110, gw: 104, gh: 24 }] },
-      { id: 'live_single_focus', name: 'Live 单视频', style: 'live', board: 'xhs', slots: [{ gx: 5, gy: 10, gw: 110, gh: 138 }] },
-      { id: 'live_two_stack', name: 'Live 二宫格上下', style: 'live', board: 'xhs', slots: [{ gx: 5, gy: 10, gw: 110, gh: 64 }, { gx: 5, gy: 86, gw: 110, gh: 64 }] },
-      { id: 'live_three_stack', name: 'Live 三宫格上下', style: 'live', board: 'xhs', slots: [{ gx: 5, gy: 8, gw: 110, gh: 46 }, { gx: 5, gy: 58, gw: 110, gh: 46 }, { gx: 5, gy: 108, gw: 110, gh: 46 }] },
-      { id: 'live_four_grid', name: 'Live 四宫格', style: 'live', board: 'xhs', slots: [{ gx: 6, gy: 10, gw: 52, gh: 66 }, { gx: 62, gy: 10, gw: 52, gh: 66 }, { gx: 6, gy: 84, gw: 52, gh: 66 }, { gx: 62, gy: 84, gw: 52, gh: 66 }] },
-      { id: 'matrix_three_by_two', name: '3x2 材料拼板', style: 'swiss', board: 'xhs', slots: [{ gx: 6, gy: 16, gw: 34, gh: 34 }, { gx: 43, gy: 16, gw: 34, gh: 34 }, { gx: 80, gy: 16, gw: 34, gh: 34 }, { gx: 6, gy: 56, gw: 34, gh: 34 }, { gx: 43, gy: 56, gw: 34, gh: 34 }, { gx: 80, gy: 56, gw: 34, gh: 34 }] },
-      { id: 'live_overlay_top', name: 'Live 重叠置顶', style: 'live', board: 'xhs', slots: [{ gx: 0, gy: 0, gw: 120, gh: 160 }, { gx: 10, gy: 90, gw: 60, gh: 50, pin_to_top: true, image_prompt: '抠出人物主体并叠加到背景视频上方' }] },
-      { id: 'live_prompt_enhance', name: 'Live 带处理提示', style: 'live', board: 'xhs', slots: [{ gx: 5, gy: 10, gw: 110, gh: 64, image_prompt: '增强色彩饱和度，暖色调风格' }, { gx: 5, gy: 86, gw: 110, gh: 64, image_prompt: '增加动态模糊效果' }] },
-    ];
+    // Templates are served by /api/templates.  Keeping a second local list
+    // here caused the canvas and smart-collage backend to disagree about IDs
+    // and slot geometry.
+    const TEMPLATE_LIBRARY = [];
 
     const els = {
       libraryRootLabel: document.getElementById('libraryRootLabel'),
@@ -1499,6 +1489,7 @@
       parseFileInput: document.getElementById('parseFileInput'),
       parseUploadArea: document.getElementById('parseUploadArea'),
       parseUploadPreview: document.getElementById('parseUploadPreview'),
+      parseUploadVideoPreview: document.getElementById('parseUploadVideoPreview'),
       parseUploadPlaceholder: document.getElementById('parseUploadPlaceholder'),
       parseAnalyzeBtn: document.getElementById('parseAnalyzeBtn'),
       parseBackendSelect: document.getElementById('parseBackendSelect'),
@@ -1523,6 +1514,7 @@
     let customTemplates = [];
     let v2Templates = [];
     let parseImageBase64 = '';
+    let parseMediaDataUrl = '';
     let parseLayoutItems = [];
     let parseActiveSlotId = '';
 
@@ -1540,6 +1532,15 @@
 
     // v2: position_preference + bg_region → grid 坐标映射
     function slotToGrid(slot) {
+      if ([slot.grid_x, slot.grid_y, slot.grid_w, slot.grid_h].every((value) => Number.isFinite(Number(value)))
+          && Number(slot.grid_w) > 0 && Number(slot.grid_h) > 0) {
+        return {
+          gx: Number(slot.grid_x),
+          gy: Number(slot.grid_y),
+          gw: Number(slot.grid_w),
+          gh: Number(slot.grid_h),
+        };
+      }
       const pp = slot.position_preference || 'any';
       const br = slot.bg_region || 'full';
       const margin = 6;
@@ -2322,9 +2323,12 @@
           grid_y: slot.gy,
           grid_w: slot.gw,
           grid_h: slot.gh,
-          z_index: index + 1,
+          z_index: slot.z_index ?? index + 1,
           pin_to_top: !!slot.pin_to_top,
           image_prompt: slot.image_prompt || '',
+          start_time_s: Number(slot.start_time_s ?? 0),
+          end_time_s: Number(slot.end_time_s ?? template.total_duration_s ?? 6),
+          fill_mode: slot.fill_mode || 'freeze',
         };
       });
       state.activeLayoutId = state.layoutItems[0]?.id || '';
@@ -2972,6 +2976,7 @@
       const preset = CANVAS_PRESETS[state.canvasPreset] ?? CANVAS_PRESETS.xhs;
       const payload = {
         user_id: 'web-demo',
+        mode: 'layout',
         text: buildGenerationIntent(),
         library_root: els.libraryRootInput.value.trim() || state.bootstrap?.library_root,
         selected_asset_ids: getLayoutAssetIds(),
@@ -3003,10 +3008,13 @@
           grid_rows: GRID_LAYOUT.rows,
           prompt: item.prompt || '',
           edit_prompt: item.edit_prompt || '',
-          edit_rect: item.edit_rect_source ?? item.edit_rect ?? null,
-          pin_to_top: item.pin_to_top ?? false,
-          image_prompt: item.image_prompt || '',
-          selection_mode: item.selection_mode || '',
+           edit_rect: item.edit_rect_source ?? item.edit_rect ?? null,
+           pin_to_top: item.pin_to_top ?? false,
+           image_prompt: item.image_prompt || '',
+           start_time_s: Number(item.start_time_s ?? 0),
+           end_time_s: Number(item.end_time_s ?? 6),
+           fill_mode: item.fill_mode || 'freeze',
+           selection_mode: item.selection_mode || '',
         });
         }),
         operation_log: state.operationLog,
@@ -3062,7 +3070,7 @@
         ? `布局中有 ${foregroundItems.length} 个前景项（foreground/is_overlay），必须先用 subject_segmentation 对其做主体分割，再用 overlay_subject_clip 叠加到拼接结果之上，按其 anchor/scale/x_offset/y_offset 定位。`
         : '本次布局无前景叠加项。';
       const editClause = editCount
-        ? `布局中有 ${editCount} 个素材携带框选区域编辑（edit_rect + edit_prompt），这些编辑仅作用于框选局部区域（如局部抠像、局部修复），请在整图处理之后、最终拼接之前执行。`
+        ? `布局中有 ${editCount} 个素材携带框选区域处理（edit_rect + edit_prompt），当前只支持框选主体抠像/叠加，不执行扩散填充或任意生成式修改。`
         : '';
       return `请根据当前布局生成最终 Live Photo：固定画布为 ${preset.width}x${preset.height}（${preset.label}），布局按 ${GRID_LAYOUT.cols}x${GRID_LAYOUT.rows} 网格解析。必须做空间拼接（compose_videos_spatial / concat_clips 的空间布局模式），严格使用每个布局项的 grid_x/grid_y/grid_w/grid_h 与 z_index 确定画布上的位置、大小和层级，顶层 z-index 覆盖底层，禁止退化为首尾相接的时间轴串行拼接。${templateClause}${foregroundClause}${pinClause}${promptClause}${editClause}${edits ? `框选编辑中间步骤：${edits}。` : ''}请保留完整的意图识别、工具使用和中间处理记录。`;
     }
@@ -3278,6 +3286,7 @@
         // 走 brain planner: /agent/execute 做意图识别 + 任务规划 + 工具执行
         const payload = {
           user_id: 'web-chat',
+          mode: 'chat',
           text: query,
           library_root: els.libraryRootInput.value.trim() || state.bootstrap?.library_root || 'data/live_photo',
           selected_asset_ids: [],
@@ -3494,9 +3503,17 @@
       const reader = new FileReader();
       reader.onload = (e) => {
         const dataUrl = e.target.result;
+        parseMediaDataUrl = dataUrl;
         parseImageBase64 = dataUrl.split(',')[1];
-        els.parseUploadPreview.src = dataUrl;
-        els.parseUploadPreview.style.display = 'block';
+        if (file.type.startsWith('video/')) {
+          els.parseUploadVideoPreview.src = dataUrl;
+          els.parseUploadVideoPreview.style.display = 'block';
+          els.parseUploadPreview.style.display = 'none';
+        } else {
+          els.parseUploadPreview.src = dataUrl;
+          els.parseUploadPreview.style.display = 'block';
+          els.parseUploadVideoPreview.style.display = 'none';
+        }
         els.parseUploadPlaceholder.style.display = 'none';
         els.parseAnalyzeBtn.disabled = false;
       };
@@ -3514,6 +3531,7 @@
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             image_base64: parseImageBase64,
+            media_base64: parseImageBase64,
             image_name: els.parseFileInput.files[0]?.name || 'uploaded',
             backend: backend,
           }),
@@ -3545,6 +3563,9 @@
         grid_h: slot.gh,
         image_prompt: slot.image_prompt || '',
         pin_to_top: !!slot.pin_to_top,
+        start_time_s: Number(slot.start_time_s ?? 0),
+        end_time_s: Number(slot.end_time_s ?? tmpl.total_duration_s ?? 6),
+        fill_mode: slot.fill_mode || 'freeze',
         z_index: i + 1,
       }));
       parseActiveSlotId = parseLayoutItems[0]?.id || '';
@@ -3594,6 +3615,9 @@
           label: item.label,
           image_prompt: item.image_prompt || '',
           pin_to_top: !!item.pin_to_top,
+          start_time_s: Number(item.start_time_s ?? 0),
+          end_time_s: Number(item.end_time_s ?? 6),
+          fill_mode: item.fill_mode || 'freeze',
         })),
       };
     }
@@ -3634,9 +3658,12 @@
 
     els.parseResetBtn.addEventListener('click', () => {
       parseImageBase64 = '';
+      parseMediaDataUrl = '';
       parseLayoutItems = [];
       parseActiveSlotId = '';
       els.parseUploadPreview.style.display = 'none';
+      els.parseUploadVideoPreview.style.display = 'none';
+      els.parseUploadVideoPreview.removeAttribute('src');
       els.parseUploadPlaceholder.style.display = '';
       els.parseWorkbench.style.display = 'none';
       els.parseSaveControls.style.display = 'none';
@@ -3790,7 +3817,8 @@
           const classes = ['template-thumb-slot'];
           if (slot.pin_to_top) classes.push('pin-to-top');
           if (slot.image_prompt) classes.push('has-prompt');
-          return `<div class="${classes.join(' ')}" style="left:${gridToPercentX(slot.gx)}%;top:${gridToPercentY(slot.gy)}%;width:${gridToPercentX(slot.gw)}%;height:${gridToPercentY(slot.gh)}%"></div>`;
+          const grid = slotToGrid(slot);
+          return `<div class="${classes.join(' ')}" style="left:${gridToPercentX(grid.gx)}%;top:${gridToPercentY(grid.gy)}%;width:${gridToPercentX(grid.gw)}%;height:${gridToPercentY(grid.gh)}%"></div>`;
         }).join('');
         return `
           <div class="template-card" style="position: relative;">
@@ -3804,12 +3832,11 @@
     }
 
     window.deleteCustomTemplate = async function (idx) {
+      const template = customTemplates[idx];
+      if (!template?.id) return;
+      const response = await fetch(`/api/templates/${encodeURIComponent(template.id)}`, { method: 'DELETE' });
+      if (!response.ok) return;
       customTemplates.splice(idx, 1);
-      await fetch('/api/template/save-all', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ templates: customTemplates }),
-      });
       renderCustomTemplateList();
     };
   </script>

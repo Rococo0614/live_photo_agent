@@ -174,6 +174,7 @@ class L0AtomicTools:
     def extract_subject_matte(self, call: ToolCall, context: dict[str, object]) -> ToolResult:
         focus_assets = self._assets_for_l0(call, context)
         mode = str(call.arguments.get("mode", "mog2")).strip().lower()
+        edit_rect = call.arguments.get("edit_rect")
         workspace = self._segmentation_workspace_dir()
         mattes: dict[str, dict[str, object]] = {}
         average_ratios: dict[str, float] = {}
@@ -185,10 +186,10 @@ class L0AtomicTools:
             if output_dir.exists():
                 shutil.rmtree(output_dir, ignore_errors=True)
             try:
-                if motion_path is not None:
+                if motion_path is not None and edit_rect is None:
                     result = self.media_ops.extract_subject_matte_frames(motion_path, output_dir, mode=mode)
                 else:
-                    result = self._extract_subject_matte_from_still(asset, output_dir)
+                    result = self._extract_subject_matte_from_still(asset, output_dir, edit_rect=edit_rect)
             except MediaOpsError as exc:
                 failed_asset_ids.append(asset.asset_id)
                 return ToolResult(
@@ -211,10 +212,21 @@ class L0AtomicTools:
             },
         )
 
-    def _extract_subject_matte_from_still(self, asset: LivePhotoAsset, output_dir: Path) -> dict[str, object]:
+    def _extract_subject_matte_from_still(
+        self,
+        asset: LivePhotoAsset,
+        output_dir: Path,
+        edit_rect: object = None,
+    ) -> dict[str, object]:
         output_dir.mkdir(parents=True, exist_ok=True)
         mask_path = output_dir / "mask.png"
-        segmentation = self.media_ops.segment_subject(Path(asset.image_path), mask_path, mode="person_first")
+        rect = self._normalize_edit_rect_to_pixels(asset, edit_rect)
+        segmentation = self.media_ops.segment_subject(
+            Path(asset.image_path),
+            mask_path,
+            mode="person_first",
+            rect=rect,
+        )
 
         try:
             import cv2
@@ -244,6 +256,36 @@ class L0AtomicTools:
             "source_type": "still_image",
         }
 
+    @staticmethod
+    def _normalize_edit_rect_to_pixels(asset: LivePhotoAsset, rect: object) -> tuple[int, int, int, int] | None:
+        if not isinstance(rect, dict):
+            return None
+        try:
+            x = float(rect["x"])
+            y = float(rect["y"])
+            w = float(rect["w"])
+            h = float(rect["h"])
+        except (KeyError, TypeError, ValueError):
+            return None
+        if not all(0.0 <= value <= 1.0 for value in (x, y, w, h)) or w <= 0 or h <= 0:
+            return None
+        # MediaOps downsizes internally; passing source-relative pixels keeps
+        # the helper useful for callers and tests while preserving the edit
+        # rectangle semantics.
+        try:
+            from PIL import Image
+
+            with Image.open(asset.image_path) as image:
+                width, height = image.size
+        except Exception:  # noqa: BLE001
+            width, height = 1, 1
+        return (
+            int(round(x * width)),
+            int(round(y * height)),
+            max(1, int(round(w * width))),
+            max(1, int(round(h * height))),
+        )
+
     def overlay_subject_clip(self, call: ToolCall, context: dict[str, object]) -> ToolResult:
         foreground_asset_id = str(call.arguments.get("foreground_asset_id", "")).strip()
         anchor = str(call.arguments.get("anchor", "bottom_right")).strip().lower()
@@ -251,6 +293,32 @@ class L0AtomicTools:
         x_offset = int(call.arguments.get("x_offset", 0))
         y_offset = int(call.arguments.get("y_offset", 0))
         fit_mode = str(call.arguments.get("fit_mode", "loop")).strip().lower()
+        placement = call.arguments.get("placement")
+        if not isinstance(placement, dict):
+            placement = None
+        used_template_placement = False
+        if placement is None:
+            explicit_keys = ("left", "top", "width", "height")
+            if all(isinstance(call.arguments.get(key), (int, float)) for key in explicit_keys):
+                placement = {key: float(call.arguments[key]) for key in explicit_keys}
+            else:
+                template = context.get("composition_template", {})
+                slots = template.get("slots", []) if isinstance(template, dict) else []
+                for slot in slots if isinstance(slots, list) else []:
+                    if not isinstance(slot, dict) or str(slot.get("asset_id", "")) != foreground_asset_id:
+                        continue
+                    placement = {
+                        "left": float(slot.get("left_pct", 0.0)),
+                        "top": float(slot.get("top_pct", 0.0)),
+                        "width": float(slot.get("width_pct", 100.0)),
+                        "height": float(slot.get("height_pct", 100.0)),
+                    }
+                    used_template_placement = True
+                    break
+        if placement is not None:
+            # Keep the historical field name for callers; it means that an
+            # explicit spatial placement was used (template or direct args).
+            used_template_placement = True
 
         subject_mattes = dict(context.get("subject_mattes", {}))
         matte = subject_mattes.get(foreground_asset_id)
@@ -278,16 +346,21 @@ class L0AtomicTools:
         output_path = workspace / "overlay_composite" / f"{timeline_id}_with_{foreground_asset_id}.mp4"
 
         try:
+            composite_kwargs = {
+                "background_path": Path(str(background_path_raw)),
+                "foreground_frames_dir": Path(str(matte["frames_dir"])),
+                "foreground_fps": float(matte.get("fps", 25.0)),
+                "output_path": output_path,
+                "anchor": anchor,
+                "scale": scale,
+                "x_offset": x_offset,
+                "y_offset": y_offset,
+                "fit_mode": fit_mode,
+            }
+            if placement is not None:
+                composite_kwargs["placement"] = placement
             result_path = self.media_ops.composite_foreground_over_background(
-                background_path=Path(str(background_path_raw)),
-                foreground_frames_dir=Path(str(matte["frames_dir"])),
-                foreground_fps=float(matte.get("fps", 25.0)),
-                output_path=output_path,
-                anchor=anchor,
-                scale=scale,
-                x_offset=x_offset,
-                y_offset=y_offset,
-                fit_mode=fit_mode,
+                **composite_kwargs,
             )
         except MediaOpsError as exc:
             return ToolResult(
@@ -313,6 +386,8 @@ class L0AtomicTools:
             "x_offset": x_offset,
             "y_offset": y_offset,
             "fit_mode": fit_mode,
+            "placement": placement,
+            "used_template_placement": used_template_placement,
             "path": str(result_path),
         }
 
@@ -552,6 +627,9 @@ class L0AtomicTools:
                 if asset is None:
                     continue
                 source_path = self._resolve_asset_video_path(asset, source_maps)
+                if source_path is None and Path(asset.image_path).exists():
+                    static_path = workspace / "static" / f"{asset.asset_id}.mp4"
+                    source_path = self.media_ops.image_to_static_video(Path(asset.image_path), static_path)
                 if source_path is None:
                     continue
                 clip_paths.append(source_path)
@@ -568,15 +646,25 @@ class L0AtomicTools:
                     },
                 )
 
-            composition_mode = self._resolve_concat_composition_mode(
-                explicit_layout=layout_mode,
-                request_text=str(context.get("request_text", "")),
-                clip_count=len(clip_paths),
-                reusable_strategies=context.get("reusable_strategies", []),
+            layout_context = context.get("layout_context", [])
+            has_explicit_layout = isinstance(layout_context, list) and any(
+                isinstance(item, dict)
+                and all(isinstance(item.get(key), (int, float)) for key in ("grid_x", "grid_y", "grid_w", "grid_h"))
+                for item in layout_context
+            )
+            composition_mode = (
+                "template"
+                if has_explicit_layout
+                else self._resolve_concat_composition_mode(
+                    explicit_layout=layout_mode,
+                    request_text=str(context.get("request_text", "")),
+                    clip_count=len(clip_paths),
+                    reusable_strategies=context.get("reusable_strategies", []),
+                )
             )
             total_candidate_count = len(clip_paths)
             capped_clip_count = total_candidate_count
-            if composition_mode != "timeline" and len(clip_paths) > 3:
+            if composition_mode not in {"timeline", "spatial", "template"} and len(clip_paths) > 3:
                 clip_paths = clip_paths[:3]
                 resolved_order = resolved_order[:3]
                 capped_clip_count = len(clip_paths)
@@ -584,7 +672,6 @@ class L0AtomicTools:
             if composition_mode == "timeline":
                 self.media_ops.concat_videos(clip_paths, timeline_path)
             else:
-                layout_context = context.get("layout_context", [])
                 placements: list[dict[str, float]] = []
                 if isinstance(layout_context, list):
                     placement_by_asset = {
@@ -597,11 +684,24 @@ class L0AtomicTools:
                         if item is None:
                             placements = []
                             break
-                        placements.append({
-                            key: float(item[key])
+                        if all(
+                            key in item and isinstance(item[key], (int, float))
                             for key in ("left", "top", "width", "height")
-                            if key in item and isinstance(item[key], (int, float))
-                        })
+                        ):
+                            placements.append({key: float(item[key]) for key in ("left", "top", "width", "height")})
+                        elif all(
+                            key in item and isinstance(item[key], (int, float))
+                            for key in ("grid_x", "grid_y", "grid_w", "grid_h")
+                        ):
+                            placements.append({
+                                "left": float(item["grid_x"]) / 120.0 * 100.0,
+                                "top": float(item["grid_y"]) / 160.0 * 100.0,
+                                "width": float(item["grid_w"]) / 120.0 * 100.0,
+                                "height": float(item["grid_h"]) / 160.0 * 100.0,
+                            })
+                        else:
+                            placements = []
+                            break
                 compose_kwargs = {"canvas": canvas, "layout": composition_mode}
                 if placements:
                     compose_kwargs["placements"] = placements

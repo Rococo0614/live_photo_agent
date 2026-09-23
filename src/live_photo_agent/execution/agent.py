@@ -11,6 +11,7 @@ from ..foundation.layout_resolver import LayoutResolver
 from ..foundation.state import FoundationLayer
 from ..models import AgentRequest, AgentResponse, ExecutionPlan, ToolCall, ToolName, ToolResult
 from .dialog_state import DialogState, is_refine_intent
+from .direct_layout import DirectLayoutExecutor
 from .flow import InputFlowLayer
 from .input_preprocessor import InputPreprocessor
 from .langgraph_runner import PlannerGraphRunner, PlannerUnavailableError
@@ -32,6 +33,7 @@ class LivePhotoAgent:
         self.input_flow_layer = InputFlowLayer()
         self.input_preprocessor = InputPreprocessor()
         self.graph_runner = PlannerGraphRunner(max_replans=1)
+        self.direct_layout_executor = DirectLayoutExecutor(self.tools)
         # Dialog state tracking: persists across turns within a session
         self._dialog_state = DialogState()
 
@@ -39,6 +41,12 @@ class LivePhotoAgent:
         request_start = perf_counter()
         logger.info("[TIMER] execute start text=%r", str(request.text)[:80])
         request = self._apply_retry_feedback(request)
+
+        # The canvas workflow is already a structured plan.  Do not send its
+        # layout back through the free-form planner: the user's coordinates,
+        # slot order and z-index are authoritative.
+        if str(request.mode).strip().lower() == "layout":
+            return self._execute_layout_request(request)
 
         # --- Dialog State Tracking (DST) ---
         # Detect refine intent and inject inherited slots BEFORE planner
@@ -73,6 +81,22 @@ class LivePhotoAgent:
                 library_summary = {
                     **library_summary,
                     "reusable_strategies": reusable_strategies,
+                }
+            if str(runtime_request.mode).strip().lower() == "chat":
+                from ..foundation.retrieval.template_library import TemplateLibrary
+
+                library_summary = {
+                    **library_summary,
+                    "template_catalog": [
+                        {
+                            "id": template.id,
+                            "name": template.name,
+                            "slot_count": template.slot_count,
+                            "description": template.description,
+                        }
+                        for template in TemplateLibrary().list_all()
+                    ],
+                    "dialog_state": dialog_context,
                 }
 
             base_context: dict[str, object] = {
@@ -239,6 +263,64 @@ class LivePhotoAgent:
                 "success_count": sum(1 for tr in tool_results if tr.success),
             })
             return response
+
+    def _execute_layout_request(self, request: AgentRequest) -> AgentResponse:
+        """Run the first UI workflow deterministically from layout_context."""
+        prepared = self.input_preprocessor.prepare(request, self.library_service)
+        direct = self.direct_layout_executor.execute(
+            prepared.request,
+            prepared.assets,
+            preprocess_info=prepared.preprocess_info,
+        )
+
+        context = dict(direct.context)
+        context["library_summary"] = prepared.library_summary
+        context["preprocess"] = prepared.preprocess_info
+        context["layout_context"] = prepared.request.layout_context
+        context["tool_results"] = direct.tool_results
+        context["processing_warnings"] = direct.warnings
+        context["direct_execution"] = True
+
+        pipeline_trace = self.input_flow_layer.build_trace()
+        foundation_state = self.foundation_layer.build_state(
+            request=prepared.request,
+            library_summary=prepared.library_summary,
+            session_memory_size=self.memory.session_memory_size(),
+            multimodal_memory_size=self.memory.multimodal_memory_size(),
+        )
+
+        final_video = ""
+        error_messages: list[str] = []
+        for result in direct.tool_results:
+            payload = result.payload if isinstance(result.payload, dict) else {}
+            if payload.get("final_video"):
+                final_video = str(payload["final_video"])
+            if not result.success:
+                error_messages.append(str(payload.get("error") or payload.get("message") or result.tool.value))
+
+        if final_video:
+            final_response = f"布局生成完成：{final_video}"
+        elif error_messages:
+            final_response = "布局生成失败：" + "；".join(error_messages)
+        elif direct.plan.need_clarification:
+            final_response = "；".join(direct.plan.clarification_questions)
+        else:
+            final_response = "布局执行完成，但没有返回可预览的视频文件。"
+
+        context["final_video"] = final_video
+        response = AgentResponse(
+            plan=direct.plan,
+            context=self._serialize_context(context),
+            tool_results=direct.tool_results,
+            final_response=final_response,
+            memory_updates=[],
+            review="",
+            pipeline_trace=pipeline_trace,
+            foundation_state=foundation_state,
+        )
+        response.review = self.memory.build_review(response)
+        response.memory_updates = self.memory.append(prepared.request, response)
+        return response
 
     def _cleanup_residual_temp_files(self, context: dict[str, object]) -> None:
         """Clean up residual temp files after execution.

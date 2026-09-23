@@ -351,7 +351,10 @@ class QwenPlanner:
         self._local_runtime = None
 
     def create_plan(self, request: AgentRequest, library_summary: dict[str, object]) -> ExecutionPlan:
-        plan = self._call_local_hf_planner(request, library_summary)
+        if str(request.mode).strip().lower() == "chat":
+            plan = self._call_local_chat_planner(request, library_summary)
+        else:
+            plan = self._call_local_hf_planner(request, library_summary)
         self._trim_inference_memory()
         return plan
 
@@ -545,7 +548,73 @@ class QwenPlanner:
             local_messages.append({"role": role, "content": content})
         return local_messages
 
+    def _call_local_chat_planner(
+        self,
+        request: AgentRequest,
+        library_summary: dict[str, object],
+    ) -> ExecutionPlan:
+        """Parse chat into one constrained smart-collage command.
+
+        Chat is not allowed to choose arbitrary L0 tools.  It may search, pick
+        an existing template, or mutate the current result by replacing one
+        slot.  The actual media workflow remains inside ``smart_collage``.
+        """
+        runtime = self._get_or_create_local_runtime()
+        try:
+            import torch
+        except Exception as exc:  # noqa: BLE001
+            raise RuntimeError("Local HF backend requires torch. Install torch in the active environment.") from exc
+
+        templates = library_summary.get("template_catalog", [])
+        state = library_summary.get("dialog_state", {})
+        prompt = (
+            "你是 Live Photo 智能拼贴的命令解析器。只输出合法 JSON，不能输出解释。\n"
+            "你只能选择已有模板，不能创建新模板，不能输出除 smart_collage 以外的媒体工具。\n"
+            "首次请求输出 smart_collage，使用 query 和 k。\n"
+            "如果用户说换模板：保留 last_asset_ids，输出 template_id 和 assignment。\n"
+            "如果用户说换某一张：保留其他 asset_ids，输出 replace_slot_index 和 replace_query。\n"
+            "任何 smart_collage 调用都必须提供 query；变更操作沿用 last_query。\n"
+            "如果缺少上一轮结果或无法定位目标，设置 need_clarification=true。\n"
+            "返回格式：{user_goal,intent,selected_asset_ids,required_context,need_clarification,"
+            "clarification_questions,blocking_missing_info,tool_calls}。\n"
+            "tool_calls 最多一个 smart_collage，arguments 可包含 query,k,asset_ids,template_id,"
+            "assignment,replace_slot_index,replace_query。\n\n"
+            f"已有模板：{json.dumps(templates, ensure_ascii=False)}\n"
+            f"当前临时结果状态：{json.dumps(state, ensure_ascii=False)}\n"
+            f"用户请求：{request.text}\n"
+        )
+        messages = [
+            {"role": "system", "content": prompt},
+            {"role": "user", "content": request.text},
+        ]
+        rendered = runtime.tokenizer.apply_chat_template(messages, tokenize=False, add_generation_prompt=True)
+        inputs = runtime.tokenizer(rendered, return_tensors="pt")
+        if hasattr(runtime.model, "device") and runtime.model.device is not None:
+            inputs = {key: value.to(runtime.model.device) for key, value in inputs.items()}
+        with torch.no_grad():
+            output = runtime.model.generate(
+                **inputs,
+                max_new_tokens=min(settings.local_max_new_tokens, 384),
+                do_sample=False,
+                use_cache=True,
+            )
+        generated = output[:, inputs["input_ids"].shape[1]:]
+        text = runtime.tokenizer.decode(generated[0], skip_special_tokens=True).strip()
+        del output, generated, inputs
+        plan_dict = self._parse_json_text(text)
+        return ExecutionPlan.model_validate(plan_dict)
+
+    def _build_chat_payload(self, request: AgentRequest, library_summary: dict[str, object]) -> dict[str, object]:
+        """Kept as a small inspection hook for UI/debug tooling."""
+        return {
+            "mode": "chat",
+            "request": request.text,
+            "library_summary": library_summary,
+        }
+
     def _build_planner_payload(self, request: AgentRequest, library_summary: dict[str, object]) -> dict[str, object]:
+        if str(request.mode).strip().lower() == "chat":
+            return self._build_chat_payload(request, library_summary)
         tool_choices = "|".join(spec.name.value for spec in TOOL_SPECS)
         layout_assets = self._extract_layout_assets(request.layout_context)
         edit_directives = self._extract_edit_directives(request.layout_context)

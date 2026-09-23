@@ -29,11 +29,18 @@ def _build_parse_system_prompt() -> str:
     )
 
 
-def _build_parse_prompt() -> str:
+def _build_parse_prompt(total_duration_s: float = 6.0, has_video: bool = False) -> str:
+    temporal_schema = (
+        f'\n如果输入包含动态段（总时长约 {total_duration_s:.2f} 秒），每个区域可以额外给出 '
+        '"start_time_s" 和 "end_time_s"；无法判断时使用 0 和总时长。\n'
+        if has_video
+        else ""
+    )
     return (
         "分析这张图片的版面布局。图片是由多张子图拼接而成的合成图。\n\n"
         "请输出一个 JSON 数组，描述每个子图的位置和大小：\n"
-        '{"left_pct": 数字, "top_pct": 数字, "width_pct": 数字, "height_pct": 数字}\n\n'
+        '{"left_pct": 数字, "top_pct": 数字, "width_pct": 数字, "height_pct": 数字}\n'
+        f"{temporal_schema}\n"
         "规则：\n"
         "1. 子图边缘对齐一条直线——划分比例是整数（如 1/3=33.3, 1/2=50, 1/4=25）\n"
         "2. 所有子图拼在一起应该正好覆盖整个画布，没有缝隙也没有重叠\n"
@@ -111,16 +118,25 @@ def _snap_to_grid(slots: list[dict[str, Any]], tolerance: float = 5.0) -> list[d
         new_top = _snap(top, grid_rows)
         new_bottom = _snap(top + h, grid_rows)
         if new_right > new_left and new_bottom > new_top:
-            snapped.append({
+            snapped_slot = {
                 "left_pct": new_left,
                 "top_pct": new_top,
                 "width_pct": new_right - new_left,
                 "height_pct": new_bottom - new_top,
-            })
+            }
+            for key in ("start_time_s", "end_time_s"):
+                if key in s:
+                    snapped_slot[key] = s[key]
+            snapped.append(snapped_slot)
     return snapped
 
 
-def _normalize_slots(raw_slots: list[Any], grid_cols: int = DEFAULT_GRID_COLS, grid_rows: int = DEFAULT_GRID_ROWS) -> list[dict[str, Any]]:
+def _normalize_slots(
+    raw_slots: list[Any],
+    grid_cols: int = DEFAULT_GRID_COLS,
+    grid_rows: int = DEFAULT_GRID_ROWS,
+    total_duration_s: float = 6.0,
+) -> list[dict[str, Any]]:
     normalized: list[dict[str, Any]] = []
     min_area = (grid_cols * grid_rows) * 0.02
 
@@ -165,6 +181,11 @@ def _normalize_slots(raw_slots: list[Any], grid_cols: int = DEFAULT_GRID_COLS, g
             "role": slot_role if slot_role == "foreground" else "background",
             "pin_to_top": bool(slot.get("pin_to_top", False)) or slot_role == "foreground",
             "image_prompt": str(slot.get("image_prompt", "")),
+            "start_time_s": max(0.0, float(slot.get("start_time_s", 0.0))),
+            "end_time_s": min(
+                max(0.0, float(slot.get("end_time_s", total_duration_s))),
+                max(total_duration_s, 0.1),
+            ),
         })
 
     # Deduplicate: if two slots share >90% overlap, keep the larger one
@@ -196,7 +217,17 @@ def _normalize_slots(raw_slots: list[Any], grid_cols: int = DEFAULT_GRID_COLS, g
         if len(full_canvas) < len(deduped):
             deduped = [s for s in deduped if s["gw"] * s["gh"] < total * 0.95]
 
-    return deduped if deduped else [{"gx": 0, "gy": 0, "gw": grid_cols, "gh": grid_rows, "role": "background", "pin_to_top": False, "image_prompt": ""}]
+    return deduped if deduped else [{
+        "gx": 0,
+        "gy": 0,
+        "gw": grid_cols,
+        "gh": grid_rows,
+        "role": "background",
+        "pin_to_top": False,
+        "image_prompt": "",
+        "start_time_s": 0.0,
+        "end_time_s": total_duration_s,
+    }]
 
 
 def _scale_slots_to_target(
@@ -226,6 +257,7 @@ def parse_image_to_template(
     image_name: str = "",
     grid_cols: int = 3,
     grid_rows: int = 4,
+    video_path: Path | None = None,
 ) -> dict[str, Any]:
     """Send image to local VLM and return a template JSON dict.
 
@@ -244,11 +276,15 @@ def parse_image_to_template(
     )
 
     image = Image.open(io.BytesIO(image_bytes)).convert("RGB")
-    prompt = _build_parse_prompt()
+    video_frames: list[Any] = []
+    total_duration_s = 6.0
+    if video_path is not None and Path(video_path).exists():
+        video_frames, total_duration_s = _extract_video_frames(Path(video_path))
+    prompt = _build_parse_prompt(total_duration_s=total_duration_s, has_video=bool(video_frames))
     system_prompt = _build_parse_system_prompt()
 
     extracted = chat_with_images(
-        images=[image],
+        images=[image, *video_frames],
         prompt=prompt,
         system_prompt=system_prompt,
         max_new_tokens=512,
@@ -277,9 +313,13 @@ def parse_image_to_template(
         template_style = str(template.get("style", template_style))
         template_board = str(template.get("board", template_board))
 
-    slots = _normalize_slots(raw_slots, grid_cols, grid_rows)
+    slots = _normalize_slots(raw_slots, grid_cols, grid_rows, total_duration_s=total_duration_s)
     if not slots:
-        slots = [{"gx": 0, "gy": 0, "gw": grid_cols, "gh": grid_rows, "pin_to_top": False, "image_prompt": ""}]
+        slots = [{
+            "gx": 0, "gy": 0, "gw": grid_cols, "gh": grid_rows,
+            "pin_to_top": False, "image_prompt": "",
+            "start_time_s": 0.0, "end_time_s": total_duration_s,
+        }]
     slots = _scale_slots_to_target(slots, grid_cols, grid_rows, DEFAULT_GRID_COLS, DEFAULT_GRID_ROWS)
 
     return {
@@ -288,7 +328,36 @@ def parse_image_to_template(
         "style": template_style,
         "board": template_board,
         "slots": slots,
+        "total_duration_s": total_duration_s,
     }
+
+
+def _extract_video_frames(video_path: Path, max_frames: int = 4) -> tuple[list[Any], float]:
+    """Extract a few representative frames and duration for coarse timing hints."""
+    from PIL import Image
+    import cv2
+
+    cap = cv2.VideoCapture(str(video_path))
+    if not cap.isOpened():
+        return [], 6.0
+    fps = float(cap.get(cv2.CAP_PROP_FPS) or 30.0)
+    total = int(cap.get(cv2.CAP_PROP_FRAME_COUNT) or 0)
+    duration = total / max(fps, 1.0) if total > 0 else 6.0
+    frames: list[Any] = []
+    indices = [int(total * (i + 0.5) / max_frames) for i in range(min(max_frames, total))]
+    for index in indices:
+        cap.set(cv2.CAP_PROP_POS_FRAMES, index)
+        ok, frame = cap.read()
+        if not ok:
+            continue
+        frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+        height, width = frame.shape[:2]
+        scale = 448 / max(height, width)
+        if scale < 1.0:
+            frame = cv2.resize(frame, (int(width * scale), int(height * scale)))
+        frames.append(Image.fromarray(frame))
+    cap.release()
+    return frames, max(duration, 0.1)
 
 
 def load_custom_templates() -> list[dict[str, Any]]:
