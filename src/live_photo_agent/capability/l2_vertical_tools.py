@@ -39,7 +39,8 @@ class L2VerticalTools:
         """
         asset_paths = call.arguments.get("asset_paths", [])
         from ..config import settings
-        output_dir = Path(str(call.arguments.get("output_dir", ""))) or (settings.agent_work_dir / "collage")
+        raw_output_dir = str(call.arguments.get("output_dir", "")).strip()
+        output_dir = Path(raw_output_dir) if raw_output_dir else (settings.agent_work_dir / "collage")
         canvas_w = int(call.arguments.get("canvas_width", 1440))
         canvas_h = int(call.arguments.get("canvas_height", 1920))
         span_ratio = float(call.arguments.get("span_ratio", 0.25))
@@ -199,7 +200,8 @@ class L2VerticalTools:
         """
         asset_paths = call.arguments.get("asset_paths", [])
         from ..config import settings
-        output_dir = Path(str(call.arguments.get("output_dir", ""))) or (settings.agent_work_dir / "collage")
+        raw_output_dir = str(call.arguments.get("output_dir", "")).strip()
+        output_dir = Path(raw_output_dir) if raw_output_dir else (settings.agent_work_dir / "collage")
         canvas_w = int(call.arguments.get("canvas_width", 1440))
         canvas_h = int(call.arguments.get("canvas_height", 1920))
         layout_type = str(call.arguments.get("layout_type", "vertical"))

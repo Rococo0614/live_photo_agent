@@ -1164,8 +1164,17 @@ class L0AtomicTools:
         return [asset for asset in assets if asset.asset_id in selected_ids]
 
     def _workspace_dir(self, context: dict[str, object]) -> Path:
-        default_root = Path(context["library_root"]).resolve() / ".agent_work"
-        root = Path(str(context.get("work_dir", default_root)))
+        # All runtime artefacts belong to the application workspace, never to
+        # the user's library/data directory.  The old fallback used
+        # ``library_root/.agent_work`` and created a second output tree such as
+        # ``data/.agent_work``.
+        configured_root = settings.agent_work_dir.resolve()
+        raw_root = context.get("work_dir")
+        root = Path(str(raw_root)).expanduser().resolve() if raw_root else configured_root
+        try:
+            root.relative_to(configured_root)
+        except ValueError:
+            root = configured_root
         root.mkdir(parents=True, exist_ok=True)
         return root
 

@@ -2,6 +2,9 @@ from pathlib import Path
 
 from live_photo_agent.execution.direct_layout import DirectLayoutExecutor, parse_processing_directives
 from live_photo_agent.models import AgentRequest
+from live_photo_agent.capability.l0_atomic_tools import L0AtomicTools
+from live_photo_agent.foundation.library import LibraryService
+from live_photo_agent.config import settings
 
 
 def test_processing_directives_are_whitelisted() -> None:
@@ -29,3 +32,14 @@ def test_layout_mode_without_slots_returns_clarification(tmp_path: Path) -> None
     # pure validation behavior and is covered by the executor's result type.
     assert request.mode == "layout"
     assert request.layout_context == []
+
+
+def test_l0_workspace_never_falls_back_under_library_root(tmp_path: Path, monkeypatch) -> None:
+    canonical = tmp_path / "workspace" / ".agent_work"
+    monkeypatch.setattr(settings, "agent_work_dir", canonical)
+    tools = L0AtomicTools(LibraryService())
+
+    resolved = tools._workspace_dir({"library_root": tmp_path / "data"})
+
+    assert resolved == canonical
+    assert not (tmp_path / "data" / ".agent_work").exists()
