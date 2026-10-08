@@ -88,18 +88,11 @@ def health() -> dict[str, str]:
 @app.get("/api/dialog-state")
 def dialog_state() -> dict[str, object]:
     """Debug endpoint: check DST state for multi-turn conversation."""
-    ds = agent._dialog_state
-    return {
-        "turn_count": ds.turn_count,
-        "last_intent": ds.last_intent,
-        "last_query": ds.last_query,
-        "last_asset_ids": ds.last_asset_ids,
-        "last_template_id": ds.last_template_id,
-        "last_template_name": ds.last_template_name,
-        "last_assignment": ds.last_assignment,
-        "last_recommendations": ds.last_recommendations,
-        "last_final_video": ds.last_final_video,
+    states = {
+        sid: ds.to_summary()
+        for sid, ds in agent._dialog_states.items()
     }
+    return {"sessions": states, "session_count": len(states)}
 
 
 @app.get("/api/templates")
@@ -259,10 +252,9 @@ def execute_agent(request: AgentRequest) -> AgentResponse:
     request.input_image_paths = [Path(p) if isinstance(p, str) else p for p in request.input_image_paths]
     request.input_video_paths = [Path(p) if isinstance(p, str) else p for p in request.input_video_paths]
     # Debug: log DST state and request info
-    ds = agent._dialog_state
-    is_refine = ds.is_refine(str(request.text))
-    print(f"  [API] text={request.text!r} selected_asset_ids={request.selected_asset_ids} "
-          f"is_refine={is_refine} dst_turns={ds.turn_count} dst_assets={len(ds.last_asset_ids)}")
+    ds = agent._dialog_state_for(request)
+    print(f"  [API] session={getattr(request, 'session_id', '') or request.user_id} "
+          f"text={request.text!r} dst_turns={ds.turn_count} dst_assets={len(ds.last_asset_ids)}")
     return agent.execute(request)
 
 

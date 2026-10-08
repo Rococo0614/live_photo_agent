@@ -1391,6 +1391,7 @@
       activeLayoutId: '',
       keepAspectResize: false,
       conversationHistory: [],
+      sessionId: 'sess_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 8),
     };
 
     const GRID_LAYOUT = { cols: 120, rows: 160 };
@@ -3287,6 +3288,7 @@
         const payload = {
           user_id: 'web-chat',
           mode: 'chat',
+          session_id: state.sessionId,
           text: query,
           library_root: els.libraryRootInput.value.trim() || state.bootstrap?.library_root || 'data/live_photo',
           selected_asset_ids: [],
@@ -3384,7 +3386,7 @@
           const thumbWrap = document.createElement('div');
           thumbWrap.style.cssText = 'display:inline-block;cursor:pointer;position:relative;';
           const thumb = document.createElement('video');
-          thumb.src = '/api/ui/media?path=' + encodeURIComponent(finalVideo);
+          thumb.src = '/api/ui/media?path=' + encodeURIComponent(finalVideo) + '&t=' + Date.now();
           thumb.controls = true;
           thumb.loop = true;
           thumb.autoplay = true;

@@ -10,7 +10,7 @@ from ..foundation import LibraryService, MemoryService
 from ..foundation.layout_resolver import LayoutResolver
 from ..foundation.state import FoundationLayer
 from ..models import AgentRequest, AgentResponse, ExecutionPlan, ToolCall, ToolName, ToolResult
-from .dialog_state import DialogState, is_refine_intent
+from .dialog_state import DialogState
 from .direct_layout import DirectLayoutExecutor
 from .flow import InputFlowLayer
 from .input_preprocessor import InputPreprocessor
@@ -34,8 +34,23 @@ class LivePhotoAgent:
         self.input_preprocessor = InputPreprocessor()
         self.graph_runner = PlannerGraphRunner(max_replans=1)
         self.direct_layout_executor = DirectLayoutExecutor(self.tools)
-        # Dialog state tracking: persists across turns within a session
-        self._dialog_state = DialogState()
+        # Dialog state tracking: per-session, keyed by session_id. A new page
+        # load sends a new session_id, so refresh = fresh conversation.
+        self._dialog_states: dict[str, DialogState] = {}
+
+    def _dialog_state_for(self, request: AgentRequest) -> DialogState:
+        session_id = str(getattr(request, "session_id", "") or request.user_id).strip()
+        if not session_id:
+            session_id = str(request.user_id)
+        state = self._dialog_states.get(session_id)
+        if state is None:
+            state = DialogState()
+            self._dialog_states[session_id] = state
+            # Bound memory: keep at most 16 sessions
+            if len(self._dialog_states) > 16:
+                oldest = next(iter(self._dialog_states))
+                self._dialog_states.pop(oldest, None)
+        return state
 
     def execute(self, request: AgentRequest) -> AgentResponse:
         request_start = perf_counter()
@@ -49,17 +64,17 @@ class LivePhotoAgent:
             return self._execute_layout_request(request)
 
         # --- Dialog State Tracking (DST) ---
-        # Detect refine intent and inject inherited slots BEFORE planner
-        is_refine = self._dialog_state.is_refine(str(request.text))
-        if is_refine:
-            inherited_ids = self._dialog_state.get_inherited_asset_ids()
-            if inherited_ids and not request.selected_asset_ids:
-                request.selected_asset_ids = inherited_ids
-                logger.info(
-                    "[DST] refine detected: inheriting %d asset_ids from previous turn",
-                    len(inherited_ids),
-                )
-        dialog_context = self._dialog_state.to_summary()
+        # Always inject the previous turn's structured state into the planner
+        # context. The LLM decides whether to reuse assets — no regex, no
+        # hardcoded rules. Language variation is absorbed by the model.
+        dialog_state = self._dialog_state_for(request)
+        dialog_context = dialog_state.to_summary()
+        logger.info(
+            "[DST] injecting dialog state: turns=%d assets=%d template=%s",
+            dialog_context.get("turn_count", 0),
+            len(dialog_context.get("last_asset_ids", [])),
+            dialog_context.get("last_template_id", ""),
+        )
 
         tracer = get_tracer()
         with tracer.start_run(request) as trace:
@@ -114,7 +129,7 @@ class LivePhotoAgent:
                 "retry_of_run_id": request.retry_of_run_id,
                 "conversation_history": runtime_request.conversation_history,
                 "dialog_state": dialog_context,
-                "is_refine": is_refine,
+                "session_id": str(getattr(runtime_request, "session_id", "") or runtime_request.user_id),
             }
 
             graph_run_start = perf_counter()
@@ -231,16 +246,16 @@ class LivePhotoAgent:
                 {"payload": tr.payload if hasattr(tr, "payload") else tr.get("payload", {})}
                 for tr in tool_results
             ]
-            self._dialog_state.last_query = str(runtime_request.text)
-            self._dialog_state.update_from_results(
+            dialog_state.last_query = str(runtime_request.text)
+            dialog_state.update_from_results(
                 plan_intent=plan.intent,
                 tool_results=tool_results_for_dst,
             )
             logger.info(
                 "[DST] state updated: intent=%s asset_ids=%d template=%s",
-                self._dialog_state.last_intent,
-                len(self._dialog_state.last_asset_ids),
-                self._dialog_state.last_template_id,
+                dialog_state.last_intent,
+                len(dialog_state.last_asset_ids),
+                dialog_state.last_template_id,
             )
 
             response = AgentResponse(

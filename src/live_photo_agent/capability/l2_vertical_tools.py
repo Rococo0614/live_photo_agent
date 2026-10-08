@@ -152,6 +152,55 @@ class L2VerticalTools:
         if decode_dir.exists():
             shutil.rmtree(decode_dir, ignore_errors=True)
 
+    def _cleanup_stale_collages(
+        self,
+        collage_root: Path,
+        keep_session: str = "",
+        max_age_seconds: int = 24 * 3600,
+    ) -> None:
+        """Remove collage outputs from inactive sessions.
+
+        Strategy (lazy, no background thread):
+        - Called before each new collage run.
+        - Deletes session_* directories whose newest file is older than
+          ``max_age_seconds`` (default 24h).
+        - Never touches the current session (``keep_session``).
+        - Also removes orphaned files written by the old flat layout
+          (final*.mp4 directly under collage_root) once they age out.
+        """
+        import shutil
+        import time as _time
+
+        if not collage_root.exists():
+            return
+        now = _time.time()
+
+        # Session-scoped directories
+        for entry in collage_root.iterdir():
+            if not entry.is_dir() or not entry.name.startswith("session_"):
+                continue
+            if keep_session and entry.name == f"session_{keep_session}":
+                continue
+            newest = 0.0
+            try:
+                for child in entry.rglob("*"):
+                    if child.is_file():
+                        newest = max(newest, child.stat().st_mtime)
+            except OSError:
+                continue
+            if now - newest > max_age_seconds:
+                shutil.rmtree(entry, ignore_errors=True)
+                print(f"  [cleanup] removed stale session dir: {entry.name}")
+
+        # Orphaned flat files from before session isolation
+        for entry in collage_root.glob("final*.mp4"):
+            try:
+                if now - entry.stat().st_mtime > max_age_seconds:
+                    entry.unlink()
+                    print(f"  [cleanup] removed stale file: {entry.name}")
+            except OSError:
+                continue
+
     # ------------------------------------------------------------------
     # Phase orchestration
     # ------------------------------------------------------------------
@@ -202,6 +251,13 @@ class L2VerticalTools:
         from ..config import settings
         raw_output_dir = str(call.arguments.get("output_dir", "")).strip()
         output_dir = Path(raw_output_dir) if raw_output_dir else (settings.agent_work_dir / "collage")
+        # Per-session isolation when called as a standalone tool. When invoked
+        # from smart_collage the output_dir already carries the session dir,
+        # so only append when not already inside a session_* directory.
+        if not any(part.startswith("session_") for part in output_dir.parts):
+            session_id = str(context.get("session_id", "") or "default").strip()
+            safe_session = "".join(ch for ch in session_id if ch.isalnum() or ch in "_-") or "default"
+            output_dir = output_dir / f"session_{safe_session}"
         canvas_w = int(call.arguments.get("canvas_width", 1440))
         canvas_h = int(call.arguments.get("canvas_height", 1920))
         layout_type = str(call.arguments.get("layout_type", "vertical"))
@@ -360,7 +416,12 @@ class L2VerticalTools:
             print(f"  [template_collage] {Path(p['path']).name}: {len(frames)} frames, window=[{p['start_s']:.1f}s, {p['end_s']:.1f}s], fill={p['fill_mode']}")
 
         # --- Render each frame ---
-        out_path = output_dir / "final_raw.mp4"
+        # Unique output name: template + timestamp so consecutive turns never
+        # overwrite each other and browsers don't serve a stale cached file.
+        import time as _time
+        safe_template = str(template_id or "collage").replace("/", "_").replace(" ", "_")
+        out_stem = f"final_{safe_template}_{int(_time.time())}"
+        out_path = output_dir / f"{out_stem}_raw.mp4"
         fourcc = cv2.VideoWriter_fourcc(*"mp4v")
         writer = cv2.VideoWriter(str(out_path), fourcc, fps, (canvas_w, canvas_h))
 
@@ -448,10 +509,10 @@ class L2VerticalTools:
                 print(f"  [template_collage] 帧 {fi}/{total_frames} (t={t:.1f}s)")
 
         writer.release()
-        print(f"  [template_collage] final_raw.mp4: {out_path} ({out_path.stat().st_size/1e6:.1f}MB)")
+        print(f"  [template_collage] raw: {out_path} ({out_path.stat().st_size/1e6:.1f}MB)")
 
         # 转码 H.264
-        final_path = output_dir / "final.mp4"
+        final_path = output_dir / f"{out_stem}.mp4"
         ffmpeg = shutil.which("ffmpeg")
         if ffmpeg:
             rc = subprocess.run(
@@ -539,12 +600,22 @@ class L2VerticalTools:
             output_dir = settings.agent_work_dir / "collage_output"
         else:
             output_dir = Path(raw_output)
+        # Per-session output isolation: each chat session gets its own
+        # subdirectory so cleanup can remove stale sessions without touching
+        # the active one.
+        session_id = str(context.get("session_id", "") or "default").strip()
+        safe_session = "".join(ch for ch in session_id if ch.isalnum() or ch in "_-") or "default"
+        output_dir = output_dir / f"session_{safe_session}"
         # Normalize template_id: planner sometimes generates placeholder values
         if template_id in ("template", "default", "auto", ""):
             template_id = None
         # Normalize exclude_template_id
         if exclude_template_id in ("template", "default", "auto", ""):
             exclude_template_id = None
+        # Lazy cleanup: remove stale collages from other sessions older than
+        # the retention window. Runs inline before each new collage — no
+        # background thread needed.
+        self._cleanup_stale_collages(output_dir.parent, keep_session=safe_session)
         library_root = Path(str(call.arguments.get("library_root", context.get("library_root", "data/live_photo"))))
         print(f"  [smart_collage] library_root={library_root} (exists={library_root.exists()})")
 
@@ -613,7 +684,13 @@ class L2VerticalTools:
         # Step 0b: Search K assets — or use pre-selected assets from the
         # current chat result.  A replacement is deliberately local: the
         # existing template and all other slot assignments stay unchanged.
+        # The LLM declares its intent via the `action` field; the code only
+        # dispatches on that, no semantic guessing.
+        action = str(call.arguments.get("action", "")).strip()
         pre_selected = list(call.arguments.get("asset_ids", []) or call.arguments.get("selected_asset_ids", []))
+        if action == "new_search":
+            # LLM decided this is a fresh request — ignore any inherited asset_ids
+            pre_selected = []
         if replace_query and pre_selected:
             try:
                 target_index = int(replace_slot_index)
@@ -701,7 +778,9 @@ class L2VerticalTools:
                     "reason": "preserve current template and slot assignment",
                 }]
             else:
-                candidates = []
+                # LLM hallucinated a template id — fall back to general match
+                print(f"  [smart_collage] template_id {template_id} not found, falling back to general match")
+                candidates = matcher.match(results)
         else:
             candidates = matcher.match(results, preferred_template_id=str(template_id) if template_id else None)
         
@@ -764,6 +843,14 @@ class L2VerticalTools:
             c.get("vlm_score", c["score"])
             + (0.15 if not c["template"].get("needs_segmentation", False) else 0.0)
         ), reverse=True)
+
+        # When the LLM explicitly requested a template (change_template), honor
+        # its choice instead of letting VLM re-ranking override it.
+        if action == "change_template" and template_id:
+            requested = [c for c in scored_candidates if c["template"]["id"] == str(template_id)]
+            if requested:
+                print(f"  [smart_collage] honoring LLM template choice: {template_id}")
+                scored_candidates = requested + [c for c in scored_candidates if c["template"]["id"] != str(template_id)]
 
         # When the planner LLM is resident on GPU, skip templates that need
         # segmentation (Mask2Former + Cutie would OOM alongside the planner).
@@ -911,7 +998,7 @@ class L2VerticalTools:
         rec_path.write_text(json.dumps({
             "query": query,
             "k": k,
-            "search_results": [{"asset_id": r["asset_id"], "score": r["score"],
+            "search_results": [{"asset_id": r["asset_id"], "score": r.get("score", 0),
                                 "content_summary": r.get("content_summary", "")} for r in results],
             "recommendations": recommendations,
             "selected": {
@@ -937,7 +1024,7 @@ class L2VerticalTools:
                 "final_video": final_video,
                 "selected_template": selected_template,
                 "assignment": assignment,
-                "search_results": [{"asset_id": r["asset_id"], "score": r["score"],
+                "search_results": [{"asset_id": r["asset_id"], "score": r.get("score", 0),
                                     "content_summary": r.get("content_summary", "")} for r in results],
             },
         )

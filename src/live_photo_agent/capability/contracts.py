@@ -310,7 +310,7 @@ TOOL_CONTRACTS: dict[ToolName, ToolContract] = {
     ToolName.TEMPLATE_COLLAGE: ToolContract(
         level="L2",
         purpose="Direct stacking collage: resize+crop videos per layout, no segmentation.",
-        allowed_arguments=("asset_paths", "output_dir", "canvas_width", "canvas_height", "layout_type", "template_id", "template_slots"),
+        allowed_arguments=("asset_paths", "output_dir", "canvas_width", "canvas_height", "layout_type", "template_id", "template_slots", "asset_ids", "selected_asset_ids", "library_root"),
         output_fields=("final_video", "layout_plan"),
         preconditions=("assets available",),
         side_effects=("writes final.mp4",),
@@ -323,7 +323,7 @@ TOOL_CONTRACTS: dict[ToolName, ToolContract] = {
     ToolName.SMART_COLLAGE: ToolContract(
         level="L2",
         purpose="Smart collage: semantic search + template match + VLM score + compose.",
-        allowed_arguments=("query", "k", "library_root", "output_dir", "template_id", "exclude_template_id", "canvas_width", "canvas_height"),
+        allowed_arguments=("query", "k", "library_root", "output_dir", "template_id", "exclude_template_id", "canvas_width", "canvas_height", "asset_ids", "selected_asset_ids", "assignment", "replace_slot_index", "replace_query", "action"),
         output_fields=("final_video", "recommendations", "selected_template"),
         preconditions=("asset index exists",),
         side_effects=("writes final.mp4",),

@@ -567,20 +567,48 @@ class QwenPlanner:
 
         templates = library_summary.get("template_catalog", [])
         state = library_summary.get("dialog_state", {})
+        # Compact state: only what the model needs to decide. Full assignment
+        # and recommendation lists are too long and confuse small models.
+        compact_state = {
+            "has_previous": bool(state.get("turn_count")),
+            "previous_query": state.get("last_query", ""),
+            "previous_asset_ids": state.get("last_asset_ids", []),
+            "previous_template_id": state.get("last_template_id", ""),
+            "previous_template_name": state.get("last_template_name", ""),
+        }
         prompt = (
             "你是 Live Photo 智能拼贴的命令解析器。只输出合法 JSON，不能输出解释。\n"
             "你只能选择已有模板，不能创建新模板，不能输出除 smart_collage 以外的媒体工具。\n"
-            "首次请求输出 smart_collage，使用 query 和 k。\n"
-            "如果用户说换模板：保留 last_asset_ids，输出 template_id 和 assignment。\n"
-            "如果用户说换某一张：保留其他 asset_ids，输出 replace_slot_index 和 replace_query。\n"
-            "任何 smart_collage 调用都必须提供 query；变更操作沿用 last_query。\n"
-            "如果缺少上一轮结果或无法定位目标，设置 need_clarification=true。\n"
+            "\n"
+            "## 核心任务：输出 action\n"
+            "tool_calls[0].arguments 里必须包含一个 action 字段，取值只能是以下三种之一：\n"
+            "- \"new_search\"：全新请求。用户提到新主题（猫/狗/海边/食物等），需要搜索新素材。\n"
+            "  arguments 只需 query 和 k，asset_ids 留空。\n"
+            "- \"change_template\"：用户对当前拼贴满意素材、只想换排版/布局/样式。\n"
+            "  arguments 带 asset_ids（沿用上一轮的）和 template_id（换成新模板）。\n"
+            "- \"replace_slot\"：用户想换掉其中某一张。arguments 带 asset_ids、"
+            "replace_slot_index 和 replace_query。\n"
+            "\n"
+            "## 判断标准\n"
+            "下方「当前临时结果状态」是上一轮拼贴的素材、模板和结果。\n"
+            "- has_previous 为 false → action=new_search。\n"
+            "- 用户提到新的主题词 → action=new_search（即使上一轮有结果也忽略）。\n"
+            "- 用户说换模板/换个样式/不要这个/来点不一样的，且没有新主题词 → action=change_template。\n"
+            "- 用户说换掉某一张/第三张换成别的 → action=replace_slot。\n"
+            "- 用户只是聊天/提问 → intent 为 conversation，tool_calls 为空。\n"
+            "\n"
+            "query 直接使用用户提到的主题词（如「猫」「去海边玩的照片」），不要编造素材 id。\n"
+            "除非真的缺少必要信息，否则 need_clarification 保持 false。\n"
             "返回格式：{user_goal,intent,selected_asset_ids,required_context,need_clarification,"
             "clarification_questions,blocking_missing_info,tool_calls}。\n"
-            "tool_calls 最多一个 smart_collage，arguments 可包含 query,k,asset_ids,template_id,"
-            "assignment,replace_slot_index,replace_query。\n\n"
+            "required_context 必须是字符串数组（例如 [\"沿用上一轮素材\"]），不能是对象。\n"
+            "JSON 里所有键和字符串值必须用英文双引号，不能有单引号，键后面用冒号。\n"
+            "输出示例（全新请求）：\n"
+            '{"user_goal":"三拼小猫","intent":"smart_collage","selected_asset_ids":[],"required_context":[],"need_clarification":false,"clarification_questions":[],"blocking_missing_info":[],"tool_calls":[{"tool":"smart_collage","reason":"search and collage","arguments":{"action":"new_search","query":"小猫","k":3}}]}\n'
+            "输出示例（换模板，沿用素材）：\n"
+            '{"user_goal":"换个模板","intent":"smart_collage","selected_asset_ids":["a1","a2","a3"],"required_context":["沿用上一轮素材"],"need_clarification":false,"clarification_questions":[],"blocking_missing_info":[],"tool_calls":[{"tool":"smart_collage","reason":"reuse assets change template","arguments":{"action":"change_template","query":"小猫","k":3,"asset_ids":["a1","a2","a3"],"template_id":"T07"}}]}\n\n'
             f"已有模板：{json.dumps(templates, ensure_ascii=False)}\n"
-            f"当前临时结果状态：{json.dumps(state, ensure_ascii=False)}\n"
+            f"当前临时结果状态：{json.dumps(compact_state, ensure_ascii=False)}\n"
             f"用户请求：{request.text}\n"
         )
         messages = [
@@ -594,15 +622,81 @@ class QwenPlanner:
         with torch.no_grad():
             output = runtime.model.generate(
                 **inputs,
-                max_new_tokens=min(settings.local_max_new_tokens, 384),
+                max_new_tokens=min(settings.local_max_new_tokens, 512),
                 do_sample=False,
                 use_cache=True,
             )
         generated = output[:, inputs["input_ids"].shape[1]:]
         text = runtime.tokenizer.decode(generated[0], skip_special_tokens=True).strip()
         del output, generated, inputs
+        print(f"  [chat_planner] raw output: {text[:600]!r}")
         plan_dict = self._parse_json_text(text)
+        plan_dict = self._coerce_chat_plan_dict(plan_dict)
         return ExecutionPlan.model_validate(plan_dict)
+
+    def _coerce_chat_plan_dict(self, plan_dict: dict[str, object]) -> dict[str, object]:
+        """Tolerate sloppy LLM output for the chat planner.
+
+        Small quantized models often emit:
+          - required_context / clarification_questions / blocking_missing_info
+            as a bare string instead of a list
+          - tool_calls entries without a ``reason`` field
+          - intents like "search" instead of "search_only"
+        """
+        # List-typed fields that models frequently emit as strings/dicts
+        for field in ("required_context", "clarification_questions", "blocking_missing_info"):
+            value = plan_dict.get(field)
+            if isinstance(value, str) and value.strip():
+                plan_dict[field] = [value.strip()]
+            elif isinstance(value, str):
+                plan_dict[field] = []
+            elif isinstance(value, dict):
+                # e.g. {"last_template_id": "T02"} — preserve as a single string summary
+                plan_dict[field] = [str(value)]
+            elif not isinstance(value, list):
+                plan_dict[field] = []
+
+        # selected_asset_ids must be a list
+        if not isinstance(plan_dict.get("selected_asset_ids"), list):
+            plan_dict["selected_asset_ids"] = []
+
+        # tool_calls entries: fill missing reason, coerce arguments to dict
+        calls = plan_dict.get("tool_calls")
+        if isinstance(calls, list):
+            for call in calls:
+                if not isinstance(call, dict):
+                    continue
+                # Some models emit "type" instead of "tool"
+                if "tool" not in call and "type" in call:
+                    call["tool"] = call.pop("type")
+                if not call.get("reason"):
+                    call["reason"] = "chat command"
+                if not isinstance(call.get("arguments"), dict):
+                    call["arguments"] = {}
+                args = call["arguments"]
+                # Normalize action: models may omit it or use Chinese labels
+                raw_action = str(args.get("action", "")).strip().lower()
+                if raw_action in ("新搜索", "全新", "搜索", "search"):
+                    args["action"] = "new_search"
+                elif raw_action in ("换模板", "变更模板", "change", "换布局"):
+                    args["action"] = "change_template"
+                elif raw_action in ("换一张", "替换", "replace"):
+                    args["action"] = "replace_slot"
+                elif not raw_action:
+                    # Infer: asset_ids present → change_template, else new_search
+                    args["action"] = "change_template" if args.get("asset_ids") else "new_search"
+
+        # intent normalization for common LLM sloppiness
+        intent = str(plan_dict.get("intent", "")).strip().lower()
+        intent_aliases = {
+            "search": "search_only",
+            "collage": "smart_collage",
+            "triptych": "smart_collage",
+        }
+        if intent in intent_aliases:
+            plan_dict["intent"] = intent_aliases[intent]
+
+        return plan_dict
 
     def _build_chat_payload(self, request: AgentRequest, library_summary: dict[str, object]) -> dict[str, object]:
         """Kept as a small inspection hook for UI/debug tooling."""
@@ -790,10 +884,81 @@ class QwenPlanner:
         end = stripped.rfind("}")
         if start == -1 or end == -1 or start >= end:
             raise RuntimeError("Planner text output is not valid JSON")
-        parsed = json.loads(stripped[start : end + 1])
-        if not isinstance(parsed, dict):
-            raise RuntimeError("Planner JSON payload must be an object")
-        return parsed
+        candidate = stripped[start : end + 1]
+
+        try:
+            parsed = json.loads(candidate)
+            if isinstance(parsed, dict):
+                return parsed
+        except json.JSONDecodeError:
+            pass
+
+        # Trailing garbage (phantom tokens): find the longest prefix that is
+        # a balanced, complete JSON object. Walk brace-depth from start.
+        import json as _json
+
+        depth = 0
+        in_string = False
+        escape = False
+        object_end = -1
+        for idx, ch in enumerate(candidate):
+            if in_string:
+                if escape:
+                    escape = False
+                elif ch == "\\":
+                    escape = True
+                elif ch == '"':
+                    in_string = False
+                continue
+            if ch == '"':
+                in_string = True
+            elif ch == "{":
+                depth += 1
+            elif ch == "}":
+                depth -= 1
+                if depth == 0:
+                    object_end = idx
+                    break
+        if object_end != -1:
+            try:
+                parsed = _json.loads(candidate[: object_end + 1])
+                if isinstance(parsed, dict):
+                    return parsed
+            except _json.JSONDecodeError:
+                pass
+
+        # Fallback: single-quoted or unquoted-key JSON emitted by smaller
+        # quantized models, e.g. {user_goal:"三拼小猫",intent:"smart_collage",...}
+        # or {'user_goal': '三拼小猫', ...}.
+        import ast
+        import re
+
+        try:
+            reparsed = ast.literal_eval(candidate)
+            if isinstance(reparsed, dict):
+                return {str(key): value for key, value in reparsed.items()}
+        except (ValueError, SyntaxError):
+            pass
+
+        # Unquoted keys with ':' or '=' separator:
+        # {user_goal:"x",intent:"y"} or {user_goal="x",intent="y"}
+        # → {"user_goal":"x","intent":"y"}
+        try:
+            unquoted_keys = re.sub(
+                r"(?<![A-Za-z0-9_\"'])([A-Za-z_][A-Za-z0-9_]*)(?=\s*[:=])",
+                r'"\1"',
+                candidate,
+            )
+            unquoted_keys = re.sub(r'"(\w+)"\s*=', r'"\1":', unquoted_keys)
+            # Missing colon entirely: {key,{...}} or {key,[...]} → {key:{...}}
+            unquoted_keys = re.sub(r'"(\w+)"\s*,(\s*[\[{])', r'"\1":\2', unquoted_keys)
+            parsed = json.loads(unquoted_keys)
+            if isinstance(parsed, dict):
+                return parsed
+        except json.JSONDecodeError:
+            pass
+
+        raise RuntimeError("Planner JSON payload must be an object")
 
     def preview_prompt(self, request: AgentRequest, library_summary: dict[str, object]) -> str:
         tool_catalog = [

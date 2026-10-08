@@ -173,6 +173,9 @@ class AgentRequest(BaseModel):
     # Conversation history: list of {role, text, template_id?, final_video?}
     # Lets the planner understand context like "换个模板" (change template).
     conversation_history: list[dict[str, object]] = Field(default_factory=list)
+    # Session identifier for dialog state tracking. A new page load generates
+    # a new session_id, so refreshing the page starts a fresh conversation.
+    session_id: str = ""
 
 
 class ToolResult(BaseModel):
