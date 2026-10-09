@@ -575,24 +575,39 @@ class QwenPlanner:
             "previous_asset_ids": state.get("last_asset_ids", []),
             "previous_template_id": state.get("last_template_id", ""),
             "previous_template_name": state.get("last_template_name", ""),
+            "used_template_ids": state.get("template_history", []),
         }
+        previous_asset_count = len(compact_state["previous_asset_ids"])
+        matching_templates = [
+            {
+                "id": item.get("id", ""),
+                "name": item.get("name", ""),
+                "slot_count": item.get("slot_count", 0),
+            }
+            for item in templates
+            if previous_asset_count and item.get("slot_count") == previous_asset_count
+        ]
         prompt = (
             "你是 Live Photo 智能拼贴的命令解析器。只输出合法 JSON，不能输出解释。\n"
             "你只能选择已有模板，不能创建新模板，不能输出除 smart_collage 以外的媒体工具。\n"
             "\n"
             "## 核心任务：输出 action\n"
             "tool_calls[0].arguments 里必须包含一个 action 字段，取值只能是以下三种之一：\n"
-            "- \"new_search\"：全新请求。用户提到新主题（猫/狗/海边/食物等），需要搜索新素材。\n"
-            "  arguments 只需 query 和 k，asset_ids 留空。\n"
-            "- \"change_template\"：用户对当前拼贴满意素材、只想换排版/布局/样式。\n"
-            "  arguments 带 asset_ids（沿用上一轮的）和 template_id（换成新模板）。\n"
+             "- \"new_search\"：全新请求。用户提到新主题（猫/狗/海边/食物等），需要搜索新素材。\n"
+             "  arguments 只需 query 和 k，asset_ids 留空。\n"
+             "- \"replace_assets\"：用户说换一批素材/重新选一组，但没有要求换模板。\n"
+             "  arguments 带 query、k，asset_ids 留空；后端保留当前模板并排除上一批素材。\n"
+             "- \"change_template\"：用户对当前拼贴满意素材、只想换排版/布局/样式。\n"
+             "  arguments 带 asset_ids（沿用上一轮的）；template_id 只有在用户明确指定模板时才填写，\n"
+             "  否则不要猜模板 ID，由后端从同素材数量的可用模板中选择。\n"
             "- \"replace_slot\"：用户想换掉其中某一张。arguments 带 asset_ids、"
             "replace_slot_index 和 replace_query。\n"
             "\n"
             "## 判断标准\n"
             "下方「当前临时结果状态」是上一轮拼贴的素材、模板和结果。\n"
             "- has_previous 为 false → action=new_search。\n"
-            "- 用户提到新的主题词 → action=new_search（即使上一轮有结果也忽略）。\n"
+             "- 用户提到新的主题词 → action=new_search（即使上一轮有结果也忽略）。\n"
+             "- 用户说换一批素材/重新挑一组，且没有要求换模板 → action=replace_assets。\n"
             "- 用户说换模板/换个样式/不要这个/来点不一样的，且没有新主题词 → action=change_template。\n"
             "- 用户说换掉某一张/第三张换成别的 → action=replace_slot。\n"
             "- 用户只是聊天/提问 → intent 为 conversation，tool_calls 为空。\n"
@@ -605,10 +620,11 @@ class QwenPlanner:
             "JSON 里所有键和字符串值必须用英文双引号，不能有单引号，键后面用冒号。\n"
             "输出示例（全新请求）：\n"
             '{"user_goal":"三拼小猫","intent":"smart_collage","selected_asset_ids":[],"required_context":[],"need_clarification":false,"clarification_questions":[],"blocking_missing_info":[],"tool_calls":[{"tool":"smart_collage","reason":"search and collage","arguments":{"action":"new_search","query":"小猫","k":3}}]}\n'
-            "输出示例（换模板，沿用素材）：\n"
-            '{"user_goal":"换个模板","intent":"smart_collage","selected_asset_ids":["a1","a2","a3"],"required_context":["沿用上一轮素材"],"need_clarification":false,"clarification_questions":[],"blocking_missing_info":[],"tool_calls":[{"tool":"smart_collage","reason":"reuse assets change template","arguments":{"action":"change_template","query":"小猫","k":3,"asset_ids":["a1","a2","a3"],"template_id":"T07"}}]}\n\n'
-            f"已有模板：{json.dumps(templates, ensure_ascii=False)}\n"
-            f"当前临时结果状态：{json.dumps(compact_state, ensure_ascii=False)}\n"
+             "输出示例（换模板，沿用素材）：\n"
+             '{"user_goal":"换个模板","intent":"smart_collage","selected_asset_ids":["a1","a2","a3"],"required_context":["沿用上一轮素材"],"need_clarification":false,"clarification_questions":[],"blocking_missing_info":[],"tool_calls":[{"tool":"smart_collage","reason":"reuse assets and let backend choose a valid alternative","arguments":{"action":"change_template","query":"小猫","k":3,"asset_ids":["a1","a2","a3"]}}]}\n\n'
+             f"已有模板：{json.dumps(templates, ensure_ascii=False)}\n"
+             f"当前素材数量对应的可用模板：{json.dumps(matching_templates, ensure_ascii=False)}\n"
+             f"当前临时结果状态：{json.dumps(compact_state, ensure_ascii=False)}\n"
             f"用户请求：{request.text}\n"
         )
         messages = [
@@ -680,6 +696,8 @@ class QwenPlanner:
                     args["action"] = "new_search"
                 elif raw_action in ("换模板", "变更模板", "change", "换布局"):
                     args["action"] = "change_template"
+                elif raw_action in ("换一批", "换素材", "重新选", "replace_assets"):
+                    args["action"] = "replace_assets"
                 elif raw_action in ("换一张", "替换", "replace"):
                     args["action"] = "replace_slot"
                 elif not raw_action:

@@ -10,6 +10,12 @@ def test_frontend_templates_are_available_from_backend_library() -> None:
     assert library.get("live_overlay_top") is not None
 
 
+def test_four_asset_templates_are_not_limited_to_t03() -> None:
+    library = TemplateLibrary()
+    ids = {template.id for template in library.find_by_slot_count(4)}
+    assert {"T03", "live_four_grid", "s10_hbar_chart"}.issubset(ids)
+
+
 def test_custom_template_round_trips_through_shared_store(tmp_path: Path) -> None:
     library = TemplateLibrary(tmp_path / "templates")
     library.save_template_dict(

@@ -31,6 +31,7 @@ class DialogState:
     last_asset_ids: list[str] = field(default_factory=list)
     last_template_id: str = ""
     last_template_name: str = ""
+    template_history: list[str] = field(default_factory=list)
     last_assignment: list[dict[str, Any]] = field(default_factory=list)
     last_recommendations: list[dict[str, Any]] = field(default_factory=list)
     last_final_video: str = ""
@@ -58,6 +59,8 @@ class DialogState:
             if isinstance(selected, dict):
                 self.last_template_id = selected.get("id", "")
                 self.last_template_name = selected.get("name", "")
+                if self.last_template_id and self.last_template_id not in self.template_history:
+                    self.template_history.append(self.last_template_id)
 
             assignment = payload.get("assignment", [])
             if isinstance(assignment, list):
@@ -87,6 +90,7 @@ class DialogState:
             "last_asset_ids": self.last_asset_ids,
             "last_template_id": self.last_template_id,
             "last_template_name": self.last_template_name,
+            "template_history": self.template_history,
             "last_assignment": self.last_assignment,
             "last_recommendations": self.last_recommendations,
             "last_final_video": self.last_final_video,

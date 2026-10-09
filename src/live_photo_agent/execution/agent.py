@@ -246,7 +246,18 @@ class LivePhotoAgent:
                 {"payload": tr.payload if hasattr(tr, "payload") else tr.get("payload", {})}
                 for tr in tool_results
             ]
-            dialog_state.last_query = str(runtime_request.text)
+            smart_call = next(
+                (call for call in plan.tool_calls if call.tool is ToolName.SMART_COLLAGE),
+                None,
+            )
+            if smart_call is not None:
+                action = str(smart_call.arguments.get("action", ""))
+                if action in {"new_search", "replace_assets"}:
+                    dialog_state.last_query = str(
+                        smart_call.arguments.get("query") or runtime_request.text
+                    )
+            elif not dialog_state.last_query:
+                dialog_state.last_query = str(runtime_request.text)
             dialog_state.update_from_results(
                 plan_intent=plan.intent,
                 tool_results=tool_results_for_dst,

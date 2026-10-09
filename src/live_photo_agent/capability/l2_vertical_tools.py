@@ -688,9 +688,29 @@ class L2VerticalTools:
         # dispatches on that, no semantic guessing.
         action = str(call.arguments.get("action", "")).strip()
         pre_selected = list(call.arguments.get("asset_ids", []) or call.arguments.get("selected_asset_ids", []))
+        dialog_state = context.get("dialog_state", {})
+        previous_asset_ids: list[str] = []
+        previous_template_id = ""
+        template_history: list[str] = []
+        previous_query = ""
+        if isinstance(dialog_state, dict):
+            previous_asset_ids = [str(item) for item in dialog_state.get("last_asset_ids", [])]
+            previous_template_id = str(dialog_state.get("last_template_id", "") or "")
+            template_history = [str(item) for item in dialog_state.get("template_history", [])]
+            previous_query = str(dialog_state.get("last_query", "") or "")
+        print(
+            f"  [smart_collage] action={action!r} previous_template={previous_template_id!r} "
+            f"template_history={template_history} previous_assets={len(previous_asset_ids)}"
+        )
         if action == "new_search":
             # LLM decided this is a fresh request — ignore any inherited asset_ids
             pre_selected = []
+        elif action == "replace_assets":
+            # Replace only the asset set. Keep the current template and avoid
+            # returning the same assets from the previous turn.
+            pre_selected = []
+            query = query or previous_query
+            template_id = previous_template_id or template_id
         if replace_query and pre_selected:
             try:
                 target_index = int(replace_slot_index)
@@ -733,7 +753,13 @@ class L2VerticalTools:
                 print(f"    {r.get('asset_id', '?')}: score=N/A (pre-selected) summary={r.get('content_summary', '')[:50]}")
         else:
             searcher = AssetSearcher(index_rows=index_rows, db_path=str(db_path))
-            results = searcher.search(query, k=k, require_video=True)
+            search_k = max(k * 3, k + len(previous_asset_ids)) if action == "replace_assets" else k
+            searched = searcher.search(query, k=search_k, require_video=True)
+            if action == "replace_assets":
+                previous_ids = set(previous_asset_ids)
+                results = [row for row in searched if row.get("asset_id") not in previous_ids][:k]
+            else:
+                results = searched
             print(f"  [smart_collage] Search '{query}' → {len(results)} results")
             for r in results:
                 print(f"    {r['asset_id']}: score={r['score']:.3f} summary={r.get('content_summary', '')[:50]}")
@@ -753,6 +779,28 @@ class L2VerticalTools:
         # template library.
         library = TemplateLibrary()
         matcher = TemplateMatcher(library)
+
+        # Template choice is constrained by the number of selected assets.  A
+        # chat model may emit an ID from another slot count, so validate it
+        # here and let the backend choose a valid alternative when necessary.
+        requested_template_id = str(template_id or "")
+        requested_template = library.get(requested_template_id) if requested_template_id else None
+        requested_template_is_valid = bool(
+            requested_template
+            and requested_template.slot_count == len(results)
+            and requested_template_id != previous_template_id
+        )
+
+        if action == "change_template":
+            if not requested_template_is_valid:
+                if requested_template_id:
+                    print(
+                        f"  [smart_collage] Ignoring invalid template choice "
+                        f"{requested_template_id!r} for {len(results)} assets"
+                    )
+                template_id = None
+                if not exclude_template_id and previous_template_id:
+                    exclude_template_id = previous_template_id
 
         if replacement_asset_id and isinstance(requested_assignment, list):
             requested_assignment = [dict(item) for item in requested_assignment if isinstance(item, dict)]
@@ -789,6 +837,39 @@ class L2VerticalTools:
             before = len(candidates)
             candidates = [c for c in candidates if c["template"]["id"] != exclude_template_id]
             print(f"  [smart_collage] Excluded template {exclude_template_id}, {before}→{len(candidates)} candidates")
+
+        if action == "change_template" and not requested_template_is_valid and template_history:
+            used_ids = set(template_history)
+            unused = [candidate for candidate in candidates if candidate["template"]["id"] not in used_ids]
+            if unused:
+                print(
+                    f"  [smart_collage] Excluded session-used templates, "
+                    f"{len(candidates)}→{len(unused)} candidates"
+                )
+                candidates = unused
+            elif candidates:
+                # All matching templates have been used. Start a new cycle;
+                # the current template was already removed above.
+                print("  [smart_collage] Template cycle exhausted; allowing a new cycle")
+
+        # Do not select a segmentation template when its runtime dependency is
+        # unavailable. Otherwise "换个模板" can choose a template that fails
+        # later with a missing Cutie import instead of producing a result.
+        if any(candidate["template"].get("needs_segmentation", False) for candidate in candidates):
+            try:
+                import cutie  # type: ignore  # noqa: F401
+            except ImportError:
+                executable = [
+                    candidate
+                    for candidate in candidates
+                    if not candidate["template"].get("needs_segmentation", False)
+                ]
+                if executable:
+                    print(
+                        f"  [smart_collage] Skipping segmentation templates: "
+                        f"Cutie is unavailable, {len(candidates)}→{len(executable)} candidates"
+                    )
+                    candidates = executable
 
         print(f"  [smart_collage] Template match → {len(candidates)} candidates")
         for c in candidates[:3]:
