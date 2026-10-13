@@ -1,0 +1,1281 @@
+[
+  {
+    "id": "T01",
+    "name": "上下两格",
+    "description": "两个素材上下排列, 同时显示, 全程可见",
+    "slot_count": 2,
+    "slots": [
+      {
+        "subject_required": true,
+        "position_preference": "upper",
+        "bg_region": "top_third",
+        "start_time_s": 0.0,
+        "end_time_s": 6.0,
+        "fill_mode": "freeze",
+        "enter_transition": {
+          "type": "fade",
+          "duration_ms": 300
+        },
+        "exit_transition": {
+          "type": "fade",
+          "duration_ms": 300
+        }
+      },
+      {
+        "subject_required": true,
+        "position_preference": "lower",
+        "bg_region": "bottom_third",
+        "start_time_s": 0.0,
+        "end_time_s": 6.0,
+        "fill_mode": "freeze",
+        "enter_transition": {
+          "type": "fade",
+          "duration_ms": 300
+        },
+        "exit_transition": {
+          "type": "fade",
+          "duration_ms": 300
+        }
+      }
+    ],
+    "canvas_width": 1080,
+    "canvas_height": 1440,
+    "layout_type": "vertical",
+    "needs_segmentation": false,
+    "total_duration_s": 6.0,
+    "style": "editorial",
+    "board": "xhs"
+  },
+  {
+    "id": "T02",
+    "name": "三格竖排",
+    "description": "三个素材上下排列, 上中下各1/3, 同时显示全程可见",
+    "slot_count": 3,
+    "slots": [
+      {
+        "subject_required": true,
+        "position_preference": "upper",
+        "bg_region": "top_third",
+        "start_time_s": 0.0,
+        "end_time_s": 6.0,
+        "fill_mode": "freeze",
+        "enter_transition": {
+          "type": "fade",
+          "duration_ms": 300
+        },
+        "exit_transition": {
+          "type": "fade",
+          "duration_ms": 300
+        }
+      },
+      {
+        "subject_required": false,
+        "position_preference": "middle",
+        "bg_region": "full",
+        "start_time_s": 0.0,
+        "end_time_s": 6.0,
+        "fill_mode": "freeze",
+        "enter_transition": {
+          "type": "fade",
+          "duration_ms": 300
+        },
+        "exit_transition": {
+          "type": "fade",
+          "duration_ms": 300
+        }
+      },
+      {
+        "subject_required": true,
+        "position_preference": "lower",
+        "bg_region": "bottom_third",
+        "start_time_s": 0.0,
+        "end_time_s": 6.0,
+        "fill_mode": "freeze",
+        "enter_transition": {
+          "type": "fade",
+          "duration_ms": 300
+        },
+        "exit_transition": {
+          "type": "fade",
+          "duration_ms": 300
+        }
+      }
+    ],
+    "canvas_width": 1080,
+    "canvas_height": 1440,
+    "layout_type": "vertical",
+    "needs_segmentation": false,
+    "total_duration_s": 6.0,
+    "style": "editorial",
+    "board": "xhs"
+  },
+  {
+    "id": "T03",
+    "name": "四格竖排",
+    "description": "四个素材上下排列, 主体和背景交替, 同时显示",
+    "slot_count": 4,
+    "slots": [
+      {
+        "subject_required": true,
+        "position_preference": "upper",
+        "bg_region": "top_third",
+        "start_time_s": 0.0,
+        "end_time_s": 6.0,
+        "fill_mode": "freeze",
+        "enter_transition": {
+          "type": "fade",
+          "duration_ms": 300
+        },
+        "exit_transition": {
+          "type": "fade",
+          "duration_ms": 300
+        }
+      },
+      {
+        "subject_required": false,
+        "position_preference": "any",
+        "bg_region": "full",
+        "start_time_s": 0.0,
+        "end_time_s": 6.0,
+        "fill_mode": "freeze",
+        "enter_transition": {
+          "type": "fade",
+          "duration_ms": 300
+        },
+        "exit_transition": {
+          "type": "fade",
+          "duration_ms": 300
+        }
+      },
+      {
+        "subject_required": true,
+        "position_preference": "any",
+        "bg_region": "bottom_third",
+        "start_time_s": 0.0,
+        "end_time_s": 6.0,
+        "fill_mode": "freeze",
+        "enter_transition": {
+          "type": "fade",
+          "duration_ms": 300
+        },
+        "exit_transition": {
+          "type": "fade",
+          "duration_ms": 300
+        }
+      },
+      {
+        "subject_required": false,
+        "position_preference": "any",
+        "bg_region": "full",
+        "start_time_s": 0.0,
+        "end_time_s": 6.0,
+        "fill_mode": "freeze",
+        "enter_transition": {
+          "type": "fade",
+          "duration_ms": 300
+        },
+        "exit_transition": {
+          "type": "fade",
+          "duration_ms": 300
+        }
+      }
+    ],
+    "canvas_width": 1080,
+    "canvas_height": 1440,
+    "layout_type": "vertical",
+    "needs_segmentation": false,
+    "total_duration_s": 6.0,
+    "style": "editorial",
+    "board": "xhs"
+  },
+  {
+    "id": "T04",
+    "name": "大主体+两背景",
+    "description": "一个大主体居中, 两个背景素材上下填充, 需要分割",
+    "slot_count": 3,
+    "slots": [
+      {
+        "subject_required": false,
+        "position_preference": "upper",
+        "bg_region": "full",
+        "start_time_s": 0.0,
+        "end_time_s": 6.0,
+        "fill_mode": "freeze",
+        "enter_transition": {
+          "type": "fade",
+          "duration_ms": 300
+        },
+        "exit_transition": {
+          "type": "fade",
+          "duration_ms": 300
+        }
+      },
+      {
+        "subject_required": true,
+        "position_preference": "middle",
+        "bg_region": "full",
+        "start_time_s": 0.0,
+        "end_time_s": 6.0,
+        "fill_mode": "freeze",
+        "enter_transition": {
+          "type": "fade",
+          "duration_ms": 300
+        },
+        "exit_transition": {
+          "type": "fade",
+          "duration_ms": 300
+        }
+      },
+      {
+        "subject_required": false,
+        "position_preference": "lower",
+        "bg_region": "full",
+        "start_time_s": 0.0,
+        "end_time_s": 6.0,
+        "fill_mode": "freeze",
+        "enter_transition": {
+          "type": "fade",
+          "duration_ms": 300
+        },
+        "exit_transition": {
+          "type": "fade",
+          "duration_ms": 300
+        }
+      }
+    ],
+    "canvas_width": 1080,
+    "canvas_height": 1440,
+    "layout_type": "vertical",
+    "needs_segmentation": true,
+    "total_duration_s": 6.0,
+    "style": "editorial",
+    "board": "xhs"
+  },
+  {
+    "id": "T05",
+    "name": "两主体+一背景",
+    "description": "两个主体素材在上和下, 一个背景素材在中间, 需要分割",
+    "slot_count": 3,
+    "slots": [
+      {
+        "subject_required": true,
+        "position_preference": "upper",
+        "bg_region": "top_third",
+        "start_time_s": 0.0,
+        "end_time_s": 6.0,
+        "fill_mode": "freeze",
+        "enter_transition": {
+          "type": "fade",
+          "duration_ms": 300
+        },
+        "exit_transition": {
+          "type": "fade",
+          "duration_ms": 300
+        }
+      },
+      {
+        "subject_required": false,
+        "position_preference": "middle",
+        "bg_region": "full",
+        "start_time_s": 0.0,
+        "end_time_s": 6.0,
+        "fill_mode": "freeze",
+        "enter_transition": {
+          "type": "fade",
+          "duration_ms": 300
+        },
+        "exit_transition": {
+          "type": "fade",
+          "duration_ms": 300
+        }
+      },
+      {
+        "subject_required": true,
+        "position_preference": "lower",
+        "bg_region": "bottom_third",
+        "start_time_s": 0.0,
+        "end_time_s": 6.0,
+        "fill_mode": "freeze",
+        "enter_transition": {
+          "type": "fade",
+          "duration_ms": 300
+        },
+        "exit_transition": {
+          "type": "fade",
+          "duration_ms": 300
+        }
+      }
+    ],
+    "canvas_width": 1080,
+    "canvas_height": 1440,
+    "layout_type": "vertical",
+    "needs_segmentation": true,
+    "total_duration_s": 6.0,
+    "style": "editorial",
+    "board": "xhs"
+  },
+  {
+    "id": "T06",
+    "name": "五格竖排",
+    "description": "五个素材上下排列, 同时显示",
+    "slot_count": 5,
+    "slots": [
+      {
+        "subject_required": true,
+        "position_preference": "upper",
+        "bg_region": "top_third",
+        "start_time_s": 0.0,
+        "end_time_s": 6.0,
+        "fill_mode": "freeze",
+        "enter_transition": {
+          "type": "fade",
+          "duration_ms": 300
+        },
+        "exit_transition": {
+          "type": "fade",
+          "duration_ms": 300
+        }
+      },
+      {
+        "subject_required": false,
+        "position_preference": "any",
+        "bg_region": "full",
+        "start_time_s": 0.0,
+        "end_time_s": 6.0,
+        "fill_mode": "freeze",
+        "enter_transition": {
+          "type": "fade",
+          "duration_ms": 300
+        },
+        "exit_transition": {
+          "type": "fade",
+          "duration_ms": 300
+        }
+      },
+      {
+        "subject_required": true,
+        "position_preference": "any",
+        "bg_region": "middle_third",
+        "start_time_s": 0.0,
+        "end_time_s": 6.0,
+        "fill_mode": "freeze",
+        "enter_transition": {
+          "type": "fade",
+          "duration_ms": 300
+        },
+        "exit_transition": {
+          "type": "fade",
+          "duration_ms": 300
+        }
+      },
+      {
+        "subject_required": false,
+        "position_preference": "any",
+        "bg_region": "full",
+        "start_time_s": 0.0,
+        "end_time_s": 6.0,
+        "fill_mode": "freeze",
+        "enter_transition": {
+          "type": "fade",
+          "duration_ms": 300
+        },
+        "exit_transition": {
+          "type": "fade",
+          "duration_ms": 300
+        }
+      },
+      {
+        "subject_required": true,
+        "position_preference": "lower",
+        "bg_region": "bottom_third",
+        "start_time_s": 0.0,
+        "end_time_s": 6.0,
+        "fill_mode": "freeze",
+        "enter_transition": {
+          "type": "fade",
+          "duration_ms": 300
+        },
+        "exit_transition": {
+          "type": "fade",
+          "duration_ms": 300
+        }
+      }
+    ],
+    "canvas_width": 1080,
+    "canvas_height": 1440,
+    "layout_type": "vertical",
+    "needs_segmentation": false,
+    "total_duration_s": 6.0,
+    "style": "editorial",
+    "board": "xhs"
+  },
+  {
+    "id": "T07",
+    "name": "三格依次出现",
+    "description": "三个素材各占2秒, 依次出现, 有淡入淡出转场",
+    "slot_count": 3,
+    "slots": [
+      {
+        "subject_required": false,
+        "position_preference": "upper",
+        "bg_region": "top_third",
+        "start_time_s": 0.0,
+        "end_time_s": 2.0,
+        "fill_mode": "trim",
+        "enter_transition": {
+          "type": "fade",
+          "duration_ms": 200
+        },
+        "exit_transition": {
+          "type": "fade",
+          "duration_ms": 200
+        }
+      },
+      {
+        "subject_required": false,
+        "position_preference": "middle",
+        "bg_region": "middle_third",
+        "start_time_s": 2.0,
+        "end_time_s": 4.0,
+        "fill_mode": "trim",
+        "enter_transition": {
+          "type": "slide_up",
+          "duration_ms": 300
+        },
+        "exit_transition": {
+          "type": "fade",
+          "duration_ms": 200
+        }
+      },
+      {
+        "subject_required": false,
+        "position_preference": "lower",
+        "bg_region": "bottom_third",
+        "start_time_s": 4.0,
+        "end_time_s": 6.0,
+        "fill_mode": "trim",
+        "enter_transition": {
+          "type": "slide_up",
+          "duration_ms": 300
+        },
+        "exit_transition": {
+          "type": "fade",
+          "duration_ms": 200
+        }
+      }
+    ],
+    "canvas_width": 1080,
+    "canvas_height": 1440,
+    "layout_type": "vertical",
+    "needs_segmentation": false,
+    "total_duration_s": 6.0,
+    "style": "editorial",
+    "board": "xhs"
+  },
+  {
+    "id": "live_four_grid",
+    "name": "Live 四宫格",
+    "description": "四个 Live Photo 四宫格",
+    "slot_count": 4,
+    "slots": [
+      {
+        "subject_required": false,
+        "position_preference": "any",
+        "bg_region": "full",
+        "start_time_s": 0.0,
+        "end_time_s": 6.0,
+        "fill_mode": "freeze",
+        "grid_x": 6,
+        "grid_y": 10,
+        "grid_w": 52,
+        "grid_h": 66,
+        "enter_transition": {
+          "type": "fade",
+          "duration_ms": 300
+        },
+        "exit_transition": {
+          "type": "fade",
+          "duration_ms": 300
+        }
+      },
+      {
+        "subject_required": false,
+        "position_preference": "any",
+        "bg_region": "full",
+        "start_time_s": 0.0,
+        "end_time_s": 6.0,
+        "fill_mode": "freeze",
+        "grid_x": 62,
+        "grid_y": 10,
+        "grid_w": 52,
+        "grid_h": 66,
+        "z_index": 1,
+        "enter_transition": {
+          "type": "fade",
+          "duration_ms": 300
+        },
+        "exit_transition": {
+          "type": "fade",
+          "duration_ms": 300
+        }
+      },
+      {
+        "subject_required": false,
+        "position_preference": "any",
+        "bg_region": "full",
+        "start_time_s": 0.0,
+        "end_time_s": 6.0,
+        "fill_mode": "freeze",
+        "grid_x": 6,
+        "grid_y": 84,
+        "grid_w": 52,
+        "grid_h": 66,
+        "z_index": 2,
+        "enter_transition": {
+          "type": "fade",
+          "duration_ms": 300
+        },
+        "exit_transition": {
+          "type": "fade",
+          "duration_ms": 300
+        }
+      },
+      {
+        "subject_required": false,
+        "position_preference": "any",
+        "bg_region": "full",
+        "start_time_s": 0.0,
+        "end_time_s": 6.0,
+        "fill_mode": "freeze",
+        "grid_x": 62,
+        "grid_y": 84,
+        "grid_w": 52,
+        "grid_h": 66,
+        "z_index": 3,
+        "enter_transition": {
+          "type": "fade",
+          "duration_ms": 300
+        },
+        "exit_transition": {
+          "type": "fade",
+          "duration_ms": 300
+        }
+      }
+    ],
+    "canvas_width": 1080,
+    "canvas_height": 1440,
+    "layout_type": "grid",
+    "needs_segmentation": false,
+    "total_duration_s": 6.0,
+    "style": "live",
+    "board": "xhs"
+  },
+  {
+    "id": "live_overlay_top",
+    "name": "Live 重叠置顶",
+    "description": "背景 Live Photo + 主体抠像叠加",
+    "slot_count": 2,
+    "slots": [
+      {
+        "subject_required": false,
+        "position_preference": "any",
+        "bg_region": "full",
+        "start_time_s": 0.0,
+        "end_time_s": 6.0,
+        "fill_mode": "freeze",
+        "grid_x": 0,
+        "grid_y": 0,
+        "grid_w": 120,
+        "grid_h": 160,
+        "enter_transition": {
+          "type": "fade",
+          "duration_ms": 300
+        },
+        "exit_transition": {
+          "type": "fade",
+          "duration_ms": 300
+        }
+      },
+      {
+        "subject_required": true,
+        "position_preference": "any",
+        "bg_region": "full",
+        "start_time_s": 0.0,
+        "end_time_s": 6.0,
+        "fill_mode": "freeze",
+        "grid_x": 10,
+        "grid_y": 90,
+        "grid_w": 60,
+        "grid_h": 50,
+        "z_index": 1,
+        "pin_to_top": true,
+        "enter_transition": {
+          "type": "fade",
+          "duration_ms": 300
+        },
+        "exit_transition": {
+          "type": "fade",
+          "duration_ms": 300
+        }
+      }
+    ],
+    "canvas_width": 1080,
+    "canvas_height": 1440,
+    "layout_type": "grid",
+    "needs_segmentation": true,
+    "total_duration_s": 6.0,
+    "style": "live",
+    "board": "xhs"
+  },
+  {
+    "id": "live_single_focus",
+    "name": "Live 单视频",
+    "description": "单个 Live Photo 主画面",
+    "slot_count": 1,
+    "slots": [
+      {
+        "subject_required": false,
+        "position_preference": "any",
+        "bg_region": "full",
+        "start_time_s": 0.0,
+        "end_time_s": 6.0,
+        "fill_mode": "freeze",
+        "grid_x": 5,
+        "grid_y": 10,
+        "grid_w": 110,
+        "grid_h": 138,
+        "enter_transition": {
+          "type": "fade",
+          "duration_ms": 300
+        },
+        "exit_transition": {
+          "type": "fade",
+          "duration_ms": 300
+        }
+      }
+    ],
+    "canvas_width": 1080,
+    "canvas_height": 1440,
+    "layout_type": "grid",
+    "needs_segmentation": false,
+    "total_duration_s": 6.0,
+    "style": "live",
+    "board": "xhs"
+  },
+  {
+    "id": "live_three_stack",
+    "name": "Live 三宫格上下",
+    "description": "三个 Live Photo 上下排列",
+    "slot_count": 3,
+    "slots": [
+      {
+        "subject_required": false,
+        "position_preference": "any",
+        "bg_region": "full",
+        "start_time_s": 0.0,
+        "end_time_s": 6.0,
+        "fill_mode": "freeze",
+        "grid_x": 5,
+        "grid_y": 8,
+        "grid_w": 110,
+        "grid_h": 46,
+        "enter_transition": {
+          "type": "fade",
+          "duration_ms": 300
+        },
+        "exit_transition": {
+          "type": "fade",
+          "duration_ms": 300
+        }
+      },
+      {
+        "subject_required": false,
+        "position_preference": "any",
+        "bg_region": "full",
+        "start_time_s": 0.0,
+        "end_time_s": 6.0,
+        "fill_mode": "freeze",
+        "grid_x": 5,
+        "grid_y": 58,
+        "grid_w": 110,
+        "grid_h": 46,
+        "z_index": 1,
+        "enter_transition": {
+          "type": "fade",
+          "duration_ms": 300
+        },
+        "exit_transition": {
+          "type": "fade",
+          "duration_ms": 300
+        }
+      },
+      {
+        "subject_required": false,
+        "position_preference": "any",
+        "bg_region": "full",
+        "start_time_s": 0.0,
+        "end_time_s": 6.0,
+        "fill_mode": "freeze",
+        "grid_x": 5,
+        "grid_y": 108,
+        "grid_w": 110,
+        "grid_h": 46,
+        "z_index": 2,
+        "enter_transition": {
+          "type": "fade",
+          "duration_ms": 300
+        },
+        "exit_transition": {
+          "type": "fade",
+          "duration_ms": 300
+        }
+      }
+    ],
+    "canvas_width": 1080,
+    "canvas_height": 1440,
+    "layout_type": "grid",
+    "needs_segmentation": false,
+    "total_duration_s": 6.0,
+    "style": "live",
+    "board": "xhs"
+  },
+  {
+    "id": "live_two_stack",
+    "name": "Live 二宫格上下",
+    "description": "两个 Live Photo 上下排列",
+    "slot_count": 2,
+    "slots": [
+      {
+        "subject_required": false,
+        "position_preference": "any",
+        "bg_region": "full",
+        "start_time_s": 0.0,
+        "end_time_s": 6.0,
+        "fill_mode": "freeze",
+        "grid_x": 5,
+        "grid_y": 10,
+        "grid_w": 110,
+        "grid_h": 64,
+        "enter_transition": {
+          "type": "fade",
+          "duration_ms": 300
+        },
+        "exit_transition": {
+          "type": "fade",
+          "duration_ms": 300
+        }
+      },
+      {
+        "subject_required": false,
+        "position_preference": "any",
+        "bg_region": "full",
+        "start_time_s": 0.0,
+        "end_time_s": 6.0,
+        "fill_mode": "freeze",
+        "grid_x": 5,
+        "grid_y": 86,
+        "grid_w": 110,
+        "grid_h": 64,
+        "z_index": 1,
+        "enter_transition": {
+          "type": "fade",
+          "duration_ms": 300
+        },
+        "exit_transition": {
+          "type": "fade",
+          "duration_ms": 300
+        }
+      }
+    ],
+    "canvas_width": 1080,
+    "canvas_height": 1440,
+    "layout_type": "grid",
+    "needs_segmentation": false,
+    "total_duration_s": 6.0,
+    "style": "live",
+    "board": "xhs"
+  },
+  {
+    "id": "m07_field_ledger",
+    "name": "M07 上图下文",
+    "description": "上下两格",
+    "slot_count": 2,
+    "slots": [
+      {
+        "subject_required": false,
+        "position_preference": "any",
+        "bg_region": "full",
+        "start_time_s": 0.0,
+        "end_time_s": 6.0,
+        "fill_mode": "freeze",
+        "grid_x": 6,
+        "grid_y": 6,
+        "grid_w": 108,
+        "grid_h": 66,
+        "enter_transition": {
+          "type": "fade",
+          "duration_ms": 300
+        },
+        "exit_transition": {
+          "type": "fade",
+          "duration_ms": 300
+        }
+      },
+      {
+        "subject_required": false,
+        "position_preference": "any",
+        "bg_region": "full",
+        "start_time_s": 0.0,
+        "end_time_s": 6.0,
+        "fill_mode": "freeze",
+        "grid_x": 6,
+        "grid_y": 78,
+        "grid_w": 108,
+        "grid_h": 76,
+        "z_index": 1,
+        "enter_transition": {
+          "type": "fade",
+          "duration_ms": 300
+        },
+        "exit_transition": {
+          "type": "fade",
+          "duration_ms": 300
+        }
+      }
+    ],
+    "canvas_width": 1080,
+    "canvas_height": 1440,
+    "layout_type": "grid",
+    "needs_segmentation": false,
+    "total_duration_s": 6.0,
+    "style": "editorial",
+    "board": "xhs"
+  },
+  {
+    "id": "m14_vertical_pipeline",
+    "name": "M14 三段流程",
+    "description": "三段竖向拼板",
+    "slot_count": 3,
+    "slots": [
+      {
+        "subject_required": false,
+        "position_preference": "any",
+        "bg_region": "full",
+        "start_time_s": 0.0,
+        "end_time_s": 6.0,
+        "fill_mode": "freeze",
+        "grid_x": 8,
+        "grid_y": 8,
+        "grid_w": 104,
+        "grid_h": 44,
+        "enter_transition": {
+          "type": "fade",
+          "duration_ms": 300
+        },
+        "exit_transition": {
+          "type": "fade",
+          "duration_ms": 300
+        }
+      },
+      {
+        "subject_required": false,
+        "position_preference": "any",
+        "bg_region": "full",
+        "start_time_s": 0.0,
+        "end_time_s": 6.0,
+        "fill_mode": "freeze",
+        "grid_x": 8,
+        "grid_y": 58,
+        "grid_w": 104,
+        "grid_h": 44,
+        "z_index": 1,
+        "enter_transition": {
+          "type": "fade",
+          "duration_ms": 300
+        },
+        "exit_transition": {
+          "type": "fade",
+          "duration_ms": 300
+        }
+      },
+      {
+        "subject_required": false,
+        "position_preference": "any",
+        "bg_region": "full",
+        "start_time_s": 0.0,
+        "end_time_s": 6.0,
+        "fill_mode": "freeze",
+        "grid_x": 8,
+        "grid_y": 108,
+        "grid_w": 104,
+        "grid_h": 44,
+        "z_index": 2,
+        "enter_transition": {
+          "type": "fade",
+          "duration_ms": 300
+        },
+        "exit_transition": {
+          "type": "fade",
+          "duration_ms": 300
+        }
+      }
+    ],
+    "canvas_width": 1080,
+    "canvas_height": 1440,
+    "layout_type": "grid",
+    "needs_segmentation": false,
+    "total_duration_s": 6.0,
+    "style": "editorial",
+    "board": "xhs"
+  },
+  {
+    "id": "m16_image_led_cover",
+    "name": "M16 全图封面",
+    "description": "单素材全画布封面",
+    "slot_count": 1,
+    "slots": [
+      {
+        "subject_required": false,
+        "position_preference": "any",
+        "bg_region": "full",
+        "start_time_s": 0.0,
+        "end_time_s": 6.0,
+        "fill_mode": "freeze",
+        "grid_x": 0,
+        "grid_y": 0,
+        "grid_w": 120,
+        "grid_h": 160,
+        "enter_transition": {
+          "type": "fade",
+          "duration_ms": 300
+        },
+        "exit_transition": {
+          "type": "fade",
+          "duration_ms": 300
+        }
+      }
+    ],
+    "canvas_width": 1080,
+    "canvas_height": 1440,
+    "layout_type": "grid",
+    "needs_segmentation": false,
+    "total_duration_s": 6.0,
+    "style": "editorial",
+    "board": "xhs"
+  },
+  {
+    "id": "matrix_three_by_two",
+    "name": "3x2 材料拼板",
+    "description": "六格材料拼板",
+    "slot_count": 6,
+    "slots": [
+      {
+        "subject_required": false,
+        "position_preference": "any",
+        "bg_region": "full",
+        "start_time_s": 0.0,
+        "end_time_s": 6.0,
+        "fill_mode": "freeze",
+        "grid_x": 6,
+        "grid_y": 16,
+        "grid_w": 34,
+        "grid_h": 34,
+        "enter_transition": {
+          "type": "fade",
+          "duration_ms": 300
+        },
+        "exit_transition": {
+          "type": "fade",
+          "duration_ms": 300
+        }
+      },
+      {
+        "subject_required": false,
+        "position_preference": "any",
+        "bg_region": "full",
+        "start_time_s": 0.0,
+        "end_time_s": 6.0,
+        "fill_mode": "freeze",
+        "grid_x": 43,
+        "grid_y": 16,
+        "grid_w": 34,
+        "grid_h": 34,
+        "z_index": 1,
+        "enter_transition": {
+          "type": "fade",
+          "duration_ms": 300
+        },
+        "exit_transition": {
+          "type": "fade",
+          "duration_ms": 300
+        }
+      },
+      {
+        "subject_required": false,
+        "position_preference": "any",
+        "bg_region": "full",
+        "start_time_s": 0.0,
+        "end_time_s": 6.0,
+        "fill_mode": "freeze",
+        "grid_x": 80,
+        "grid_y": 16,
+        "grid_w": 34,
+        "grid_h": 34,
+        "z_index": 2,
+        "enter_transition": {
+          "type": "fade",
+          "duration_ms": 300
+        },
+        "exit_transition": {
+          "type": "fade",
+          "duration_ms": 300
+        }
+      },
+      {
+        "subject_required": false,
+        "position_preference": "any",
+        "bg_region": "full",
+        "start_time_s": 0.0,
+        "end_time_s": 6.0,
+        "fill_mode": "freeze",
+        "grid_x": 6,
+        "grid_y": 56,
+        "grid_w": 34,
+        "grid_h": 34,
+        "z_index": 3,
+        "enter_transition": {
+          "type": "fade",
+          "duration_ms": 300
+        },
+        "exit_transition": {
+          "type": "fade",
+          "duration_ms": 300
+        }
+      },
+      {
+        "subject_required": false,
+        "position_preference": "any",
+        "bg_region": "full",
+        "start_time_s": 0.0,
+        "end_time_s": 6.0,
+        "fill_mode": "freeze",
+        "grid_x": 43,
+        "grid_y": 56,
+        "grid_w": 34,
+        "grid_h": 34,
+        "z_index": 4,
+        "enter_transition": {
+          "type": "fade",
+          "duration_ms": 300
+        },
+        "exit_transition": {
+          "type": "fade",
+          "duration_ms": 300
+        }
+      },
+      {
+        "subject_required": false,
+        "position_preference": "any",
+        "bg_region": "full",
+        "start_time_s": 0.0,
+        "end_time_s": 6.0,
+        "fill_mode": "freeze",
+        "grid_x": 80,
+        "grid_y": 56,
+        "grid_w": 34,
+        "grid_h": 34,
+        "z_index": 5,
+        "enter_transition": {
+          "type": "fade",
+          "duration_ms": 300
+        },
+        "exit_transition": {
+          "type": "fade",
+          "duration_ms": 300
+        }
+      }
+    ],
+    "canvas_width": 1080,
+    "canvas_height": 1440,
+    "layout_type": "grid",
+    "needs_segmentation": false,
+    "total_duration_s": 6.0,
+    "style": "swiss",
+    "board": "xhs"
+  },
+  {
+    "id": "s09_kpi_tower",
+    "name": "S09 KPI 三栏",
+    "description": "三栏竖向拼板",
+    "slot_count": 3,
+    "slots": [
+      {
+        "subject_required": false,
+        "position_preference": "any",
+        "bg_region": "full",
+        "start_time_s": 0.0,
+        "end_time_s": 6.0,
+        "fill_mode": "freeze",
+        "grid_x": 6,
+        "grid_y": 12,
+        "grid_w": 34,
+        "grid_h": 136,
+        "enter_transition": {
+          "type": "fade",
+          "duration_ms": 300
+        },
+        "exit_transition": {
+          "type": "fade",
+          "duration_ms": 300
+        }
+      },
+      {
+        "subject_required": false,
+        "position_preference": "any",
+        "bg_region": "full",
+        "start_time_s": 0.0,
+        "end_time_s": 6.0,
+        "fill_mode": "freeze",
+        "grid_x": 43,
+        "grid_y": 12,
+        "grid_w": 34,
+        "grid_h": 136,
+        "z_index": 1,
+        "enter_transition": {
+          "type": "fade",
+          "duration_ms": 300
+        },
+        "exit_transition": {
+          "type": "fade",
+          "duration_ms": 300
+        }
+      },
+      {
+        "subject_required": false,
+        "position_preference": "any",
+        "bg_region": "full",
+        "start_time_s": 0.0,
+        "end_time_s": 6.0,
+        "fill_mode": "freeze",
+        "grid_x": 80,
+        "grid_y": 12,
+        "grid_w": 34,
+        "grid_h": 136,
+        "z_index": 2,
+        "enter_transition": {
+          "type": "fade",
+          "duration_ms": 300
+        },
+        "exit_transition": {
+          "type": "fade",
+          "duration_ms": 300
+        }
+      }
+    ],
+    "canvas_width": 1080,
+    "canvas_height": 1440,
+    "layout_type": "grid",
+    "needs_segmentation": false,
+    "total_duration_s": 6.0,
+    "style": "swiss",
+    "board": "xhs"
+  },
+  {
+    "id": "s10_hbar_chart",
+    "name": "S10 条形四段",
+    "description": "四段横向拼板",
+    "slot_count": 4,
+    "slots": [
+      {
+        "subject_required": false,
+        "position_preference": "any",
+        "bg_region": "full",
+        "start_time_s": 0.0,
+        "end_time_s": 6.0,
+        "fill_mode": "freeze",
+        "grid_x": 8,
+        "grid_y": 14,
+        "grid_w": 104,
+        "grid_h": 24,
+        "enter_transition": {
+          "type": "fade",
+          "duration_ms": 300
+        },
+        "exit_transition": {
+          "type": "fade",
+          "duration_ms": 300
+        }
+      },
+      {
+        "subject_required": false,
+        "position_preference": "any",
+        "bg_region": "full",
+        "start_time_s": 0.0,
+        "end_time_s": 6.0,
+        "fill_mode": "freeze",
+        "grid_x": 8,
+        "grid_y": 46,
+        "grid_w": 104,
+        "grid_h": 24,
+        "z_index": 1,
+        "enter_transition": {
+          "type": "fade",
+          "duration_ms": 300
+        },
+        "exit_transition": {
+          "type": "fade",
+          "duration_ms": 300
+        }
+      },
+      {
+        "subject_required": false,
+        "position_preference": "any",
+        "bg_region": "full",
+        "start_time_s": 0.0,
+        "end_time_s": 6.0,
+        "fill_mode": "freeze",
+        "grid_x": 8,
+        "grid_y": 78,
+        "grid_w": 104,
+        "grid_h": 24,
+        "z_index": 2,
+        "enter_transition": {
+          "type": "fade",
+          "duration_ms": 300
+        },
+        "exit_transition": {
+          "type": "fade",
+          "duration_ms": 300
+        }
+      },
+      {
+        "subject_required": false,
+        "position_preference": "any",
+        "bg_region": "full",
+        "start_time_s": 0.0,
+        "end_time_s": 6.0,
+        "fill_mode": "freeze",
+        "grid_x": 8,
+        "grid_y": 110,
+        "grid_w": 104,
+        "grid_h": 24,
+        "z_index": 3,
+        "enter_transition": {
+          "type": "fade",
+          "duration_ms": 300
+        },
+        "exit_transition": {
+          "type": "fade",
+          "duration_ms": 300
+        }
+      }
+    ],
+    "canvas_width": 1080,
+    "canvas_height": 1440,
+    "layout_type": "grid",
+    "needs_segmentation": false,
+    "total_duration_s": 6.0,
+    "style": "swiss",
+    "board": "xhs"
+  }
+]

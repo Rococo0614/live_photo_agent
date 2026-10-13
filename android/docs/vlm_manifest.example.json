@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "runner": "replace-with-the-real-qnn-vlm-runner",
+  "task": "image_video_semantic_captioning",
+  "input": {
+    "frames": "jpeg_paths",
+    "prompt": "utf8_text"
+  },
+  "output": {
+    "format": "json",
+    "fields": [
+      "summary",
+      "theme",
+      "scene_tags",
+      "subject_tags",
+      "motion_tags",
+      "audio_tags",
+      "search_keywords"
+    ]
+  }
+}

@@ -23,6 +23,7 @@ import com.vivo.videoeditorsdk.videoeditor.VideoExportEngine
 import java.io.File
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
+import org.json.JSONObject
 
 /**
  * 无头（headless）渲染验证。
@@ -48,7 +49,18 @@ class HeadlessService : Service() {
         // 因此必须立刻转前台。通知本身与验证无关，只为拿到前台豁免。
         promoteToForeground()
         // 不能占用主线程：SDK 回调依赖主线程 Looper 派发，阻塞会死锁
-        Thread({ runAll() }, "lpa-headless").start()
+        val inputPath = intent?.getStringExtra("input_path")
+        val inputPaths = intent?.getStringExtra("input_paths")
+            ?.split("|", ",")
+            ?.map { it.trim() }
+            ?.filter { it.isNotEmpty() }
+            ?: listOfNotNull(inputPath)
+        val operation = intent?.getStringExtra("native_operation") ?: "clip_trim"
+        val layout = intent?.getStringExtra("native_layout") ?: "vertical"
+        val layoutContext = intent?.getStringExtra("layout_context")?.let { runCatching { JSONObject(it) }.getOrNull() }
+        val imageParams = intent?.getStringExtra("image_params")
+            ?.let { runCatching { JSONObject(it) }.getOrNull() } ?: JSONObject()
+        Thread({ if (inputPaths.isEmpty()) runAll() else runNativeAdapter(inputPaths, operation, layout, layoutContext, imageParams) }, "lpa-headless").start()
         return START_NOT_STICKY
     }
 
@@ -87,6 +99,65 @@ class HeadlessService : Service() {
             .onFailure { log("C 抛异常: ${it::class.java.simpleName}: ${it.message}") }
 
         log("=== HEADLESS RENDER TEST END ===")
+    }
+
+    /** Run the migrated PlanExecutor's SDK path against an explicit local MP4. */
+    private fun runNativeAdapter(inputPaths: List<String>, operation: String, layout: String, layoutContext: JSONObject?, imageParams: JSONObject) {
+        val inputs = inputPaths.map(::File)
+        val missing = inputs.firstOrNull { !it.isFile }
+        if (missing != null) {
+            log("FAIL 输入不存在: ${missing.absolutePath}")
+            stopSelf()
+            return
+        }
+        val outputDir = File(filesDir, "probe-native").apply { mkdirs() }
+        log("=== NATIVE ADAPTER TEST BEGIN ===")
+        log("操作: $operation / 布局: $layout")
+        inputs.forEach { log("输入 MP4: ${it.absolutePath} (${it.length()} bytes)") }
+        runCatching {
+            if (operation == "livephoto_pack") {
+                require(inputs.size >= 2) { "livephoto_pack requires image,video" }
+                val packed = LivePhotoSdkAdapter(this).pack(inputs[0], inputs[1], outputDir)
+                require(LivePhotoSdkAdapter(this).unpack(packed, File(outputDir, "decoded-probe")) != null) {
+                    "packed output could not be decoded"
+                }
+                log("PASS LivePhotoSDK pack/decode: ${packed.absolutePath} (${packed.length()} bytes)")
+                log("=== NATIVE ADAPTER TEST END ===")
+                stopSelf()
+                return
+            }
+            if (operation == "brighten" || operation == "sharpen" ||
+                operation == "denoise" || operation == "color_tone" ||
+                operation == "portrait_beauty" ||
+                (operation == "video_filter" && inputs[0].extension.lowercase() in setOf("jpg", "jpeg", "png"))) {
+                val result = VivoImageSdkExecutor.execute(
+                    this, "headless-image-probe", operation, inputs[0].absolutePath,
+                    imageParams, outputDir
+                ) { percent, message -> log("进度 $percent% $message") }
+                log("PASS image adapter: ${result.output.absolutePath} (${result.output.length()} bytes)")
+                log("=== NATIVE ADAPTER TEST END ===")
+                stopSelf()
+                return
+            }
+            val result = VivoSdkExecutor.execute(
+                this,
+                "headless-native-probe",
+                operation,
+                inputs.map { it.absolutePath },
+                0L,
+                1000L,
+                layout,
+                1080,
+                1920,
+                outputDir,
+                layoutContext
+            ) { percent, message -> log("进度 $percent% $message") }
+            log("PASS native adapter: ${result.output.absolutePath} (${result.output.length()} bytes)")
+        }.onFailure { error ->
+            log("FAIL native adapter: ${error::class.java.simpleName}: ${error.message}")
+        }
+        log("=== NATIVE ADAPTER TEST END ===")
+        stopSelf()
     }
 
     /**
@@ -277,8 +348,17 @@ class HeadlessService : Service() {
         }
         // 有回调不等于产物可用，必须验证输出确实是个 MP4
         if (dst.exists() && dst.length() > 0) {
-            val head = dst.inputStream().use { it.readNBytes(12) }
-            val isMp4 = head.size == 12 && String(head, 4, 4) == "ftyp"
+            val head = ByteArray(12)
+            val count = dst.inputStream().use { input ->
+                var offset = 0
+                while (offset < head.size) {
+                    val read = input.read(head, offset, head.size - offset)
+                    if (read <= 0) break
+                    offset += read
+                }
+                offset
+            }
+            val isMp4 = count == 12 && String(head, 4, 4) == "ftyp"
             log("    $tag 产物: ${dst.length()} bytes, ftyp=$isMp4")
             log("    $tag 判定: ${if (isMp4 && done) "无头渲染可行" else "产物异常"}")
         } else {

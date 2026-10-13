@@ -13,7 +13,7 @@ android {
         minSdk = 28
         targetSdk = 36
         versionCode = 1
-        versionName = "0.1-probe"
+        versionName = "0.1-mobile-agent"
         ndk {
             // 两台真机都是 arm64-v8a，只打这一个 ABI，包体减半
             abiFilters += "arm64-v8a"
@@ -51,8 +51,8 @@ android {
 }
 
 dependencies {
-    // vivo 两个本地 SDK
-    implementation(fileTree("libs") { include("*.aar") })
+    // vivo SDKs and the LivePhotoSDK support jars downloaded from the internal Maven repo.
+    implementation(fileTree("libs") { include("*.aar"); include("*.jar") })
 
     // AAR 反编译可见依赖: androidx.annotation / collection / core / appcompat
     // videoeditorsdk 的 VMEditor 初始化路径依赖 Gson（AAR 未打包、未声明 POM）
@@ -61,4 +61,5 @@ dependencies {
     implementation("com.tencent.tav:libpag:4.2.41")
     implementation("androidx.appcompat:appcompat:1.7.0")
     implementation("androidx.core:core-ktx:1.13.1")
+    implementation("com.microsoft.onnxruntime:onnxruntime-android:1.19.2")
 }

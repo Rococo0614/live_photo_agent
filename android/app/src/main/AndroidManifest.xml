@@ -29,23 +29,42 @@
 
     <application
         android:allowBackup="false"
-        android:label="LPA Probe"
+        android:label="Live Photo Agent"
         android:supportsRtl="true"
         android:theme="@style/Theme.AppCompat.DayNight.NoActionBar">
 
         <activity
-            android:name=".MainActivity"
-            android:exported="true">
+            android:name=".AgentActivity"
+            android:exported="true"
+            android:windowSoftInputMode="adjustResize">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
 
+        <activity
+            android:name=".CanvasEditorActivity"
+            android:exported="false" />
+
+        <activity
+            android:name=".LibraryActivity"
+            android:exported="false" />
+
+        <!-- SDK probe remains available for vendor API diagnostics. -->
+        <activity
+            android:name=".MainActivity"
+            android:exported="true" />
+
         <!-- 无头验证入口：adb shell am start-service -n com.vivo.lpa/.HeadlessService -->
         <service
             android:name=".HeadlessService"
             android:exported="true"
+            android:foregroundServiceType="dataSync" />
+
+        <service
+            android:name=".AgentKeepAliveService"
+            android:exported="false"
             android:foregroundServiceType="dataSync" />
     </application>
 
