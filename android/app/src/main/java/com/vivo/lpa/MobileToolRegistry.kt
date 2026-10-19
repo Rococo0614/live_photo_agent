@@ -30,12 +30,38 @@ object MobileToolRegistry {
         "live_photo_motion_effect" to "Live Photo 动感特效",
         "set_display_frame" to "按视频帧更换 Live Photo 封面",
         "live_xdr_process" to "Live XDR 资源处理",
-        "export_mp4" to "发布 MP4 结果"
+        "export_mp4" to "发布 MP4 结果",
+        "layout_swap" to "交换拼贴中两个素材的位置",
+        "asset_replace" to "按语义检索替换拼贴中的一个素材",
+        "color_analysis" to "提取素材主色并生成调色板图"
     )
+
+    /**
+     * Tools that only make sense when the user has tapped specific assets in the strip.
+     *
+     * They are hidden from the catalogue unless the exact selection they require is present:
+     * advertising them unconditionally would invite the planner to emit them with no selection
+     * behind it, and the executor would then fail on a missing target.
+     */
+    private val selectionOnly = setOf("layout_swap", "asset_replace")
 
     fun supports(tool: String): Boolean = tools.containsKey(tool)
 
-    fun promptCatalog(): String = tools.entries.joinToString("\n") { (id, description) ->
-        "$id: $description"
-    }
+    /**
+     * Tool list for the planner prompt.
+     *
+     * @param selectedCount how many assets the user has tapped right now. Selection is UI state,
+     *   so the caller must supply it -- the planner cannot observe it. `layout_swap` needs exactly
+     *   two taps to have two slots to exchange; `asset_replace` needs exactly one to know what to
+     *   swap out.
+     */
+    fun promptCatalog(selectedCount: Int = 0): String = tools.entries
+        .filter { (id, _) ->
+            when (id) {
+                "layout_swap" -> selectedCount == 2
+                "asset_replace" -> selectedCount == 1
+                else -> id !in selectionOnly
+            }
+        }
+        .joinToString("\n") { (id, description) -> "$id: $description" }
 }

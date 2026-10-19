@@ -3,11 +3,13 @@ package com.vivo.lpa
 import android.content.ContentValues
 import android.content.Context
 import android.graphics.Bitmap
+import android.graphics.BitmapFactory
 import android.media.MediaMetadataRetriever
 import android.net.Uri
 import android.os.Build
 import android.os.Environment
 import android.provider.MediaStore
+import com.vivo.imageprocess.ImageProcessRenderEngine
 import java.io.File
 import java.io.FileInputStream
 import java.io.FileOutputStream
@@ -16,9 +18,52 @@ import org.json.JSONArray
 import org.json.JSONObject
 
 class MobileAgentRunner(private val context: Context) {
+
+    companion object {
+        /**
+         * Where agent results land in the system gallery.
+         *
+         * These are the single source of truth: LibraryIndexer filters on them so that
+         * generated output is never re-indexed as a source asset. Publishing a result
+         * also sets the vendor `live_photo` motion marker, which means generated files
+         * match the indexer's `live_photo IS NOT NULL` branch -- the path is the only
+         * thing keeping them out, so both sides must read the same constant.
+         */
+        val OUTPUT_IMAGE_PATH: String =
+            Environment.DIRECTORY_PICTURES + "/LivePhotoAgent/Generated"
+        val OUTPUT_VIDEO_PATH: String =
+            Environment.DIRECTORY_MOVIES + "/LivePhotoAgent"
+
+        /**
+         * Tools exempt from selection convergence.
+         *
+         * Collage composes the whole cast by design -- narrowing it to the tapped assets would
+         * silently drop slots. layout_swap and asset_replace are arity-strict (exactly two ids /
+         * exactly one target) and their own branches validate that, so converging them could
+         * shrink the id list below the required arity and turn a valid step into an error.
+         */
+        private val unscopedTools = setOf(
+            "template_collage", "smart_collage", "layout_swap", "asset_replace"
+        )
+    }
     interface Listener {
         fun onProgress(message: String)
         fun onAssetsPrepared(uris: List<Uri>, assets: List<PreparedAsset>) {}
+        /**
+         * Fired when asset_replace swaps an asset out mid-plan, so the strip can refresh.
+         *
+         * @param replacedIds maps each vacated asset_id to the one that took its slot. The caller
+         *   uses it to move the user's tap-selection onto the replacement.
+         */
+        fun onAssetsUpdated(assets: List<PreparedAsset>, replacedIds: Map<String, String> = emptyMap()) {}
+        /**
+         * A tool step is about to run, with the arguments it will actually receive.
+         *
+         * [MobileToolResult] only reports the tool name and outcome, so the arguments a plan
+         * carried -- the ones that decide which assets get touched and with which parameters --
+         * were never recorded anywhere. This is the audit hook for them.
+         */
+        fun onToolCall(index: Int, total: Int, call: MobileToolCall) {}
         fun onPlan(plan: MobilePlan)
         fun onResult(result: MobileToolResult)
         fun onFinished(uri: Uri?, message: String)
@@ -35,14 +80,31 @@ class MobileAgentRunner(private val context: Context) {
         cancelled: AtomicBoolean,
         listener: Listener,
         preparedAssets: List<PreparedAsset>? = null,
-        sessionId: String? = null
+        sessionId: String? = null,
+        selectedAssetIds: List<String> = emptyList()
     ) {
         val jobDir = File(context.cacheDir, "agent-jobs/job-${System.currentTimeMillis()}").apply { mkdirs() }
         var lastOutput: File? = null
         var lastOutputIsImage = false
         var lastUri: Uri? = null
+        var published = false
+        /**
+         * Layout as it stands mid-plan.
+         *
+         * Deep-copied from the session layout so layout_swap / asset_replace mutate a private
+         * object on the worker thread instead of aliasing the Activity's copy; the edited layout
+         * is handed back only via onResult. The trailing re-collage composes this arrangement.
+         */
+        var workingLayout: JSONObject? = layoutContext?.let { JSONObject(it.toString()) }
         try {
-            val intentPlan = if (uris.isEmpty()) GenieTextPlanner(context, sessionId).tryIntent(query) else null
+            // A tap-selection must never be routed through the free-text intent planner: that
+            // path returns a plan built from words alone and would silently drop the selection.
+            // MobilePlanner.plan() is the only entry point that knows about selectedAssetIds.
+            val intentPlan = if (uris.isEmpty() && selectedAssetIds.isEmpty()) {
+                GenieTextPlanner(context, sessionId).tryIntent(query)
+            } else {
+                null
+            }
             val resolvedUris = if (uris.isNotEmpty()) {
                 uris
             } else {
@@ -72,38 +134,61 @@ class MobileAgentRunner(private val context: Context) {
             if (uris.isEmpty()) {
                 listener.onProgress("素材库推荐 ${resolvedUris.size} 个最相关素材")
             }
-            val assets = preparedAssets ?: preprocessor.prepare(
+            val assets = (preparedAssets ?: preprocessor.prepare(
                 resolvedUris,
                 cancelled = { cancelled.get() },
                 progress = { message -> listener.onProgress(message) }
-            )
+            )).toMutableList()
             if (cancelled.get()) throw InterruptedException("cancelled")
             listener.onAssetsPrepared(resolvedUris, assets)
 
             val planner = MobilePlanner(context, sessionId)
-            val plan = intentPlan?.let { intent ->
-                val executable = intent.toolCalls.filterNot { it.tool == "search_assets" }
-                    .map { call ->
-                        if (call.tool == "template_collage" || call.tool == "smart_collage") {
-                            call.copy(arguments = call.arguments.put(
-                                "asset_ids", JSONArray(assets.map { it.assetId })
-                            ))
-                        } else call
-                    }
-                executable.takeIf { it.isNotEmpty() }?.let {
-                    intent.copy(selectedAssetIds = assets.map { it.assetId }, toolCalls = it)
-                }
-            } ?: planner.plan(query, assets, layoutContext)
-            listener.onPlan(plan)
-            if (plan.clarification != null) {
-                listener.onFinished(null, plan.clarification)
+            // intentPlan came from the pre-retrieval prompt: it knows nothing about the assets that
+            // were actually found, so it must not double as the final plan. Its only job is to
+            // supply the search parameters consumed above. Planning happens here, once the cast is
+            // real -- which also restores the deterministic colour-analysis pre-emption that this
+            // shortcut used to bypass entirely.
+            val plan = planner.plan(query, assets, workingLayout, selectedAssetIds)
+            // Safety net: search_assets is consumed during URI resolution above and has no
+            // execution mapping. Strip it from every plan source (genie STEP, restored
+            // continuation) so it can never reach the runner's native-mapping fallback.
+            val executablePlan = if (plan.toolCalls.any { it.tool == "search_assets" }) {
+                plan.copy(toolCalls = plan.toolCalls.filterNot { it.tool == "search_assets" })
+            } else plan
+            // The tap-selection is the source of truth for what an edit may touch. The planner
+            // already scopes calls to it, but a plan can also arrive from a restored continuation
+            // or from a model that invented an ordinal, so converge here too: an edit step may
+            // never reach an asset the user did not select.
+            //
+            // Excluded on purpose: collage tools act on the whole cast by design, and
+            // layout_swap/asset_replace are arity-strict (exactly two / exactly one id) and are
+            // validated by their own branches.
+            val scopedPlan = if (selectedAssetIds.isNotEmpty()) {
+                val allowed = selectedAssetIds.toSet()
+                executablePlan.copy(toolCalls = executablePlan.toolCalls.map { call ->
+                    if (call.tool in unscopedTools) return@map call
+                    val ids = call.arguments.optJSONArray("asset_ids")
+                        ?.let { array -> (0 until array.length()).map(array::optString) }
+                        .orEmpty()
+                    val kept = ids.filter { it in allowed }
+                    // Empty intersection means the step targets nothing the user selected; leaving
+                    // the original ids in place would edit the wrong asset, so drop the step.
+                    if (ids.isNotEmpty() && kept.isEmpty()) return@map null
+                    if (kept.size == ids.size) return@map call
+                    call.copy(arguments = JSONObject(call.arguments.toString())
+                        .put("asset_ids", JSONArray(kept)))
+                }.filterNotNull())
+            } else executablePlan
+            listener.onPlan(scopedPlan)
+            if (scopedPlan.clarification != null) {
+                listener.onFinished(null, scopedPlan.clarification)
                 return
             }
 
-            val assetById = assets.associateBy { it.assetId }
-            plan.toolCalls.forEachIndexed { index, call ->
+            scopedPlan.toolCalls.forEachIndexed { index, call ->
                 if (cancelled.get()) throw InterruptedException("cancelled")
-                listener.onProgress("执行 ${index + 1}/${plan.toolCalls.size}: ${call.tool}")
+                listener.onProgress("执行 ${index + 1}/${scopedPlan.toolCalls.size}: ${call.tool}")
+                listener.onToolCall(index, scopedPlan.toolCalls.size, call)
                 when (call.tool) {
                     "asset_summarize" -> {
                         val payload = JSONArray()
@@ -143,8 +228,8 @@ class MobileAgentRunner(private val context: Context) {
                     "video_fit_band", "video_crop_band", "video_vertical_stack", "video_dynamic_sticker",
                     "video_border_watermark", "video_filter", "video_speed", "video_reverse" -> {
                         val selected = selectedAssets(call.arguments, assets)
-                        val inputs = selected.mapNotNull { it.videoFile?.absolutePath }
-                        if (inputs.isEmpty()) throw IllegalArgumentException("效果处理需要视频素材")
+                        val perAsset = call.arguments.optBoolean("per_asset")
+                        val writeback = call.arguments.optBoolean("writeback")
                         val videoArguments = if (call.tool == "video_filter") {
                             JSONObject(call.arguments.toString()).apply {
                                 if (!has("contrast")) put("contrast", 0.12)
@@ -154,15 +239,38 @@ class MobileAgentRunner(private val context: Context) {
                         } else {
                             call.arguments
                         }
-                        val result = VivoSdkExecutor.execute(
-                            context, jobDir.name, call.tool, inputs, 0L, 0L, "", 0, 0, jobDir, videoArguments
-                        ) { percent, message -> listener.onProgress("$message $percent%") }
-                        lastOutput = result.output
-                        lastOutputIsImage = false
-                        lastUri = null
-                        listener.onResult(MobileToolResult(call.tool, true, JSONObject()
-                            .put("output_path", result.output.absolutePath)
-                            .put("execution_backend", "vivo_videoeditorsdk")))
+                        if (perAsset && writeback) {
+                            // One asset at a time, each result stored back under its own
+                            // asset_id so the trailing re-collage finds the edited clip in its
+                            // original slot. Nothing is published here.
+                            selected.forEachIndexed { slot, asset ->
+                                if (cancelled.get()) throw InterruptedException("cancelled")
+                                val input = asset.videoFile?.absolutePath
+                                    ?: throw IllegalArgumentException("${call.tool} 需要带运动轨道的素材")
+                                listener.onProgress("处理选中素材 ${slot + 1}/${selected.size}：${call.tool}")
+                                val result = VivoSdkExecutor.execute(
+                                    context, "${jobDir.name}-$slot", call.tool, listOf(input),
+                                    0L, 0L, "", 0, 0, editDir(asset.assetId), videoArguments
+                                ) { percent, message -> listener.onProgress("$message $percent%") }
+                                writebackVideo(assets, asset.assetId, result.output)
+                            }
+                            listener.onResult(MobileToolResult(call.tool, true, JSONObject()
+                                .put("edited_asset_ids", JSONArray(selected.map { it.assetId }))
+                                .put("writeback", true)
+                                .put("execution_backend", "vivo_videoeditorsdk")))
+                        } else {
+                            val inputs = selected.mapNotNull { it.videoFile?.absolutePath }
+                            if (inputs.isEmpty()) throw IllegalArgumentException("效果处理需要视频素材")
+                            val result = VivoSdkExecutor.execute(
+                                context, jobDir.name, call.tool, inputs, 0L, 0L, "", 0, 0, jobDir, videoArguments
+                            ) { percent, message -> listener.onProgress("$message $percent%") }
+                            lastOutput = result.output
+                            lastOutputIsImage = false
+                            lastUri = null
+                            listener.onResult(MobileToolResult(call.tool, true, JSONObject()
+                                .put("output_path", result.output.absolutePath)
+                                .put("execution_backend", "vivo_videoeditorsdk")))
+                        }
                     }
                     "brighten", "sharpen", "denoise", "color_tone", "portrait_beauty" -> {
                         val selected = selectedAssets(call.arguments, assets)
@@ -185,56 +293,76 @@ class MobileAgentRunner(private val context: Context) {
                             .put("execution_backend", "vivo_image_sdk")))
                     }
                     "live_photo_filter_effect", "live_photo_motion_effect" -> {
-                        val asset = selectedLiveAsset(call.arguments, assets)
-                            ?: throw IllegalArgumentException("${call.tool} 需要 Live Photo 素材")
-                        val decoded = decodeLiveAsset(
-                            asset, File(jobDir, "decode-${call.tool}")
-                        ) ?: throw IllegalArgumentException("输入不是 vivo Live Photo 或缺少可用运动轨道")
-                        val effectArguments = JSONObject(call.arguments.toString())
-                        val operation = if (call.tool == "live_photo_filter_effect") {
-                            if (!effectArguments.has("contrast")) effectArguments.put("contrast", 0.18)
-                            if (!effectArguments.has("saturation")) effectArguments.put("saturation", 0.2)
-                            if (!effectArguments.has("temperature")) effectArguments.put("temperature", 0.12)
-                            "video_filter"
-                        } else {
-                            if (!effectArguments.has("effect")) effectArguments.put("effect", "motion_light")
-                            "video_motion_effect"
-                        }
-                        val effected = VivoSdkExecutor.execute(
-                            context, jobDir.name, operation, listOf(decoded.video.absolutePath),
-                            0L, 0L, "", 0, 0, jobDir, effectArguments
-                        ) { percent, message ->
-                            if (cancelled.get()) {
-                                VivoSdkExecutor.cancel(jobDir.name)
-                                throw InterruptedException("cancelled")
+                        val selected = selectedAssets(call.arguments, assets)
+                            .filter { it.metadata.optString("media_format") == "livephoto" && it.imageFile != null }
+                        if (selected.isEmpty()) throw IllegalArgumentException("${call.tool} 需要 Live Photo 素材")
+                        val perAsset = call.arguments.optBoolean("per_asset")
+                        val writeback = call.arguments.optBoolean("writeback")
+
+                        // One asset at a time. Under writeback the edited motion track is stored
+                        // back onto the asset (no publish); the trailing re-collage reads
+                        // videoFile, so that is the field that must carry the edit.
+                        val targets = if (perAsset) selected else listOf(selected.first())
+                        targets.forEachIndexed { slot, asset ->
+                            if (cancelled.get()) throw InterruptedException("cancelled")
+                            listener.onProgress("处理选中素材 ${slot + 1}/${targets.size}：${call.tool}")
+                            val decoded = decodeLiveAsset(asset, File(jobDir, "decode-${call.tool}-$slot"))
+                                ?: throw IllegalArgumentException("输入不是 vivo Live Photo 或缺少可用运动轨道")
+                            val effectArguments = JSONObject(call.arguments.toString())
+                            val operation = if (call.tool == "live_photo_filter_effect") {
+                                if (!effectArguments.has("contrast")) effectArguments.put("contrast", 0.18)
+                                if (!effectArguments.has("saturation")) effectArguments.put("saturation", 0.2)
+                                if (!effectArguments.has("temperature")) effectArguments.put("temperature", 0.12)
+                                "video_filter"
+                            } else {
+                                if (!effectArguments.has("effect")) effectArguments.put("effect", "motion_light")
+                                "video_motion_effect"
                             }
-                            listener.onProgress("$message $percent%")
+                            val effected = VivoSdkExecutor.execute(
+                                context, "${jobDir.name}-$slot", operation, listOf(decoded.video.absolutePath),
+                                0L, 0L, "", 0, 0,
+                                if (writeback) editDir(asset.assetId) else File(jobDir, "lp-$slot"),
+                                effectArguments
+                            ) { percent, message ->
+                                if (cancelled.get()) {
+                                    VivoSdkExecutor.cancel("${jobDir.name}-$slot")
+                                    throw InterruptedException("cancelled")
+                                }
+                                listener.onProgress("$message $percent%")
+                            }
+
+                            if (writeback) {
+                                writebackVideo(assets, asset.assetId, effected.output)
+                                return@forEachIndexed
+                            }
+
+                            val cover = if (call.tool == "live_photo_filter_effect") {
+                                val coverResult = VivoImageSdkExecutor.execute(
+                                    context, "${jobDir.name}-cover-$slot", "video_filter",
+                                    decoded.image.absolutePath, effectArguments, File(jobDir, "filter-cover-$slot")
+                                ) { percent, message -> listener.onProgress("封面 $message $percent%") }
+                                coverResult.output
+                            } else {
+                                decoded.image
+                            }
+                            val packed = livePhotoSdk.pack(
+                                cover, effected.output, File(jobDir, "pack-$slot"), decoded.photoTimestampUs
+                            )
+                            val outputUri = publishImage(packed, packed.name)
+                            lastOutput = packed
+                            lastOutputIsImage = true
+                            lastUri = outputUri
+                            listener.onResult(MobileToolResult(call.tool, true, JSONObject()
+                                .put("output_path", packed.absolutePath)
+                                .put("output_uri", outputUri.toString())
+                                .put("execution_backend", "vivo_livephotosdk+vivo_videoeditorsdk")))
                         }
-                        val cover = if (call.tool == "live_photo_filter_effect") {
-                            val coverResult = VivoImageSdkExecutor.execute(
-                                context,
-                                "${jobDir.name}-cover",
-                                "video_filter",
-                                decoded.image.absolutePath,
-                                effectArguments,
-                                File(jobDir, "filter-cover")
-                            ) { percent, message -> listener.onProgress("封面 $message $percent%") }
-                            coverResult.output
-                        } else {
-                            decoded.image
+                        if (writeback) {
+                            listener.onResult(MobileToolResult(call.tool, true, JSONObject()
+                                .put("edited_asset_ids", JSONArray(targets.map { it.assetId }))
+                                .put("writeback", true)
+                                .put("execution_backend", "vivo_livephotosdk+vivo_videoeditorsdk")))
                         }
-                        val packed = livePhotoSdk.pack(
-                            cover, effected.output, File(jobDir, "pack"),
-                            decoded.photoTimestampUs
-                        )
-                        val outputUri = publishImage(packed, packed.name)
-                        lastOutput = packed
-                        lastOutputIsImage = true
-                        lastUri = outputUri
-                        listener.onResult(MobileToolResult(call.tool, true, JSONObject()
-                            .put("output_path", packed.absolutePath)
-                            .put("output_uri", outputUri.toString())
-                            .put("execution_backend", "vivo_livephotosdk+vivo_videoeditorsdk")))
                     }
                     "set_display_frame" -> {
                         val asset = selectedLiveAsset(call.arguments, assets)
@@ -277,6 +405,26 @@ class MobileAgentRunner(private val context: Context) {
                         if (call.tool == "smart_collage" && assets.any { !it.semantic.optBoolean("ready", false) }) {
                             throw IllegalStateException("智能拼贴需要端侧 VLM 模型包；当前仅完成技术前处理")
                         }
+                        // Plans embed an asset_ids snapshot taken when the plan was built. An
+                        // earlier asset_replace step in the same plan makes that snapshot stale:
+                        // filtering by it would drop the freshly replaced asset (its id is not in
+                        // the snapshot) and the vacated id, shrinking the cast and shifting every
+                        // later slot. When any snapshot id no longer exists, take the cast from
+                        // the live layout instead, which replace/swap already repointed.
+                        val snapshotIds = call.arguments.optJSONArray("asset_ids")
+                            ?.let { array -> (0 until array.length()).map(array::optString) }
+                        val snapshotStale = snapshotIds?.any { id -> assets.none { it.assetId == id } } == true
+                        if (snapshotStale) {
+                            val liveIds = workingLayout?.optJSONArray("items")
+                                ?.let { items ->
+                                    (0 until items.length()).mapNotNull { position ->
+                                        items.optJSONObject(position)?.optString("asset_id")
+                                            .takeIf { id -> assets.any { it.assetId == id } }
+                                    }
+                                }?.ifEmpty { assets.map { it.assetId } }
+                                ?: assets.map { it.assetId }
+                            call.arguments.put("asset_ids", JSONArray(liveIds))
+                        }
                         val selected = selectedAssets(call.arguments, assets)
                         val catalog = MobileTemplateCatalog(context)
                         val changingTemplate = isTemplateChange(query)
@@ -291,14 +439,35 @@ class MobileAgentRunner(private val context: Context) {
                                 selected.size,
                                 previousTemplateId.takeIf { changingTemplate }
                             )
-                        val contextForLayout = when {
+                        // parse() assigns assets to slots positionally, so feeding it the raw
+                        // prepared-asset order would silently undo any earlier layout_swap.
+                        // Reordering to the current slot arrangement first is what makes
+                        // "keep the assets, change the layout" actually keep the arrangement.
+                        val orderedForParse = if (workingLayout != null) {
+                            orderForLayout(selected, workingLayout)
+                        } else {
+                            selected
+                        }
+                        var contextForLayout = when {
+                            // Explicit re-compose after a selection edit: reuse the working
+                            // layout verbatim (it already carries any swap/replace), so slot
+                            // geometry and asset order survive the edit.
+                            call.arguments.optBoolean("reuse_layout") && workingLayout != null -> workingLayout!!
                             changingTemplate || requestedTemplate != null ->
-                                MobileTemplateParser.parse(chosenTemplate, selected)
+                                MobileTemplateParser.parse(chosenTemplate, orderedForParse)
                             call.arguments.optJSONObject("layout_context") != null ->
                                 call.arguments.optJSONObject("layout_context")!!
-                            layoutContext != null -> layoutContext
-                            else -> MobileTemplateParser.parse(chosenTemplate, selected)
+                            workingLayout != null -> workingLayout!!
+                            else -> MobileTemplateParser.parse(chosenTemplate, orderedForParse)
                         }
+                        // Guardrail: a reused layout whose slot count no longer matches the cast
+                        // would feed fewer inputs than slots and render empty bands. Re-parse the
+                        // chosen template (already sized to the cast) instead of dropping slots.
+                        val slotCount = contextForLayout.optJSONArray("items")?.length() ?: 0
+                        if (slotCount > 0 && slotCount != selected.size) {
+                            contextForLayout = MobileTemplateParser.parse(chosenTemplate, selected)
+                        }
+                        workingLayout = contextForLayout
                         val ordered = orderForLayout(selected, contextForLayout)
                         val inputs = ordered.mapNotNull { it.videoFile?.absolutePath }
                         if (inputs.size < 2) throw IllegalArgumentException("拼贴至少需要两个带运动轨道的素材")
@@ -353,6 +522,144 @@ class MobileAgentRunner(private val context: Context) {
                         }
                         listener.onResult(MobileToolResult(call.tool, true, payload))
                     }
+                    "layout_swap" -> {
+                        val ids = call.arguments.optJSONArray("asset_ids")
+                            ?.let { array -> (0 until array.length()).map(array::optString) }
+                            .orEmpty()
+                        if (ids.size != 2) throw IllegalArgumentException("交换位置需要选中两个素材")
+                        val layout = workingLayout
+                            ?: throw IllegalStateException("当前没有可交换的拼贴布局，请先完成一次拼接")
+                        val items = layout.optJSONArray("items")
+                            ?: throw IllegalStateException("布局缺少 items，无法交换位置")
+
+                        // Swap the asset_id references, not the geometry. Slot position, size and
+                        // timing belong to the layout; the user asked to move the *content*.
+                        val indexes = (0 until items.length()).filter { index ->
+                            items.optJSONObject(index)?.optString("asset_id") in ids
+                        }
+                        if (indexes.size != 2) {
+                            throw IllegalStateException("选中的素材不在当前布局中，无法交换位置")
+                        }
+                        val a = items.optJSONObject(indexes[0])
+                        val b = items.optJSONObject(indexes[1])
+                        val idA = a.optString("asset_id")
+                        val idB = b.optString("asset_id")
+                        a.put("asset_id", idB)
+                        b.put("asset_id", idA)
+                        listener.onProgress("已交换两个选中素材的位置")
+
+                        workingLayout = layout
+                        listener.onResult(MobileToolResult(call.tool, true, JSONObject()
+                            .put("swapped_asset_ids", JSONArray(ids))
+                            .put("layout_context", layout)
+                            .put("execution_backend", "layout_context")))
+                    }
+                    "asset_replace" -> {
+                        val targetId = call.arguments.optJSONArray("asset_ids")?.optString(0)
+                            ?: throw IllegalArgumentException("替换需要选中一个素材")
+                        val searchQuery = call.arguments.optString("query").ifBlank { query }
+                        val database = LibraryDatabase(context)
+                        val embedder = BgeEmbedder(context)
+                        if (!embedder.available()) {
+                            throw IllegalStateException("BGE 检索模型未部署，无法按语义替换素材")
+                        }
+                        listener.onProgress("语义检索替换素材：$searchQuery")
+                        // Over-fetch so the current cast can be excluded: the replacement must be
+                        // a genuinely different asset, not one already occupying a slot.
+                        val inUse = assets.map { it.assetId }.toSet() + targetId
+                        val ranked = database.searchEmbeddingScored(embedder.embed(searchQuery), 8, searchQuery)
+                        val (candidate, candidateScore) = ranked.firstOrNull { it.first.assetId !in inUse }
+                            ?: throw IllegalStateException("素材库没有可用于替换的「$searchQuery」素材")
+
+                        val prepared = preprocessor.prepare(
+                            listOf(Uri.parse(candidate.sourceUri)),
+                            cancelled = { cancelled.get() },
+                            progress = { message -> listener.onProgress(message) }
+                        ).firstOrNull() ?: throw IllegalStateException("替换素材预处理失败")
+
+                        val index = assets.indexOfFirst { it.assetId == targetId }
+                        if (index < 0) throw IllegalStateException("被替换的素材不在当前会话中")
+                        assets[index] = prepared
+
+                        // Keep the slot geometry, repoint it at the new asset_id.
+                        workingLayout?.optJSONArray("items")?.let { items ->
+                            for (position in 0 until items.length()) {
+                                val item = items.optJSONObject(position) ?: continue
+                                if (item.optString("asset_id") == targetId) item.put("asset_id", prepared.assetId)
+                            }
+                        }
+                        // The user's tap was on the slot, not on the old asset: the replacement
+                        // inherits the selection so the next instruction keeps addressing the same
+                        // slot. Without this the strip silently deselects and the following turn
+                        // falls back to whole-cast semantics.
+                        listener.onAssetsUpdated(assets.toList(), mapOf(targetId to prepared.assetId))
+                        listener.onResult(MobileToolResult(call.tool, true, JSONObject()
+                            .put("replaced_asset_id", targetId)
+                            .put("new_asset_id", prepared.assetId)
+                            .put("display_name", candidate.displayName)
+                            .put("search_query", searchQuery)
+                            .put("match_score", candidateScore)
+                            .put("candidates", JSONArray(ranked.map { (record, score) ->
+                                JSONObject()
+                                    .put("asset_id", record.assetId)
+                                    .put("display_name", record.displayName)
+                                    .put("score", score)
+                                    .put("excluded", record.assetId in inUse)
+                            }))
+                            .put("layout_context", workingLayout ?: JSONObject())
+                            .put("execution_backend", "bge+library")))
+                    }
+                    "color_analysis" -> {
+                        val selected = selectedAssets(call.arguments, assets)
+                        val colorCount = call.arguments.optInt("color_count", 5)
+                        val palette = JSONArray()
+                        val swatches = mutableListOf<List<Int>>()
+                        selected.forEach { asset ->
+                            val cover = asset.imageFile?.let { BitmapFactory.decodeFile(it.absolutePath) }
+                                ?: asset.videoFile?.let { extractCoverFrame(it, jobDir) }
+                                    ?.let { BitmapFactory.decodeFile(it.absolutePath) }
+                                ?: throw IllegalStateException("素材缺少可分析的封面图")
+                            val colors = ImageProcessRenderEngine.nativeAnalyzeDominantColor(cover, colorCount)
+                                .orEmpty()
+                            cover.recycle()
+                            val hex = JSONArray()
+                            colors.forEach { hex.put(String.format("#%06X", 0xFFFFFF and it)) }
+                            palette.put(JSONObject()
+                                .put("asset_id", asset.assetId)
+                                .put("dominant_colors", hex))
+                            swatches += colors
+                        }
+                        if (swatches.isEmpty()) throw IllegalStateException("没有可分析的素材")
+                        val swatchWidth = 200
+                        val paletteImage = Bitmap.createBitmap(
+                            swatchWidth * colorCount, swatchWidth * swatches.size, Bitmap.Config.ARGB_8888
+                        )
+                        val canvas = android.graphics.Canvas(paletteImage)
+                        swatches.forEachIndexed { row, colors ->
+                            colors.forEachIndexed { column, color ->
+                                canvas.drawRect(
+                                    android.graphics.RectF(
+                                        column * swatchWidth.toFloat(), row * swatchWidth.toFloat(),
+                                        (column + 1) * swatchWidth.toFloat(), (row + 1) * swatchWidth.toFloat()
+                                    ),
+                                    android.graphics.Paint().apply { this.color = color }
+                                )
+                            }
+                        }
+                        val paletteFile = File(jobDir, "palette.png")
+                        paletteFile.outputStream().use {
+                            paletteImage.compress(Bitmap.CompressFormat.PNG, 100, it)
+                        }
+                        paletteImage.recycle()
+                        lastOutput = paletteFile
+                        lastOutputIsImage = true
+                        lastUri = null
+                        listener.onProgress("主色提取完成 ${swatches.size} 个素材")
+                        listener.onResult(MobileToolResult(call.tool, true, JSONObject()
+                            .put("palette", palette)
+                            .put("palette_image", paletteFile.absolutePath)
+                            .put("execution_backend", "imageprocess-cpu")))
+                    }
                     else -> {
                         val result = MobileToolResult(call.tool, false, JSONObject()
                             .put("error_code", "native_tool_not_mapped")
@@ -379,17 +686,45 @@ class MobileAgentRunner(private val context: Context) {
                     }
                 }
             }
+            published = true
             listener.onFinished(lastUri, if (lastUri == null) "已完成前处理" else "已写入系统相册")
         } catch (cancelledError: InterruptedException) {
             listener.onFinished(null, "用户已取消")
         } catch (error: Throwable) {
             val message = error.message ?: error::class.java.simpleName
             if (lastOutput?.isFile == true) {
-                listener.onError("$message；中间结果已保留在应用缓存，未写入系统相册")
+                listener.onError("$message；中间结果已保留在缓存 ${jobDir.name}，未写入系统相册")
             } else {
                 listener.onError(message)
             }
+        } finally {
+            // Only reclaim the workspace once the result is safely in the system gallery.
+            // On failure or cancel the intermediates stay put, because the error message
+            // above points the user at them for manual recovery.
+            if (published) jobDir.deleteRecursively()
         }
+    }
+
+    /**
+     * Stable per-asset directory for selection edits.
+     *
+     * jobDir is deleted once the result reaches the gallery, so an edited clip stored there
+     * would dangle the next time the user taps the same asset. Keying by asset_id also means a
+     * second edit overwrites the first rather than accumulating one file per attempt.
+     */
+    private fun editDir(assetId: String): File =
+        File(context.cacheDir, "agent-edits/$assetId").apply { mkdirs() }
+
+    /**
+     * Stores an edited motion track back onto its asset, keeping the asset_id.
+     *
+     * Preserving the id is the whole point: layout_context items reference slots by asset_id,
+     * so a new id would orphan the slot and the re-collage would silently drop the asset.
+     */
+    private fun writebackVideo(assets: MutableList<PreparedAsset>, assetId: String, edited: File) {
+        val index = assets.indexOfFirst { it.assetId == assetId }
+        if (index < 0) return
+        assets[index] = assets[index].copy(videoFile = edited)
     }
 
     private fun selectedAssets(arguments: JSONObject, assets: List<PreparedAsset>): List<PreparedAsset> {
@@ -483,7 +818,7 @@ class MobileAgentRunner(private val context: Context) {
             put(MediaStore.Video.Media.DISPLAY_NAME, name)
             put(MediaStore.Video.Media.MIME_TYPE, "video/mp4")
             if (Build.VERSION.SDK_INT >= 29) {
-                put(MediaStore.Video.Media.RELATIVE_PATH, Environment.DIRECTORY_MOVIES + "/LivePhotoAgent")
+                put(MediaStore.Video.Media.RELATIVE_PATH, OUTPUT_VIDEO_PATH)
                 put(MediaStore.Video.Media.IS_PENDING, 1)
             }
         }
@@ -517,7 +852,7 @@ class MobileAgentRunner(private val context: Context) {
             put(MediaStore.Images.Media.MIME_TYPE, if (isPng) "image/png" else "image/jpeg")
             if (!isPng) put("live_photo", "motionphoto00010000000000000")
             if (Build.VERSION.SDK_INT >= 29) {
-                put(MediaStore.Images.Media.RELATIVE_PATH, Environment.DIRECTORY_PICTURES + "/LivePhotoAgent/Generated")
+                put(MediaStore.Images.Media.RELATIVE_PATH, OUTPUT_IMAGE_PATH)
                 put(MediaStore.Images.Media.IS_PENDING, 1)
             }
         }

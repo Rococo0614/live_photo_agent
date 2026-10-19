@@ -24,7 +24,16 @@ data class MobilePlan(
     val intent: String,
     val selectedAssetIds: List<String>,
     val toolCalls: List<MobileToolCall>,
-    val clarification: String? = null
+    val clarification: String? = null,
+    /**
+     * Verbatim text the on-device LLM produced for this plan, plus how long it took.
+     *
+     * Audit-only: it is deliberately kept out of [toJson] so the (already large) session state
+     * never carries raw model output. Surfacing it is what makes a wrong plan diagnosable
+     * instead of guessable -- previously the brain's reasoning could only be inferred from the
+     * step list.
+     */
+    val brainTrace: BrainTrace? = null
 ) {
     fun toJson(): JSONObject {
         val calls = JSONArray()
@@ -36,7 +45,31 @@ data class MobilePlan(
             .put("tool_calls", calls)
             .put("need_clarification", clarification != null)
             .put("clarification_questions", JSONArray(clarification?.let { listOf(it) } ?: emptyList<String>()))
+            .put("plan_source", if (brainTrace?.parsed == true) brainTrace.source else "fallback")
     }
+}
+
+/** Provenance of a plan: which planner produced it, and the model's raw words. */
+data class BrainTrace(
+    val source: String,
+    val rawOutput: String = "",
+    val promptChars: Int = 0,
+    val elapsedMs: Long = 0,
+    /**
+     * Whether this run actually produced the plan.
+     *
+     * A trace can also travel with a fallback plan: the brain ran and failed to parse, and the
+     * keyword tables took over. Keeping the failed words is the whole point of the audit, but the
+     * plan must still be attributed to the fallback, hence the flag.
+     */
+    val parsed: Boolean = false
+) {
+    fun toJson(): JSONObject = JSONObject()
+        .put("source", source)
+        .put("prompt_chars", promptChars)
+        .put("elapsed_ms", elapsedMs)
+        .put("parsed", parsed)
+        .put("raw_output", rawOutput)
 }
 
 data class MobileToolResult(

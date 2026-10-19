@@ -5,8 +5,11 @@ import java.io.File
 
 /** Locations used by the phone-side model pack installer. */
 object ModelPack {
-    fun root(context: Context): File = context.getExternalFilesDir("models")
-        ?: File(context.filesDir, "models")
+    fun root(context: Context): File {
+        val internal = File(context.filesDir, "models")
+        return if (internal.isDirectory) internal else context.getExternalFilesDir("models")
+            ?: internal
+    }
 
     fun qwenRoot(context: Context): File = File(root(context), "qwen")
 

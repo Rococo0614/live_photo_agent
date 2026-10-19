@@ -154,7 +154,36 @@ class LibraryDatabase(context: Context) : SQLiteOpenHelper(
         writableDatabase.execSQL("UPDATE assets SET search_embedding = NULL")
     }
 
-    fun searchEmbedding(query: FloatArray, limit: Int, queryText: String = ""): List<LibraryRecord> {
+    /**
+     * Drops every row whose semantic payload was not produced by the current analysis
+     * version, so a prompt or frame-sampling change can never leave a stale parse behind.
+     *
+     * Stale rows are deleted rather than filtered at query time: their search vectors were
+     * built from superseded text (e.g. the removed audio_tags), so keeping them around
+     * means keeping vectors that no longer correspond to anything the pipeline produces.
+     * The indexer recreates the rows on the next pass.
+     */
+    fun purgeStaleAnalysis(currentVersion: String): Int = writableDatabase.delete(
+        "assets",
+        "semantic_json IS NULL OR semantic_json NOT LIKE ?",
+        arrayOf("%\"analysis_version\":\"$currentVersion\"%")
+    )
+
+    fun searchEmbedding(query: FloatArray, limit: Int, queryText: String = ""): List<LibraryRecord> =
+        searchEmbeddingScored(query, limit, queryText).map { it.first }
+
+    /**
+     * Same ranking as [searchEmbedding], but keeps the cosine score and the tag-hit count.
+     *
+     * Retrieval is otherwise a black box: when the wrong asset comes back there is no way to tell
+     * a weak embedding from a wrong search phrase. Exposing the scores is what makes a bad
+     * replacement diagnosable from the audit log.
+     */
+    fun searchEmbeddingScored(
+        query: FloatArray,
+        limit: Int,
+        queryText: String = ""
+    ): List<Pair<LibraryRecord, Double>> {
         val records = list()
         val scored = records.mapNotNull { record ->
             val blob = readableDatabase.query(
@@ -175,7 +204,7 @@ class LibraryDatabase(context: Context) : SQLiteOpenHelper(
         return exact.sortedWith(
             compareByDescending<Triple<LibraryRecord, Double, Int>> { if (hasExplicitTagHit) it.third else 0 }
                 .thenByDescending { it.second }
-        ).take(limit).map { it.first }
+        ).take(limit).map { it.first to it.second }
     }
 
     private fun queryTerms(query: String): List<String> {
@@ -217,18 +246,59 @@ class LibraryDatabase(context: Context) : SQLiteOpenHelper(
         }
     }
 
-    fun isFresh(sourceUri: String, fingerprint: String, requireEmbedding: Boolean = false): Boolean = readableDatabase.query(
-        "assets", arrayOf("asset_id"), "source_uri = ? AND fingerprint = ? AND " +
-            "(semantic_json LIKE ? OR semantic_json LIKE ?)" +
-            if (requireEmbedding) " AND search_embedding IS NOT NULL" else "",
-        arrayOf(sourceUri, fingerprint, "%\"status\":\"ready\"%", "%\"ready\":true%"),
-        null, null, null
-    ).use { it.moveToFirst() }
+    /**
+     * True when this asset needs no further work from the indexer.
+     *
+     * Two shapes qualify, both stamped with the current analysis version:
+     *  - a successful parse (status=ready)
+     *  - a settled failure, i.e. one that cannot heal by retrying
+     *
+     * Settled failures must count as fresh. The VLM sampler uses a fixed seed, so
+     * re-running it on the same frames reproduces the same bad output forever; without
+     * this, every launch would re-analyse those assets and the pending count would never
+     * reach zero. Bumping ANALYSIS_VERSION after a prompt change clears them again.
+     */
+    /**
+     * True when this asset needs no further work from the indexer.
+     *
+     * Two shapes qualify, both stamped with the current analysis version:
+     *  - a successful parse (status=ready), which must also carry its embedding
+     *  - a settled failure, which by design has no embedding
+     *
+     * The embedding requirement is scoped to the ready branch on purpose. A settled row is
+     * one that cannot heal by retrying (the sampler uses a fixed seed, so the same frames
+     * reproduce the same bad output), and LibraryIndexer deliberately does not embed
+     * failed parses. Requiring an embedding there would make the row permanently not-fresh,
+     * so every launch would re-run VLM on it and the pending count would never reach zero.
+     */
+    fun isFresh(sourceUri: String, fingerprint: String, requireEmbedding: Boolean = false): Boolean {
+        val versionClause = "semantic_json LIKE ?"
+        val readyClause = "(semantic_json LIKE ? OR semantic_json LIKE ?)"
+        val settledClause = "semantic_json LIKE ?"
+        val embeddingClause = if (requireEmbedding) " AND search_embedding IS NOT NULL" else ""
+        return readableDatabase.query(
+            "assets", arrayOf("asset_id"),
+            "source_uri = ? AND fingerprint = ? AND $versionClause AND " +
+                "($readyClause$embeddingClause OR $settledClause)",
+            arrayOf(
+                sourceUri, fingerprint,
+                "%\"analysis_version\":\"${MobileVlmPreprocessor.ANALYSIS_VERSION}\"%",
+                "%\"status\":\"ready\"%", "%\"ready\":true%",
+                "%\"settled\":true%"
+            ),
+            null, null, null
+        ).use { it.moveToFirst() }
+    }
 
     fun readySemantic(sourceUri: String, fingerprint: String): JSONObject? = readableDatabase.query(
         "assets", arrayOf("semantic_json"),
-        "source_uri = ? AND fingerprint = ? AND (semantic_json LIKE ? OR semantic_json LIKE ?)",
-        arrayOf(sourceUri, fingerprint, "%\"status\":\"ready\"%", "%\"ready\":true%"),
+        "source_uri = ? AND fingerprint = ? AND (semantic_json LIKE ? OR semantic_json LIKE ?) " +
+            "AND semantic_json LIKE ?",
+        arrayOf(
+            sourceUri, fingerprint,
+            "%\"status\":\"ready\"%", "%\"ready\":true%",
+            "%\"analysis_version\":\"${MobileVlmPreprocessor.ANALYSIS_VERSION}\"%"
+        ),
         null, null, null
     ).use { cursor ->
         if (!cursor.moveToFirst()) null else JSONObject(cursor.getString(0))
@@ -338,6 +408,29 @@ class LibraryDatabase(context: Context) : SQLiteOpenHelper(
                 cursor.getLong(cursor.getColumnIndexOrThrow("created_at")),
                 cursor.getLong(cursor.getColumnIndexOrThrow("updated_at"))
             ))
+        }
+    }
+
+    fun deleteSession(sessionId: String) {
+        writableDatabase.delete("chat_messages", "session_id = ?", arrayOf(sessionId))
+        writableDatabase.delete("chat_sessions", "session_id = ?", arrayOf(sessionId))
+    }
+
+    /**
+     * File paths owned by one session's prepared-asset cache, read back from its saved state.
+     *
+     * Only these copies are session-private; agent-edits and album outputs are shared or
+     * user-visible and are deliberately not listed here.
+     */
+    fun sessionPreparedPaths(sessionId: String): List<String> {
+        val prepared = sessionState(sessionId).optJSONArray("prepared_assets") ?: return emptyList()
+        return buildList {
+            for (index in 0 until prepared.length()) {
+                val item = prepared.optJSONObject(index) ?: continue
+                listOf("source_file", "image_file", "video_file").forEach { key ->
+                    item.optString(key, "").takeIf { it.isNotBlank() && it != "null" }?.let(::add)
+                }
+            }
         }
     }
 

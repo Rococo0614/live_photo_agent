@@ -62,6 +62,12 @@
             android:exported="true"
             android:foregroundServiceType="dataSync" />
 
+        <!-- SDK 能力探针：adb shell am start-foreground-service -n com.vivo.lpa/.SdkProbeService -->
+        <service
+            android:name=".SdkProbeService"
+            android:exported="true"
+            android:foregroundServiceType="dataSync" />
+
         <service
             android:name=".AgentKeepAliveService"
             android:exported="false"

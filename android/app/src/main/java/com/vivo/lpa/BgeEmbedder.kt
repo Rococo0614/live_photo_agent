@@ -10,7 +10,7 @@ import kotlin.math.sqrt
 
 /** CPU ONNX BGE encoder matching the web project's 512-dim search embeddings. */
 class BgeEmbedder(context: Context) {
-    private val root = File(context.getExternalFilesDir("models"), "bge")
+    private val root = File(ModelPack.root(context), "bge")
     private val model = File(root, "bge_small_zh_v1_5.onnx")
     private val tokenizer = File(root, "vocab.txt")
     private val environment by lazy { OrtEnvironment.getEnvironment() }

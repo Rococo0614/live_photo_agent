@@ -18,27 +18,65 @@ class MobilePlanner(context: Context? = null, sessionId: String? = null) {
     private val geniePlanner = context?.let { GenieTextPlanner(it.applicationContext, sessionId) }
     private val templates = context?.let { MobileTemplateCatalog(it.applicationContext) }
 
-    fun plan(query: String, assets: List<PreparedAsset>, layoutContext: JSONObject? = null): MobilePlan {
-        geniePlanner?.tryPlan(query, assets)?.let { generated ->
-            val explicitAction = containsAny(
-                query.lowercase(Locale.ROOT),
-                "拼", "拼接", "模板", "模版", "版式", "template", "layout", "裁剪", "剪", "调色", "滤镜", "增强", "识别", "摘要", "倒放", "变速"
-            )
-            if (generated.toolCalls.isNotEmpty() || generated.clarification == null || !explicitAction) {
-                return attachLayout(generated, layoutContext)
-            }
-        }
-        restoreContinuation(query, assets, layoutContext)?.let { return it }
+    fun plan(
+        query: String,
+        assets: List<PreparedAsset>,
+        layoutContext: JSONObject? = null,
+        selectedAssetIds: List<String> = emptyList()
+    ): MobilePlan {
         val text = query.trim()
         val lower = text.lowercase(Locale.ROOT)
+
+        // Pure information request: no tool could act on it, so paying 6-10s for the brain to say
+        // the same thing is waste.
+        if (containsAny(lower, "能做什么", "可以做什么", "能力", "帮助", "what can you do")) {
+            return MobilePlan(text, "capability", assets.map { it.assetId }, emptyList(), null)
+        }
+
+        // Dominant-colour analysis is a tool the on-device text planner has never seen, so it
+        // must be claimed before genie gets a chance to misread it as a collage request.
+        if (containsAny(lower, "主色", "主色调", "配色", "色板", "取色", "dominant color", "palette")) {
+            val colorIds = selectedAssetIds.ifEmpty { assets.map { it.assetId } }
+            return MobilePlan(text, "color_analysis", colorIds, listOf(MobileToolCall(
+                tool = "color_analysis",
+                reason = "提取素材主色并生成调色板",
+                arguments = JSONObject().put("asset_ids", JSONArray(colorIds)).put("color_count", 5)
+            )))
+        }
+
+        // Brain first. The keyword tables below are a fallback, not the primary planner: a table
+        // can only ever miss silently (an unlisted synonym such as 反转 drops the step and returns
+        // a plan that looks complete), whereas the brain fails loudly -- null, unparseable, or
+        // CLARIFY -- and the tables then take over. Only the brain can recognise a verb nobody
+        // thought to enumerate.
+        val selected = selectedAssetIds.filter { id -> assets.any { it.assetId == id } }
+        val brainBefore = geniePlanner?.lastTrace
+        geniePlanner?.tryPlan(text, assets, selected)?.let { generated ->
+            // If the brain asks a clarifying question about a sentence that plainly names an
+            // action, do not bother the user -- fall through to the deterministic tables instead.
+            val explicitAction = containsAny(
+                lower,
+                "拼", "拼接", "模板", "模版", "版式", "template", "layout", "裁剪", "剪", "调色", "滤镜",
+                "增强", "识别", "摘要", "倒放", "变速", "反转", "翻转", "镜像", "模糊", "动感", "换",
+                "主色", "配色", "色板", "取色", "palette", "mirror", "flip", "reverse", "replace"
+            )
+            if (generated.toolCalls.isNotEmpty() || generated.clarification == null || !explicitAction) {
+                val scoped = applySelectionContract(generated, assets, layoutContext, selected)
+                return attachLayout(scoped, layoutContext)
+            }
+        }
+        // The brain ran but produced no usable plan. Its raw words still explain *why* the tables
+        // had to take over, so they travel with the fallback instead of vanishing.
+        val brainFailure = geniePlanner?.lastTrace?.takeIf { it !== brainBefore && !it.parsed }
+
+        planSelection(query, assets, layoutContext, selectedAssetIds)
+            ?.let { return it.withFailedBrain(brainFailure) }
+        restoreContinuation(query, assets, layoutContext)
+            ?.let { return it.withFailedBrain(brainFailure) }
         val ids = assets.map { it.assetId }
         val calls = mutableListOf<MobileToolCall>()
         val hasLivePhoto = assets.any { it.metadata.optString("media_format") == "livephoto" }
         val hasVideo = assets.any { it.videoFile != null }
-
-        if (containsAny(lower, "能做什么", "可以做什么", "能力", "帮助", "what can you do")) {
-            return MobilePlan(text, "capability", ids, emptyList(), null)
-        }
 
         if (containsAny(lower, "识别", "查看信息", "素材信息", "内容", "summarize", "summary")) {
             calls += MobileToolCall(
@@ -203,7 +241,7 @@ class MobilePlanner(context: Context? = null, sessionId: String? = null) {
                 selectedAssetIds = ids,
                 toolCalls = emptyList(),
                 clarification = "请说明要对素材进行裁剪、拼接、调色、内容识别或图片增强中的哪一种操作；主体分割当前未接入。"
-            )
+            ).withFailedBrain(brainFailure)
         }
 
         return MobilePlan(
@@ -211,7 +249,205 @@ class MobilePlanner(context: Context? = null, sessionId: String? = null) {
             intent = if (calls.any { it.tool.endsWith("collage") }) "collage" else "media_edit",
             selectedAssetIds = ids,
             toolCalls = supportedCalls
+        ).withFailedBrain(brainFailure)
+    }
+
+    /**
+     * Attaches a failed brain attempt to a fallback plan without changing its attribution.
+     *
+     * The plan itself still comes from the deterministic tables, so intent keeps saying so; but the
+     * brain's raw output is preserved so the audit can show what the model said before the tables
+     * had to step in.
+     */
+    private fun MobilePlan.withFailedBrain(trace: BrainTrace?): MobilePlan =
+        if (trace == null || brainTrace != null) this else copy(brainTrace = trace)
+
+    /**
+     * Deterministic planning for operations on assets the user tapped in the strip.
+     *
+     * Selection is UI state, so the text planner is bypassed entirely: with a dozen-slot
+     * templates and free-form wording, letting an LLM guess which asset "这张" refers to is
+     * both slower and less reliable than reading the tap. No selection means no override,
+     * which keeps every existing whole-batch path untouched.
+     *
+     * Edits are flagged `per_asset` + `writeback` so the runner loops one asset at a time and
+     * stores each result back under the same asset_id. That is what lets the trailing collage
+     * reuse the stored layout verbatim: slot geometry is keyed by asset_id, so preserving the
+     * id is what keeps an edited asset in its original slot.
+     */
+    private fun planSelection(
+        query: String,
+        assets: List<PreparedAsset>,
+        layoutContext: JSONObject?,
+        selectedAssetIds: List<String>
+    ): MobilePlan? {
+        if (selectedAssetIds.isEmpty()) return null
+        val selected = selectedAssetIds.mapNotNull { id -> assets.firstOrNull { it.assetId == id } }
+        if (selected.isEmpty()) return null
+
+        val text = query.trim()
+        val lower = text.lowercase(Locale.ROOT)
+        // Template wording wins over selection: "换个模板" is about the whole collage even if
+        // one asset happens to be tapped, and must not be read as "replace this asset".
+        if (isTemplateChange(lower) || containsAny(lower, "模板", "模版", "版式", "宫格")) return null
+
+        val selectedIds = selected.map { it.assetId }
+        val hasLivePhoto = selected.any { it.metadata.optString("media_format") == "livephoto" }
+        val hasVideo = selected.any { it.videoFile != null }
+        val calls = mutableListOf<MobileToolCall>()
+        val intent: String
+
+        val swapping = selected.size == 2 &&
+            containsAny(lower, "换位置", "换个位置", "换位", "交换", "调换", "对调", "互换", "swap")
+        val replacementQuery = if (selected.size == 1) replacementQuery(text) else null
+
+        when {
+            swapping -> {
+                intent = "selection_swap"
+                calls += MobileToolCall(
+                    tool = "layout_swap",
+                    reason = "交换两个选中素材在拼贴中的位置",
+                    arguments = JSONObject().put("asset_ids", JSONArray(selectedIds))
+                )
+            }
+            replacementQuery != null -> {
+                intent = "selection_replace"
+                calls += MobileToolCall(
+                    tool = "asset_replace",
+                    reason = "按语义检索素材库，替换选中的素材",
+                    arguments = JSONObject()
+                        .put("asset_ids", JSONArray(selectedIds))
+                        .put("query", replacementQuery)
+                )
+            }
+            else -> intent = "selection_edit"
+        }
+
+        // A replace can carry a follow-up edit in the same sentence ("换成狗的素材并调滤镜变暖"),
+        // so edit verbs are detected for every selection intent, not just the plain-edit one.
+        calls += selectionEditCalls(lower, selectedIds, hasLivePhoto, hasVideo)
+
+        if (calls.isEmpty()) return null
+
+        // Re-collage only when there is a layout to reuse; otherwise the edit stands alone and
+        // publishes normally.
+        val recombine = layoutContext != null &&
+            (swapping || replacementQuery != null || calls.any { it.tool != "asset_replace" })
+        if (recombine) {
+            calls += MobileToolCall(
+                tool = "template_collage",
+                reason = "沿用原模板与槽位重新拼接",
+                arguments = JSONObject()
+                    .put("asset_ids", JSONArray(assets.map { it.assetId }))
+                    .put("reuse_layout", true)
+                    .put("layout_context", layoutContext)
+            )
+        } else {
+            // Standalone edit: publish it instead of writing it back into a slot.
+            calls.replaceAll { call ->
+                if (call.arguments.optBoolean("writeback")) {
+                    call.copy(arguments = JSONObject(call.arguments.toString()).apply {
+                        remove("writeback"); remove("per_asset")
+                    })
+                } else call
+            }
+        }
+
+        return MobilePlan(
+            userGoal = text,
+            intent = intent,
+            selectedAssetIds = selectedIds,
+            toolCalls = calls
         )
+    }
+
+    /**
+     * Edit verbs recognized on a tapped asset.
+     *
+     * Deliberately narrower than [plan]: selection covers the operations a user points at a
+     * single thumbnail for (colour, orientation, playback), while batch-only verbs such as
+     * 裁剪 or 识别 keep their existing whole-set semantics.
+     */
+    private fun selectionEditCalls(
+        lower: String,
+        ids: List<String>,
+        hasLivePhoto: Boolean,
+        hasVideo: Boolean
+    ): List<MobileToolCall> {
+        val calls = mutableListOf<MobileToolCall>()
+        val idArray = { JSONArray(ids) }
+        val scoped = { extra: JSONObject.() -> Unit ->
+            JSONObject().put("asset_ids", idArray()).put("per_asset", true).put("writeback", true).apply(extra)
+        }
+
+        if (containsAny(lower, "滤镜", "调色", "鲜艳", "暖", "冷", "filter", "color", "tone")) {
+            val temperature = when {
+                containsAny(lower, "冷") -> -0.08
+                containsAny(lower, "暖") -> 0.12
+                else -> 0.08
+            }
+            calls += MobileToolCall(
+                tool = if (hasLivePhoto) "live_photo_filter_effect" else if (hasVideo) "video_filter" else "color_tone",
+                reason = "对选中素材调整色彩与影调",
+                arguments = scoped {
+                    put("contrast", 0.12); put("saturation", 0.12); put("temperature", temperature)
+                }
+            )
+        }
+        if (containsAny(lower, "翻转", "镜像", "左右翻", "mirror", "flip")) {
+            calls += MobileToolCall("video_mirror", scoped {}, "对选中素材左右翻转")
+        }
+        if (containsAny(lower, "倒放", "反向播放", "reverse")) {
+            calls += MobileToolCall("video_reverse", scoped {}, "对选中素材倒放")
+        }
+        if (containsAny(lower, "加速", "变快", "慢放", "减速", "变速", "speed")) {
+            val speed = if (containsAny(lower, "慢", "减速", "slow")) 0.5 else 2.0
+            calls += MobileToolCall("video_speed", scoped { put("speed", speed) }, "对选中素材变速")
+        }
+        if (containsAny(lower, "模糊", "blur")) {
+            calls += MobileToolCall("video_blur", scoped {}, "对选中素材做背景模糊")
+        }
+        if (containsAny(lower, "动感", "光效", "motion light")) {
+            calls += MobileToolCall(
+                if (hasLivePhoto) "live_photo_motion_effect" else "video_motion_effect",
+                scoped {}, "对选中素材叠加动感光效"
+            )
+        }
+        return calls.filter { MobileToolRegistry.supports(it.tool) }
+    }
+
+    /**
+     * Pulls the semantic-search phrase out of a replacement request.
+     *
+     * "这张猫换成狗" -> "狗"; "更换成狗的素材并调滤镜变得更温暖一点" -> "狗". The clause
+     * boundary matters: everything after 并/然后/再 describes a *follow-up edit* on the new
+     * asset, not the search target, so it is cut before the trailing 的素材 noise is stripped.
+     */
+    private fun replacementQuery(text: String): String? {
+        val triggers = listOf(
+            "替换成", "更换成", "替换为", "更换为", "换成", "换为", "改成", "改为", "替换", "更换",
+            // "swap with X" only: a bare "swap" belongs to layout_swap and must not be read as a
+            // replacement request.
+            "replace with", "replace by", "swap with", "replace"
+        )
+        // Earliest trigger wins, but among triggers starting at the same offset the *longest*
+        // must be consumed. Otherwise "replace with dog" matches "replace" first and leaves
+        // "with dog" as the search query.
+        val start = triggers.mapNotNull { trigger ->
+            text.indexOf(trigger).takeIf { it >= 0 }?.let { it to trigger.length }
+        }.minWithOrNull(compareBy({ it.first }, { -it.second }))
+            ?.let { (offset, length) -> offset + length }
+            ?: return null
+
+        val clause = text.substring(start)
+            .split(Regex("[，,。；;！!？?]|并且|然后|接着|同时|另外|再|并"))
+            .first()
+            .trim()
+            .removePrefix("一张").removePrefix("一个").removePrefix("个")
+            .removeSuffix("的素材").removeSuffix("素材").removeSuffix("的图片")
+            .removeSuffix("的照片").removeSuffix("的图").removeSuffix("的")
+            .trim()
+        return clause.takeIf { it.isNotEmpty() }
     }
 
     private fun restoreContinuation(
@@ -246,6 +482,67 @@ class MobilePlanner(context: Context? = null, sessionId: String? = null) {
             ),
             layoutContext
         )
+    }
+
+    /**
+     * Tools whose executor branch honours per_asset + writeback, i.e. it edits each asset in place
+     * and stores the result back under the same asset_id so a trailing re-collage picks it up.
+     *
+     * The image branch (brighten/sharpen/denoise/color_tone/portrait_beauty) does NOT: it takes one
+     * asset and publishes it. Marking those writeback would silently drop the edit, so they are
+     * deliberately absent here and stay standalone.
+     */
+    private val writebackCapable = setOf(
+        "video_mirror", "video_blur", "video_timeline_effect", "video_motion_effect",
+        "video_transition", "video_fit_band", "video_crop_band", "video_vertical_stack",
+        "video_dynamic_sticker", "video_border_watermark", "video_filter", "video_speed",
+        "video_reverse", "live_photo_filter_effect", "live_photo_motion_effect"
+    )
+
+    /**
+     * Imposes the selection execution contract on a brain plan.
+     *
+     * The brain decides *what* to do (which tools, which assets); this decides *how* it is wired
+     * into the pipeline. The per_asset/writeback flags and the trailing re-collage are an executor
+     * convention the model has never been shown, so leaving them to it would only widen the ways a
+     * plan can be wrong. Applying them here keeps the brain's output honest to the selection while
+     * the plumbing stays deterministic.
+     */
+    private fun applySelectionContract(
+        plan: MobilePlan,
+        assets: List<PreparedAsset>,
+        layoutContext: JSONObject?,
+        selected: List<String>
+    ): MobilePlan {
+        if (selected.isEmpty() || plan.clarification != null) return plan
+
+        val calls = plan.toolCalls.toMutableList()
+        val hasSlotEdit = calls.any { it.tool != "asset_replace" && it.tool in writebackCapable }
+        val hasReplace = calls.any { it.tool == "asset_replace" }
+        val recombine = layoutContext != null && (hasSlotEdit || hasReplace)
+
+        val rewritten = calls.map { call ->
+            if (recombine && call.tool in writebackCapable) {
+                val arguments = JSONObject(call.arguments.toString())
+                if (!arguments.has("asset_ids") || arguments.optJSONArray("asset_ids")?.length() == 0) {
+                    arguments.put("asset_ids", JSONArray(selected))
+                }
+                arguments.put("per_asset", true).put("writeback", true)
+                call.copy(arguments = arguments)
+            } else call
+        }.toMutableList()
+
+        if (recombine) {
+            rewritten += MobileToolCall(
+                tool = "template_collage",
+                reason = "沿用原模板与槽位重新拼接",
+                arguments = JSONObject()
+                    .put("asset_ids", JSONArray(assets.map { it.assetId }))
+                    .put("reuse_layout", true)
+                    .put("layout_context", layoutContext)
+            )
+        }
+        return plan.copy(selectedAssetIds = selected, toolCalls = rewritten)
     }
 
     private fun attachLayout(plan: MobilePlan, layoutContext: JSONObject?): MobilePlan {

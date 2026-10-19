@@ -38,7 +38,6 @@ class VLMSemanticAnalyzer:
                 "summary": content_summary,
                 "subjects": semantic_payload.get("subject_tags", []),
                 "motion": semantic_payload.get("motion_tags", []),
-                "audio": semantic_payload.get("audio_tags", []),
                 "theme": semantic_payload.get("theme", ""),
             }
         )
@@ -52,7 +51,6 @@ class VLMSemanticAnalyzer:
                 "scene_tags": semantic_payload.get("scene_tags", []),
                 "subject_tags": semantic_payload.get("subject_tags", []),
                 "motion_tags": semantic_payload.get("motion_tags", []),
-                "audio_tags": semantic_payload.get("audio_tags", []),
                 "search_keywords": semantic_payload.get("search_keywords", []),
                 "theme": semantic_payload.get("theme", ""),
             }
@@ -93,7 +91,6 @@ class VLMSemanticAnalyzer:
                 "scene_tags": [],
                 "subject_tags": [],
                 "motion_tags": [],
-                "audio_tags": [],
                 "search_keywords": [],
                 "theme": "",
                 "version": "v1",
@@ -200,17 +197,16 @@ class VLMSemanticAnalyzer:
             "scene_tags": list(parsed.get("scene_tags") or []),
             "subject_tags": list(parsed.get("subject_tags") or []),
             "motion_tags": list(parsed.get("motion_tags") or []),
-            "audio_tags": list(parsed.get("audio_tags") or []),
             "search_keywords": list(parsed.get("search_keywords") or []),
         }
 
     def _build_user_prompt(self, asset: LivePhotoAsset, has_video: bool, has_image: bool) -> str:
         if has_video and has_image:
             media_desc = "一段 live photo（包含视频和封面图）"
-            observe_instruction = "请仔细观看视频内容（包括画面动态和声音）以及封面图，"
+            observe_instruction = "请仔细观看视频内容（关注画面动态变化）以及封面图，"
         elif has_video:
             media_desc = "一段视频"
-            observe_instruction = "请仔细观看视频内容（包括画面动态和声音），"
+            observe_instruction = "请仔细观看视频内容（关注画面动态变化），"
         else:
             media_desc = "一张图片"
             observe_instruction = "请仔细分析图片内容，"
@@ -224,7 +220,6 @@ class VLMSemanticAnalyzer:
             "  scene_tags   （2-5 个场景标签）\n"
             "  subject_tags （2-5 个主体标签：人物、物体、事件、动作主体）\n"
             "  motion_tags  （1-3 个动作或动态描述标签，如无动态则写 static）\n"
-            "  audio_tags   （1-3 个声音或环境标签，如无音频则写 no_audio）\n"
             "  search_keywords（至少 5 个可检索短词，涵盖主题、场景、人物、动作）\n"
             "不能包含任何解释文字，只输出 JSON。"
         )
@@ -233,7 +228,7 @@ class VLMSemanticAnalyzer:
         return (
             "你是一个面向 agent 检索的多媒体语义标注器。"
             "你的任务是通过观看视频/图片内容，生成可检索的语义摘要。"
-            "请返回纯 JSON，字段包含 summary, theme, scene_tags, subject_tags, motion_tags, audio_tags, search_keywords。"
+            "请返回纯 JSON，字段包含 summary, theme, scene_tags, subject_tags, motion_tags, search_keywords。"
             "字段值简洁、稳定，适合用于后续检索和 chunk 构建，不含任何解释文字。"
         )
 

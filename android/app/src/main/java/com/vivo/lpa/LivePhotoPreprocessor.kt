@@ -21,14 +21,34 @@ import org.json.JSONObject
 class LivePhotoPreprocessor(private val context: Context) {
     private val livePhotoSdk = LivePhotoSdkAdapter(context)
 
+    /**
+     * One instance for the lifetime of this preprocessor, not one per prepare() call.
+     *
+     * It owns the ThermalGuard, whose whole job is counting inferences across a batch.
+     * Constructing it inside prepare() -- which the indexer calls once per asset -- gave
+     * every asset a fresh guard with its counter at zero, so the batch size was never
+     * reached and the duty-cycle limit never engaged.
+     */
+    private val vlm = MobileVlmPreprocessor(context)
+
+    /**
+     * One helper for the lifetime of this preprocessor.
+     *
+     * It used to be constructed inside prepare()'s per-asset loop, so indexing 102 assets
+     * opened 102 SQLiteOpenHelper instances -- each with its own connection pool -- and
+     * nothing ever closed them. The leaked connections accumulate until the system kills
+     * the process, which is what cut indexing short at a consistent point across runs.
+     */
+    private val database = LibraryDatabase(context)
+
     fun prepare(
         uris: List<Uri>,
         cancelled: () -> Boolean = { false },
         progress: (String) -> Unit = {},
-        frameLimit: Int = 3
+        frameLimit: Int = MobileVlmPreprocessor.MAX_GRID_FRAMES,
+        keepFiles: Boolean = true
     ): List<PreparedAsset> {
         val root = File(context.cacheDir, "agent-inputs").apply { mkdirs() }
-        val vlm = MobileVlmPreprocessor(context)
         return uris.mapIndexed { index, uri ->
             check(!cancelled()) { "cancelled" }
             progress("预处理素材 ${index + 1}/${uris.size}")
@@ -54,7 +74,7 @@ class LivePhotoPreprocessor(private val context: Context) {
                 semantic = JSONObject()
             )
             val sourceFingerprint = sourceFingerprint(uri)
-            val cachedSemantic = LibraryDatabase(context).readySemantic(uri.toString(), sourceFingerprint)
+            val cachedSemantic = database.readySemantic(uri.toString(), sourceFingerprint)
             val semantic = if (cachedSemantic != null) {
                 MobileVlmPreprocessor.Result(cachedSemantic, true, "复用素材库 VLM 摘要")
             } else {
@@ -63,7 +83,14 @@ class LivePhotoPreprocessor(private val context: Context) {
                 vlm.analyze(provisional, frames)
             }
             progress("${semantic.message}：${source.name}")
-            provisional.copy(semantic = semantic.payload.put("ready", semantic.ready))
+            val prepared = provisional.copy(semantic = semantic.payload.put("ready", semantic.ready))
+            if (!keepFiles) {
+                // Indexing only needs the semantic payload. The caller persists sourceUri
+                // and the display name, never these cache paths, so the working copy is
+                // dead weight once analysis is done.
+                assetDir.deleteRecursively()
+            }
+            prepared
         }
     }
 
@@ -223,21 +250,41 @@ class LivePhotoPreprocessor(private val context: Context) {
         }
     }
 
+    /**
+     * Samples four frames spanning the whole clip so the VLM sees the full motion arc.
+     *
+     * A frame that fails to decode is dropped, so callers can receive fewer than four.
+     * That is safe rather than silent: the survivors keep their relative order, the grid
+     * fills cells in list order, and MobileVlmPreprocessor derives its layout sentence
+     * from the count it actually got -- so a blank cell is always declared to the model
+     * instead of being mistaken for content.
+     */
     private fun extractFrames(video: File, directory: File): List<File> {
         val retriever = MediaMetadataRetriever()
         return try {
             retriever.setDataSource(video.absolutePath)
             val durationUs = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION)
                 ?.toLongOrNull()?.times(1000L) ?: 0L
-            val times = listOf(0L, durationUs / 2L, (durationUs * 9L) / 10L).distinct()
-            times.mapIndexedNotNull { index, time ->
+            // 100% can land exactly past the last frame on some devices and yield null,
+            // so clamp back by one microsecond.
+            val last = (durationUs - 1L).coerceAtLeast(0L)
+            val times = listOf(
+                0L,
+                durationUs / 3L,
+                (durationUs * 2L) / 3L,
+                last
+            ).distinct()
+            times.mapIndexed { index, time ->
                 val bitmap = retriever.getFrameAtTime(time, MediaMetadataRetriever.OPTION_CLOSEST)
-                    ?: return@mapIndexedNotNull null
-                val output = File(directory, "frame-$index.jpg")
-                FileOutputStream(output).use { bitmap.compress(Bitmap.CompressFormat.JPEG, 88, it) }
-                bitmap.recycle()
-                output
-            }
+                if (bitmap == null) {
+                    null
+                } else {
+                    val output = File(directory, "frame-$index.jpg")
+                    FileOutputStream(output).use { bitmap.compress(Bitmap.CompressFormat.JPEG, 88, it) }
+                    bitmap.recycle()
+                    output
+                }
+            }.filterNotNull()
         } finally {
             retriever.release()
         }
