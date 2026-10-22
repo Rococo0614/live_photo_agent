@@ -13,6 +13,7 @@ import com.vivo.imageprocess.ImageProcessRenderEngine
 import java.io.File
 import java.io.FileInputStream
 import java.io.FileOutputStream
+import java.util.Locale
 import java.util.concurrent.atomic.AtomicBoolean
 import org.json.JSONArray
 import org.json.JSONObject
@@ -43,8 +44,22 @@ class MobileAgentRunner(private val context: Context) {
          * shrink the id list below the required arity and turn a valid step into an error.
          */
         private val unscopedTools = setOf(
-            "template_collage", "smart_collage", "layout_swap", "asset_replace"
+            "template_collage", "layout_swap", "asset_replace"
         )
+
+        /** Tools whose arguments may carry a style name that must be resolved to numeric params. */
+        private val styleTools = setOf(
+            "video_filter", "color_tone", "live_photo_filter_effect", "brighten", "portrait_beauty"
+        )
+
+        /**
+         * Minimum cosine score for asset_replace to accept a candidate.
+         *
+         * Calibrated from audit data: genuine content replacements ("换成狗的", "换成一只猫的")
+         * scored 0.51-0.69, while the misclassified filter query "黑白" scored 0.43. 0.48 sits in
+         * the observed gap; it is a destructive-operation guard, not a content filter.
+         */
+        private const val REPLACE_MIN_SCORE = 0.48
     }
     interface Listener {
         fun onProgress(message: String)
@@ -64,6 +79,15 @@ class MobileAgentRunner(private val context: Context) {
          * were never recorded anywhere. This is the audit hook for them.
          */
         fun onToolCall(index: Int, total: Int, call: MobileToolCall) {}
+        /**
+         * The intent-stage brain attempt, logged the moment it completes.
+         *
+         * The intent plan is consumed for its search parameters and then discarded: on the
+         * retrieval path its trace never reaches onPlan, so PLAN_BRAIN alone only ever shows
+         * intent calls that took the chat fast-path. That survivorship is what made
+         * intent_returned_tools unmeasurable (planner_reliability_plan.md §3.4).
+         */
+        fun onIntentTrace(trace: BrainTrace) {}
         fun onPlan(plan: MobilePlan)
         fun onResult(result: MobileToolResult)
         fun onFinished(uri: Uri?, message: String)
@@ -101,9 +125,37 @@ class MobileAgentRunner(private val context: Context) {
             // path returns a plan built from words alone and would silently drop the selection.
             // MobilePlanner.plan() is the only entry point that knows about selectedAssetIds.
             val intentPlan = if (uris.isEmpty() && selectedAssetIds.isEmpty()) {
-                GenieTextPlanner(context, sessionId).tryIntent(query)
+                listener.onProgress("端侧大脑正在理解请求…")
+                val intentPlanner = GenieTextPlanner(context, sessionId)
+                val plan = intentPlanner.tryIntent(query)
+                // Log the attempt whether or not it parsed into a usable plan: a null plan with
+                // a raw output is exactly the failure the audit exists to capture.
+                intentPlanner.lastTrace?.let { listener.onIntentTrace(it) }
+                plan
             } else {
                 null
+            }
+            // Chat and capability questions must answer before any retrieval runs. Searching with
+            // the chat text as the query silently loads three unrelated assets into the strip and
+            // leaves the user with no reply -- the exact failure a plain "你好 你可以做什么" produced.
+            if (uris.isEmpty() && selectedAssetIds.isEmpty()) {
+                // The keyword answer is a fallback for a missing brain only; when the brain is up
+                // it understands capability questions itself through its chat channel.
+                if (MobilePlanner.isCapabilityQuery(query) && !ModelPack.qwenReady(context)) {
+                    val reply = MobilePlanner.CAPABILITY_TEXT
+                    listener.onPlan(MobilePlan(query, "capability", emptyList(), emptyList(), reply))
+                    listener.onFinished(null, reply)
+                    return
+                }
+                // The brain looked at the sentence and found no tool chain at all: that is
+                // conversation, not an edit request. Its clarifying words are the answer.
+                intentPlan?.takeIf {
+                    it.toolCalls.isEmpty() && !MobilePlanner.isExplicitEditQuery(query)
+                }?.clarification?.let { reply ->
+                    listener.onPlan(intentPlan)
+                    listener.onFinished(null, reply)
+                    return
+                }
             }
             val resolvedUris = if (uris.isNotEmpty()) {
                 uris
@@ -148,6 +200,7 @@ class MobileAgentRunner(private val context: Context) {
             // supply the search parameters consumed above. Planning happens here, once the cast is
             // real -- which also restores the deterministic colour-analysis pre-emption that this
             // shortcut used to bypass entirely.
+            listener.onProgress("素材已就绪，正在规划执行步骤…")
             val plan = planner.plan(query, assets, workingLayout, selectedAssetIds)
             // Safety net: search_assets is consumed during URI resolution above and has no
             // execution mapping. Strip it from every plan source (genie STEP, restored
@@ -184,11 +237,38 @@ class MobileAgentRunner(private val context: Context) {
                 listener.onFinished(null, scopedPlan.clarification)
                 return
             }
+            // Device planner experiments need retrieval and real prepared-asset context, but not
+            // dozens of identical SDK exports. This build-time-only arm stops after the exact same
+            // PLAN_FINAL audit point used by production. The default is false, so a normal APK can
+            // never silently skip user work.
+            if (BuildConfig.PLANNER_EVAL_ONLY) {
+                listener.onFinished(null, "规划评测完成（未执行工具）")
+                return
+            }
 
-            scopedPlan.toolCalls.forEachIndexed { index, call ->
+            // Style names ("黑白", "冷色") are the planner's vocabulary; the SDKs only read numeric
+            // parameters. Resolve them once, before the loop, so the TOOL_CALL audit records exactly
+            // the arguments each executor branch receives.
+            //
+            // video_filter's contrast/saturation/filter_level defaults live here too, not inside its
+            // branch: onToolCall fires before the branch runs, so defaults injected there were
+            // invisible to the audit. Keeping this the single place style arguments are finalised is
+            // what lets the harness tell "the brain chose saturation=-1.0" from "a lookup table
+            // filled it" (planner_reliability_plan.md §3.5 defect B).
+            val styledPlan = scopedPlan.copy(toolCalls = scopedPlan.toolCalls.map { call ->
+                if (call.tool !in styleTools) return@map call
+                val resolved = applyStylePreset(call.arguments)
+                if (call.tool == "video_filter") {
+                    if (!resolved.has("contrast")) resolved.put("contrast", 0.12)
+                    if (!resolved.has("saturation")) resolved.put("saturation", 0.08)
+                    if (!resolved.has("filter_level")) resolved.put("filter_level", 0.8)
+                }
+                call.copy(arguments = resolved)
+            })
+            styledPlan.toolCalls.forEachIndexed { index, call ->
                 if (cancelled.get()) throw InterruptedException("cancelled")
-                listener.onProgress("执行 ${index + 1}/${scopedPlan.toolCalls.size}: ${call.tool}")
-                listener.onToolCall(index, scopedPlan.toolCalls.size, call)
+                listener.onProgress("执行 ${index + 1}/${styledPlan.toolCalls.size}: ${call.tool}")
+                listener.onToolCall(index, styledPlan.toolCalls.size, call)
                 when (call.tool) {
                     "asset_summarize" -> {
                         val payload = JSONArray()
@@ -230,15 +310,9 @@ class MobileAgentRunner(private val context: Context) {
                         val selected = selectedAssets(call.arguments, assets)
                         val perAsset = call.arguments.optBoolean("per_asset")
                         val writeback = call.arguments.optBoolean("writeback")
-                        val videoArguments = if (call.tool == "video_filter") {
-                            JSONObject(call.arguments.toString()).apply {
-                                if (!has("contrast")) put("contrast", 0.12)
-                                if (!has("saturation")) put("saturation", 0.08)
-                                if (!has("filter_level")) put("filter_level", 0.8)
-                            }
-                        } else {
-                            call.arguments
-                        }
+                        // Already resolved (preset + video_filter defaults) by the styledPlan
+                        // mapping above, which is what onToolCall audited.
+                        val videoArguments = call.arguments
                         if (perAsset && writeback) {
                             // One asset at a time, each result stored back under its own
                             // asset_id so the trailing re-collage finds the edited clip in its
@@ -260,7 +334,16 @@ class MobileAgentRunner(private val context: Context) {
                                 .put("execution_backend", "vivo_videoeditorsdk")))
                         } else {
                             val inputs = selected.mapNotNull { it.videoFile?.absolutePath }
-                            if (inputs.isEmpty()) throw IllegalArgumentException("效果处理需要视频素材")
+                            val requiredVideos = when (call.tool) {
+                                "video_vertical_stack" -> 3
+                                "video_transition", "video_dynamic_sticker" -> 2
+                                else -> 1
+                            }
+                            if (inputs.size < requiredVideos) {
+                                throw IllegalArgumentException(
+                                    "${call.tool} 需要 $requiredVideos 个视频素材，当前只有 ${inputs.size} 个"
+                                )
+                            }
                             val result = VivoSdkExecutor.execute(
                                 context, jobDir.name, call.tool, inputs, 0L, 0L, "", 0, 0, jobDir, videoArguments
                             ) { percent, message -> listener.onProgress("$message $percent%") }
@@ -276,8 +359,9 @@ class MobileAgentRunner(private val context: Context) {
                         val selected = selectedAssets(call.arguments, assets)
                         val input = selected.firstOrNull()?.imageFile
                             ?: throw IllegalArgumentException("${call.tool} 需要图片素材")
+                        val imageArguments = applyStylePreset(call.arguments)
                         val result = VivoImageSdkExecutor.execute(
-                            context, jobDir.name, call.tool, input.absolutePath, call.arguments, jobDir
+                            context, jobDir.name, call.tool, input.absolutePath, imageArguments, jobDir
                         ) { percent, message ->
                             if (cancelled.get()) {
                                 VivoSdkExecutor.cancel(jobDir.name)
@@ -310,6 +394,8 @@ class MobileAgentRunner(private val context: Context) {
                                 ?: throw IllegalArgumentException("输入不是 vivo Live Photo 或缺少可用运动轨道")
                             val effectArguments = JSONObject(call.arguments.toString())
                             val operation = if (call.tool == "live_photo_filter_effect") {
+                                val preset = applyStylePreset(effectArguments)
+                                preset.keys().forEach { key -> effectArguments.put(key, preset.get(key)) }
                                 if (!effectArguments.has("contrast")) effectArguments.put("contrast", 0.18)
                                 if (!effectArguments.has("saturation")) effectArguments.put("saturation", 0.2)
                                 if (!effectArguments.has("temperature")) effectArguments.put("temperature", 0.12)
@@ -401,10 +487,7 @@ class MobileAgentRunner(private val context: Context) {
                             .put("output_path", output.absolutePath)
                             .put("execution_backend", "vivo_mediaeffectsdk")))
                     }
-                    "template_collage", "smart_collage" -> {
-                        if (call.tool == "smart_collage" && assets.any { !it.semantic.optBoolean("ready", false) }) {
-                            throw IllegalStateException("智能拼贴需要端侧 VLM 模型包；当前仅完成技术前处理")
-                        }
+                    "template_collage" -> {
                         // Plans embed an asset_ids snapshot taken when the plan was built. An
                         // earlier asset_replace step in the same plan makes that snapshot stale:
                         // filtering by it would drop the freshly replaced asset (its id is not in
@@ -570,6 +653,18 @@ class MobileAgentRunner(private val context: Context) {
                         val ranked = database.searchEmbeddingScored(embedder.embed(searchQuery), 8, searchQuery)
                         val (candidate, candidateScore) = ranked.firstOrNull { it.first.assetId !in inUse }
                             ?: throw IllegalStateException("素材库没有可用于替换的「$searchQuery」素材")
+                        // A replacement is destructive: it throws away the asset the user tapped.
+                        // When the brain misreads a recolour request as a retrieval, the query is a
+                        // style name that matches nothing well, and the old code swapped in whatever
+                        // ranked first regardless of how weak it was. Refusing a weak match keeps the
+                        // asset intact and tells the user, which is recoverable; a wrong photo is not.
+                        if (candidateScore < REPLACE_MIN_SCORE) {
+                            throw IllegalStateException(
+                                "没有找到与「$searchQuery」足够匹配的素材（最高相似度 " +
+                                    String.format("%.2f", candidateScore) + "），已保留原素材。" +
+                                    "如果想换的是滤镜或色调，请直接说明风格名称。"
+                            )
+                        }
 
                         val prepared = preprocessor.prepare(
                             listOf(Uri.parse(candidate.sourceUri)),
@@ -725,6 +820,50 @@ class MobileAgentRunner(private val context: Context) {
         val index = assets.indexOfFirst { it.assetId == assetId }
         if (index < 0) return
         assets[index] = assets[index].copy(videoFile = edited)
+    }
+
+    /**
+     * Turns a style *name* into the numeric parameters the SDKs actually consume.
+     *
+     * The brain plans filters by name ("黑白", "冷色", "复古") but both the video and image
+     * executors only read contrast/saturation/temperature/brightness -- an unmapped effect string
+     * was silently ignored, so "黑白" produced a plain warm default. Mapping here keeps the name as
+     * the planner's vocabulary while the executor stays numeric. Explicit numbers in the plan win.
+     */
+    private fun applyStylePreset(arguments: JSONObject): JSONObject {
+        // Always a copy, never the input reference. The video_filter branch mutates the result
+        // in place to add contrast/saturation/filter_level defaults; returning `arguments`
+        // itself wrote those defaults back into the plan's own tool call. Because logAudit runs
+        // on the UI thread, PLAN_FINAL was serialised after that mutation and recorded
+        // parameters the brain never emitted -- which both corrupted the audit and masked
+        // unresolved style names, since the defaults made every call look parameterised.
+        val out = JSONObject(arguments.toString())
+        val style = out.optString("effect").lowercase(Locale.ROOT)
+        if (style.isBlank()) return out
+        val preset: (JSONObject) -> Unit = when {
+            listOf("黑白", "灰度", "mono", "grayscale", "black and white", "bw").any(style::contains) ->
+                { target: JSONObject -> target.put("saturation", -1.0); target.put("contrast", 0.1); target.put("temperature", 0.0) }
+            listOf("冷色", "冷调", "cool", "cold").any(style::contains) ->
+                { target: JSONObject -> target.put("temperature", -0.18) }
+            listOf("暖色", "暖调", "warm").any(style::contains) ->
+                { target: JSONObject -> target.put("temperature", 0.18) }
+            listOf("鲜艳", "vivid", "saturate").any(style::contains) ->
+                { target: JSONObject -> target.put("saturation", 0.3); target.put("contrast", 0.08) }
+            listOf("复古", "胶片", "vintage", "film").any(style::contains) ->
+                { target: JSONObject -> target.put("saturation", -0.25); target.put("temperature", 0.1); target.put("contrast", -0.06) }
+            listOf("明亮", "提亮", "bright").any(style::contains) ->
+                { target: JSONObject -> target.put("brightness", 0.15) }
+            else -> return out
+        }
+        presetKeys(out, preset)
+        return out
+    }
+
+    /** Preset values fill only what the plan did not already set explicitly. */
+    private fun presetKeys(target: JSONObject, preset: (JSONObject) -> Unit) {
+        val filled = JSONObject()
+        preset(filled)
+        filled.keys().forEach { key -> if (!target.has(key)) target.put(key, filled.get(key)) }
     }
 
     private fun selectedAssets(arguments: JSONObject, assets: List<PreparedAsset>): List<PreparedAsset> {

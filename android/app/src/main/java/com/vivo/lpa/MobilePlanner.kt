@@ -13,6 +13,38 @@ import org.json.JSONObject
  * SDK validation and prevents an unavailable model from producing fake edits.
  */
 class MobilePlanner(context: Context? = null, sessionId: String? = null) {
+    companion object {
+        /** Spoken answer for "what can you do"; kept here so UI and runner share one wording. */
+        const val CAPABILITY_TEXT =
+            "我可以：按内容语义检索素材；2-6 格拼贴与换模板；裁剪、变速、倒放、镜像、模糊、动感光效；" +
+                "滤镜调色（暖色、冷色、黑白、鲜艳、复古）；图片增强（提亮、锐化、降噪、美颜）；" +
+                "Live Photo 换封面；选中素材后语义替换、交换位置；提取主色生成调色板。直接告诉我想怎么处理即可。"
+
+        fun isCapabilityQuery(query: String): Boolean {
+            val lower = query.lowercase(Locale.ROOT)
+            return listOf("能做什么", "可以做什么", "能力", "帮助", "what can you do", "介绍自己", "你是谁")
+                .any(lower::contains)
+        }
+
+        /**
+         * Whether the literal request clearly names a media-edit action.
+         *
+         * This is a guard against a false CHAT fast-path, not a tool router: a guarded request still
+         * goes through BGE retrieval and the post-retrieval brain. The exact same predicate already
+         * protected final-plan CLARIFY responses; exposing it here keeps both brain stages aligned.
+         */
+        fun isExplicitEditQuery(query: String): Boolean {
+            val lower = query.lowercase(Locale.ROOT)
+            return listOf(
+                "拼", "拼接", "模板", "模版", "版式", "template", "layout", "裁剪", "剪",
+                "调色", "滤镜", "增强", "识别", "摘要", "倒放", "变速", "加速", "慢放",
+                "反转", "翻转", "镜像", "模糊", "动感", "换", "替换", "主色", "配色",
+                "色板", "取色", "美颜", "锐化", "降噪", "提亮", "palette", "mirror",
+                "flip", "reverse", "replace", "collage", "trim", "filter"
+            ).any(lower::contains)
+        }
+    }
+
     private val appContext = context?.applicationContext
     private val activeSessionId = sessionId
     private val geniePlanner = context?.let { GenieTextPlanner(it.applicationContext, sessionId) }
@@ -26,12 +58,6 @@ class MobilePlanner(context: Context? = null, sessionId: String? = null) {
     ): MobilePlan {
         val text = query.trim()
         val lower = text.lowercase(Locale.ROOT)
-
-        // Pure information request: no tool could act on it, so paying 6-10s for the brain to say
-        // the same thing is waste.
-        if (containsAny(lower, "能做什么", "可以做什么", "能力", "帮助", "what can you do")) {
-            return MobilePlan(text, "capability", assets.map { it.assetId }, emptyList(), null)
-        }
 
         // Dominant-colour analysis is a tool the on-device text planner has never seen, so it
         // must be claimed before genie gets a chance to misread it as a collage request.
@@ -54,12 +80,7 @@ class MobilePlanner(context: Context? = null, sessionId: String? = null) {
         geniePlanner?.tryPlan(text, assets, selected)?.let { generated ->
             // If the brain asks a clarifying question about a sentence that plainly names an
             // action, do not bother the user -- fall through to the deterministic tables instead.
-            val explicitAction = containsAny(
-                lower,
-                "拼", "拼接", "模板", "模版", "版式", "template", "layout", "裁剪", "剪", "调色", "滤镜",
-                "增强", "识别", "摘要", "倒放", "变速", "反转", "翻转", "镜像", "模糊", "动感", "换",
-                "主色", "配色", "色板", "取色", "palette", "mirror", "flip", "reverse", "replace"
-            )
+            val explicitAction = isExplicitEditQuery(lower)
             if (generated.toolCalls.isNotEmpty() || generated.clarification == null || !explicitAction) {
                 val scoped = applySelectionContract(generated, assets, layoutContext, selected)
                 return attachLayout(scoped, layoutContext)
@@ -124,7 +145,6 @@ class MobilePlanner(context: Context? = null, sessionId: String? = null) {
 
         val changingTemplate = isTemplateChange(lower)
         if (containsAny(lower, "拼", "拼接", "拼贴", "拼图", "模板", "模版", "版式", "template", "layout", "collage", "stack", "当前布局", "画布")) {
-            val smart = changingTemplate || containsAny(lower, "智能", "自动", "推荐", "smart")
             val layout = if (containsAny(lower, "横", "horizontal", "溶解")) "horizontal" else "vertical"
             val previousTemplateId = activeSessionId?.let { session ->
                 appContext?.let { context ->
@@ -146,8 +166,8 @@ class MobilePlanner(context: Context? = null, sessionId: String? = null) {
                 .put("canvas", "${template?.optInt("canvas_width", 1080) ?: 1080}x${template?.optInt("canvas_height", 1440) ?: 1440}")
             if (layoutContext != null && !changingTemplate) arguments.put("layout_context", layoutContext)
             calls += MobileToolCall(
-                tool = if (smart) "smart_collage" else "template_collage",
-                reason = if (smart) "按素材前处理结果选择模板" else "按当前布局模板拼接",
+                tool = "template_collage",
+                reason = "按当前布局模板拼接",
                 arguments = arguments
             )
         }
@@ -185,18 +205,32 @@ class MobilePlanner(context: Context? = null, sessionId: String? = null) {
             )
         }
 
-        if (containsAny(lower, "调色", "滤镜", "鲜艳", "暖色", "冷色", "color", "tone", "filter")) {
+        if (containsAny(lower, "调色", "滤镜", "鲜艳", "暖色", "冷色", "黑白", "灰度", "复古", "胶片", "color", "tone", "filter", "grayscale", "vintage")) {
             val filterTool = when {
                 hasLivePhoto -> "live_photo_filter_effect"
                 hasVideo -> "video_filter"
                 else -> "color_tone"
             }
+            // Style names map to the numeric parameters the SDKs consume; the runner applies the
+            // same presets to brain plans, so both paths speak one style vocabulary.
+            val style = JSONObject()
+            when {
+                containsAny(lower, "黑白", "灰度", "grayscale") -> {
+                    style.put("saturation", -1.0).put("contrast", 0.1).put("temperature", 0.0)
+                }
+                containsAny(lower, "冷色", "冷调", "cool") -> style.put("temperature", -0.18)
+                containsAny(lower, "暖色", "暖调", "warm") -> style.put("temperature", 0.18)
+                containsAny(lower, "鲜艳", "vivid") -> style.put("saturation", 0.3).put("contrast", 0.08)
+                containsAny(lower, "复古", "胶片", "vintage") ->
+                    style.put("saturation", -0.25).put("temperature", 0.1).put("contrast", -0.06)
+                else -> style.put("contrast", 0.12).put("saturation", 0.12).put("temperature", 0.08)
+            }
+            val filterArguments = JSONObject().put("asset_ids", JSONArray(ids))
+            style.keys().forEach { key -> filterArguments.put(key, style.get(key)) }
             calls += MobileToolCall(
                 tool = filterTool,
                 reason = "调用端侧 ImageProcessSDK 调整色彩与影调",
-                arguments = JSONObject().put("asset_ids", JSONArray(ids))
-                    .put("contrast", 0.12).put("saturation", 0.12)
-                    .put("temperature", if (lower.contains("冷色")) -0.08 else 0.08)
+                arguments = filterArguments
             )
         }
 
@@ -231,6 +265,12 @@ class MobilePlanner(context: Context? = null, sessionId: String? = null) {
                 reason = "调用端侧 MediaEffectSDK 获取 Live XDR 资源",
                 arguments = JSONObject()
             )
+        }
+
+        // Capability questions reach the keyword table only when the brain is down or produced
+        // nothing usable; with the brain up, its chat channel answers them itself.
+        if (isCapabilityQuery(text)) {
+            return MobilePlan(text, "capability", ids, emptyList(), CAPABILITY_TEXT)
         }
 
         val supportedCalls = calls.filter { MobileToolRegistry.supports(it.tool) }
@@ -380,17 +420,23 @@ class MobilePlanner(context: Context? = null, sessionId: String? = null) {
             JSONObject().put("asset_ids", idArray()).put("per_asset", true).put("writeback", true).apply(extra)
         }
 
-        if (containsAny(lower, "滤镜", "调色", "鲜艳", "暖", "冷", "filter", "color", "tone")) {
-            val temperature = when {
-                containsAny(lower, "冷") -> -0.08
-                containsAny(lower, "暖") -> 0.12
-                else -> 0.08
+        if (containsAny(lower, "滤镜", "调色", "鲜艳", "暖", "冷", "黑白", "灰度", "复古", "胶片",
+                "filter", "color", "tone", "grayscale", "vintage")) {
+            // Same style vocabulary as the whole-batch filter block in plan(): a selection edit
+            // saying 黑白 must desaturate, not fall through to the generic warm preset.
+            val (saturation, contrast, temperature) = when {
+                containsAny(lower, "黑白", "灰度", "grayscale") -> Triple(-1.0, 0.1, 0.0)
+                containsAny(lower, "冷") -> Triple(0.0, 0.0, -0.18)
+                containsAny(lower, "暖") -> Triple(0.0, 0.0, 0.18)
+                containsAny(lower, "鲜艳") -> Triple(0.3, 0.08, 0.0)
+                containsAny(lower, "复古", "胶片", "vintage") -> Triple(-0.25, -0.06, 0.1)
+                else -> Triple(0.12, 0.12, 0.08)
             }
             calls += MobileToolCall(
                 tool = if (hasLivePhoto) "live_photo_filter_effect" else if (hasVideo) "video_filter" else "color_tone",
                 reason = "对选中素材调整色彩与影调",
                 arguments = scoped {
-                    put("contrast", 0.12); put("saturation", 0.12); put("temperature", temperature)
+                    put("contrast", contrast); put("saturation", saturation); put("temperature", temperature)
                 }
             )
         }
@@ -519,7 +565,11 @@ class MobilePlanner(context: Context? = null, sessionId: String? = null) {
         val calls = plan.toolCalls.toMutableList()
         val hasSlotEdit = calls.any { it.tool != "asset_replace" && it.tool in writebackCapable }
         val hasReplace = calls.any { it.tool == "asset_replace" }
-        val recombine = layoutContext != null && (hasSlotEdit || hasReplace)
+        // layout_swap only repoints slots inside workingLayout; without a trailing re-collage the
+        // plan produces no file at all and finishes with "已完成前处理". The deterministic path
+        // appends the re-collage itself, so the brain path must as well.
+        val hasSwap = calls.any { it.tool == "layout_swap" }
+        val recombine = layoutContext != null && (hasSlotEdit || hasReplace || hasSwap)
 
         val rewritten = calls.map { call ->
             if (recombine && call.tool in writebackCapable) {

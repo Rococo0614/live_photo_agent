@@ -1,5 +1,8 @@
 # Mobile Agent Migration
 
+完整的端侧部署、问题修复、测评数据与当前状态见：
+[`on_device_deployment_technical_report.md`](on_device_deployment_technical_report.md)。
+
 The Android module is now the phone-side shell for the Python Live Photo Agent.
 
 ## Runtime boundary
@@ -21,7 +24,7 @@ The Python `ExecutionPlan` vocabulary is preserved in `AgentModels.kt`. Python
 |---|---|---|
 | `clip_trim` | vivo VideoEditorSDK | implemented |
 | `template_collage` | Android Canvas `layout_context` + vivo VideoEditorSDK overlays | implemented for manual slot layout and imported template slots; verified on X300 Ultra |
-| `smart_collage` | QNN VLM + template selection | VLM pipeline is deployed; planner still uses the deterministic fallback until the text pack is added |
+| `smart_collage` | QNN VLM + template selection | **removed from the Android registry**: the port never consumed VLM semantics and duplicated `template_collage` with one extra failure gate. The Python VLM-scored implementation remains; reintroduce the Android tool only when semantic template ranking is actually ported |
 | `asset_summarize` | Qwen3-VL-4B QNN/Genie key-frame analysis | implemented and verified on X300 Ultra |
 | `export_mp4` | Android MediaStore | implemented |
 | Live Photo unpack/pack | vivo LivePhotoSDK 2.4.20.0 | implemented and verified on X300 Ultra |

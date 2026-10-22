@@ -141,3 +141,35 @@ Notes:
 - `category` remains evaluation metadata and is not intended as planner input.
 - Script startup prints resolved backend runtime info for quick verification.
 - For `musiq` / `clipiqa`, install an IQA backend first (for example `pyiqa`), otherwise image scoring will be skipped for that case.
+
+## On-device planner experiment
+
+`device_harness.py` drives the actual Android QNN planner and scores its audit rows. It is
+separate from the Python planner evaluation above.
+
+Build one reproducible experiment arm:
+
+```bash
+cd android
+./gradlew assembleDebug -PplannerExperiment=p1
+```
+
+Valid values are `baseline`, `p1`, `scratchpad`, and `two_turn`. The normal build defaults to
+`baseline`; each trace records the selected arm in `INTENT_BRAIN.strategy` and
+`PLAN_BRAIN.strategy`.
+
+For planner-only evaluation (same intent/retrieval/preparation/PLAN_FINAL path, no SDK export), add
+`-PplannerEvalOnly=true`. The flag defaults to `false` and must never be used for a production APK.
+
+After installing the APK, run and keep each report separate:
+
+```bash
+python tests/evals/device_harness.py --repeat 3 \
+  --report tests/evals/device_eval_report_p1.json \
+  --failures tests/evals/device_eval_failures_p1.jsonl
+```
+
+`scratchpad` is a visible, prompt-induced draft in one generation. It is **not** native thinking:
+the deployed `Qwen3-4B-Instruct-2507` supports non-thinking mode only. `two_turn` performs two
+actual generations—free planning followed by mechanical formatting—and reports their latencies
+separately.

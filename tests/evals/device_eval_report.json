@@ -1,0 +1,3563 @@
+{
+  "summary": {
+    "cases_run": 60,
+    "errors": 0,
+    "scored": 60,
+    "pass_rate": 0.9,
+    "brain_pass_rate": 0.9,
+    "rescued_by_tables": 0,
+    "vacuous": 0,
+    "intent_called": {
+      "n": 60,
+      "total": 60,
+      "rate": 1.0
+    },
+    "intent_trace_complete": {
+      "n": 60,
+      "total": 60
+    },
+    "intent_returned_tools": {
+      "n": 18,
+      "total": 60,
+      "rate": 0.3
+    },
+    "chat_swallowed_edit": {
+      "n": 6,
+      "total": 60,
+      "rate": 0.1
+    },
+    "keyword_fallback": {
+      "n": 0,
+      "total": 60,
+      "rate": 0.0
+    },
+    "retrieved": {
+      "n": 36,
+      "total": 60,
+      "rate": 0.6
+    },
+    "executed": {
+      "n": 36,
+      "total": 60,
+      "rate": 0.6
+    },
+    "protocol": {
+      "step_class_turns": 36,
+      "parsed_step_rows": 36,
+      "protocol_clean_rate": 1.0,
+      "legacy_header_rate": 0.0,
+      "legacy_field_rows": 0,
+      "legacy_placeholder_leak": 0,
+      "drifted": []
+    },
+    "has_duplicate_tools": {
+      "n": 0,
+      "total": 60,
+      "rate": 0.0
+    },
+    "markdown_pollution": {
+      "n": 0,
+      "total": 60,
+      "rate": 0.0
+    },
+    "param_quality": {
+      "style_tools_planned": 9,
+      "hollow": {
+        "D010": [
+          "video_filter"
+        ],
+        "D013": [
+          "color_tone"
+        ]
+      },
+      "unresolved": {
+        "D012": [
+          "color_tone"
+        ]
+      },
+      "brain_authored": {},
+      "table_authored": {}
+    },
+    "latency_ms": {
+      "intent": {
+        "n": 60,
+        "p50": 5925,
+        "p95": 10234,
+        "max": 12743,
+        "mean": 6584
+      },
+      "plan": {
+        "n": 36,
+        "p50": 5938,
+        "p95": 10030,
+        "max": 11330,
+        "mean": 6673
+      }
+    },
+    "slot_echo": {
+      "effect": {
+        "echoed": 0,
+        "filled": 30,
+        "echo_rate": 0.0
+      },
+      "ordinal_suffix": {
+        "echoed": 0,
+        "filled": 9,
+        "echo_rate": 0.0
+      }
+    },
+    "sampler_variance": {
+      "你好": {
+        "distinct_outcomes": 1,
+        "runs": 3,
+        "outcomes": [
+          "[]"
+        ]
+      },
+      "你是谁 你可以做什么": {
+        "distinct_outcomes": 1,
+        "runs": 3,
+        "outcomes": [
+          "[]"
+        ]
+      },
+      "你知道成龙是谁么": {
+        "distinct_outcomes": 1,
+        "runs": 3,
+        "outcomes": [
+          "[]"
+        ]
+      },
+      "今天天气怎么样": {
+        "distinct_outcomes": 1,
+        "runs": 3,
+        "outcomes": [
+          "[]"
+        ]
+      },
+      "做个狗的四拼": {
+        "distinct_outcomes": 1,
+        "runs": 3,
+        "outcomes": [
+          "['template_collage']"
+        ]
+      },
+      "给我的猫做个三拼": {
+        "distinct_outcomes": 1,
+        "runs": 3,
+        "outcomes": [
+          "[]"
+        ]
+      },
+      "从相册中选择风景照做拼接": {
+        "distinct_outcomes": 1,
+        "runs": 3,
+        "outcomes": [
+          "['template_collage']"
+        ]
+      },
+      "找几张美食照片拼起来": {
+        "distinct_outcomes": 1,
+        "runs": 3,
+        "outcomes": [
+          "['template_collage']"
+        ]
+      },
+      "用海边的照片做个拼图": {
+        "distinct_outcomes": 1,
+        "runs": 3,
+        "outcomes": [
+          "['template_collage']"
+        ]
+      },
+      "把视频调成黑白的": {
+        "distinct_outcomes": 1,
+        "runs": 3,
+        "outcomes": [
+          "['video_filter']"
+        ]
+      },
+      "给这张加个复古滤镜": {
+        "distinct_outcomes": 1,
+        "runs": 3,
+        "outcomes": [
+          "[]"
+        ]
+      },
+      "画面调暖一点": {
+        "distinct_outcomes": 1,
+        "runs": 3,
+        "outcomes": [
+          "['color_tone']"
+        ]
+      },
+      "把颜色调鲜艳一些": {
+        "distinct_outcomes": 1,
+        "runs": 3,
+        "outcomes": [
+          "['color_tone']"
+        ]
+      },
+      "处理一下": {
+        "distinct_outcomes": 1,
+        "runs": 3,
+        "outcomes": [
+          "[]"
+        ]
+      },
+      "这个弄好看点": {
+        "distinct_outcomes": 1,
+        "runs": 3,
+        "outcomes": [
+          "[]"
+        ]
+      },
+      "把视频左右翻转": {
+        "distinct_outcomes": 1,
+        "runs": 3,
+        "outcomes": [
+          "['video_mirror']"
+        ]
+      },
+      "视频背景虚化": {
+        "distinct_outcomes": 1,
+        "runs": 3,
+        "outcomes": [
+          "['video_blur']"
+        ]
+      },
+      "把视频倒放": {
+        "distinct_outcomes": 1,
+        "runs": 3,
+        "outcomes": [
+          "['video_reverse']"
+        ]
+      },
+      "视频加速两倍": {
+        "distinct_outcomes": 1,
+        "runs": 3,
+        "outcomes": [
+          "['video_speed']"
+        ]
+      },
+      "make a collage of my cat": {
+        "distinct_outcomes": 1,
+        "runs": 3,
+        "outcomes": [
+          "['template_collage']"
+        ]
+      }
+    }
+  },
+  "results": [
+    {
+      "case_id": "D001",
+      "query": "你好",
+      "category": "chat",
+      "repeat": 0,
+      "error": null,
+      "timed_out": false,
+      "metrics": {
+        "events_seen": 7,
+        "intent_called": true,
+        "intent_returned_tools": false,
+        "intent_trace_complete": true,
+        "chat_swallowed_edit": false,
+        "retrieved": false,
+        "keyword_fallback": false,
+        "final_source": "qnn_genie_intent",
+        "clarified": false,
+        "clarification": null,
+        "planned_tools": [],
+        "executed": false,
+        "step_raw": "",
+        "intent_raw": "  \n{\"intent\":\"chat\",\"reply\":\"你好！有什么我可以帮你的吗？\",\"tool_calls\":[]}",
+        "latency_ms": {
+          "intent": 5614,
+          "plan": null
+        },
+        "reply": "你好！有什么我可以帮你的吗？",
+        "has_step_output": false,
+        "hollow_params": [],
+        "unresolved_style": [],
+        "brain_authored_params": [],
+        "table_authored_params": [],
+        "style_tools_planned": 0,
+        "checks": {
+          "outcome_match": true,
+          "tools_must_include": null,
+          "tools_must_not_include": null,
+          "retrieval": true,
+          "not_swallowed": true,
+          "turn_recorded": true,
+          "brain_attributed": null,
+          "vacuous": false,
+          "passed": true,
+          "brain_passed": true
+        }
+      }
+    },
+    {
+      "case_id": "D001",
+      "query": "你好",
+      "category": "chat",
+      "repeat": 1,
+      "error": null,
+      "timed_out": false,
+      "metrics": {
+        "events_seen": 7,
+        "intent_called": true,
+        "intent_returned_tools": false,
+        "intent_trace_complete": true,
+        "chat_swallowed_edit": false,
+        "retrieved": false,
+        "keyword_fallback": false,
+        "final_source": "qnn_genie_intent",
+        "clarified": false,
+        "clarification": null,
+        "planned_tools": [],
+        "executed": false,
+        "step_raw": "",
+        "intent_raw": "  \n{\"intent\":\"chat\",\"reply\":\"你好！有什么我可以帮你的吗？\",\"tool_calls\":[]}",
+        "latency_ms": {
+          "intent": 5216,
+          "plan": null
+        },
+        "reply": "你好！有什么我可以帮你的吗？",
+        "has_step_output": false,
+        "hollow_params": [],
+        "unresolved_style": [],
+        "brain_authored_params": [],
+        "table_authored_params": [],
+        "style_tools_planned": 0,
+        "checks": {
+          "outcome_match": true,
+          "tools_must_include": null,
+          "tools_must_not_include": null,
+          "retrieval": true,
+          "not_swallowed": true,
+          "turn_recorded": true,
+          "brain_attributed": null,
+          "vacuous": false,
+          "passed": true,
+          "brain_passed": true
+        }
+      }
+    },
+    {
+      "case_id": "D001",
+      "query": "你好",
+      "category": "chat",
+      "repeat": 2,
+      "error": null,
+      "timed_out": false,
+      "metrics": {
+        "events_seen": 7,
+        "intent_called": true,
+        "intent_returned_tools": false,
+        "intent_trace_complete": true,
+        "chat_swallowed_edit": false,
+        "retrieved": false,
+        "keyword_fallback": false,
+        "final_source": "qnn_genie_intent",
+        "clarified": false,
+        "clarification": null,
+        "planned_tools": [],
+        "executed": false,
+        "step_raw": "",
+        "intent_raw": "  \n{\"intent\":\"chat\",\"reply\":\"你好！有什么我可以帮你的吗？\",\"tool_calls\":[]}",
+        "latency_ms": {
+          "intent": 4816,
+          "plan": null
+        },
+        "reply": "你好！有什么我可以帮你的吗？",
+        "has_step_output": false,
+        "hollow_params": [],
+        "unresolved_style": [],
+        "brain_authored_params": [],
+        "table_authored_params": [],
+        "style_tools_planned": 0,
+        "checks": {
+          "outcome_match": true,
+          "tools_must_include": null,
+          "tools_must_not_include": null,
+          "retrieval": true,
+          "not_swallowed": true,
+          "turn_recorded": true,
+          "brain_attributed": null,
+          "vacuous": false,
+          "passed": true,
+          "brain_passed": true
+        }
+      }
+    },
+    {
+      "case_id": "D002",
+      "query": "你是谁 你可以做什么",
+      "category": "chat",
+      "repeat": 0,
+      "error": null,
+      "timed_out": false,
+      "metrics": {
+        "events_seen": 7,
+        "intent_called": true,
+        "intent_returned_tools": false,
+        "intent_trace_complete": true,
+        "chat_swallowed_edit": false,
+        "retrieved": false,
+        "keyword_fallback": false,
+        "final_source": "qnn_genie_intent",
+        "clarified": false,
+        "clarification": null,
+        "planned_tools": [],
+        "executed": false,
+        "step_raw": "",
+        "intent_raw": "\n{\"intent\":\"chat\",\"reply\":\"我是 Live Photo Agent，可以执行视频/图片编辑任务，如搜索素材、拼接、滤镜处理、特效添加等。\",\"tool_calls\":[]}",
+        "latency_ms": {
+          "intent": 5514,
+          "plan": null
+        },
+        "reply": "我是 Live Photo Agent，可以执行视频/图片编辑任务，如搜索素材、拼接、滤镜处理、特效添加等。",
+        "has_step_output": false,
+        "hollow_params": [],
+        "unresolved_style": [],
+        "brain_authored_params": [],
+        "table_authored_params": [],
+        "style_tools_planned": 0,
+        "checks": {
+          "outcome_match": true,
+          "tools_must_include": null,
+          "tools_must_not_include": null,
+          "retrieval": true,
+          "not_swallowed": true,
+          "turn_recorded": true,
+          "brain_attributed": null,
+          "vacuous": false,
+          "passed": true,
+          "brain_passed": true
+        }
+      }
+    },
+    {
+      "case_id": "D002",
+      "query": "你是谁 你可以做什么",
+      "category": "chat",
+      "repeat": 1,
+      "error": null,
+      "timed_out": false,
+      "metrics": {
+        "events_seen": 7,
+        "intent_called": true,
+        "intent_returned_tools": false,
+        "intent_trace_complete": true,
+        "chat_swallowed_edit": false,
+        "retrieved": false,
+        "keyword_fallback": false,
+        "final_source": "qnn_genie_intent",
+        "clarified": false,
+        "clarification": null,
+        "planned_tools": [],
+        "executed": false,
+        "step_raw": "",
+        "intent_raw": "\n{\"intent\":\"chat\",\"reply\":\"我是 Live Photo Agent，可以执行视频/图片编辑任务，如搜索素材、拼接、滤镜处理、特效添加等。\",\"tool_calls\":[]}",
+        "latency_ms": {
+          "intent": 5517,
+          "plan": null
+        },
+        "reply": "我是 Live Photo Agent，可以执行视频/图片编辑任务，如搜索素材、拼接、滤镜处理、特效添加等。",
+        "has_step_output": false,
+        "hollow_params": [],
+        "unresolved_style": [],
+        "brain_authored_params": [],
+        "table_authored_params": [],
+        "style_tools_planned": 0,
+        "checks": {
+          "outcome_match": true,
+          "tools_must_include": null,
+          "tools_must_not_include": null,
+          "retrieval": true,
+          "not_swallowed": true,
+          "turn_recorded": true,
+          "brain_attributed": null,
+          "vacuous": false,
+          "passed": true,
+          "brain_passed": true
+        }
+      }
+    },
+    {
+      "case_id": "D002",
+      "query": "你是谁 你可以做什么",
+      "category": "chat",
+      "repeat": 2,
+      "error": null,
+      "timed_out": false,
+      "metrics": {
+        "events_seen": 7,
+        "intent_called": true,
+        "intent_returned_tools": false,
+        "intent_trace_complete": true,
+        "chat_swallowed_edit": false,
+        "retrieved": false,
+        "keyword_fallback": false,
+        "final_source": "qnn_genie_intent",
+        "clarified": false,
+        "clarification": null,
+        "planned_tools": [],
+        "executed": false,
+        "step_raw": "",
+        "intent_raw": "\n{\"intent\":\"chat\",\"reply\":\"我是 Live Photo Agent，可以执行视频/图片编辑任务，如搜索素材、拼接、滤镜处理、特效添加等。\",\"tool_calls\":[]}",
+        "latency_ms": {
+          "intent": 5413,
+          "plan": null
+        },
+        "reply": "我是 Live Photo Agent，可以执行视频/图片编辑任务，如搜索素材、拼接、滤镜处理、特效添加等。",
+        "has_step_output": false,
+        "hollow_params": [],
+        "unresolved_style": [],
+        "brain_authored_params": [],
+        "table_authored_params": [],
+        "style_tools_planned": 0,
+        "checks": {
+          "outcome_match": true,
+          "tools_must_include": null,
+          "tools_must_not_include": null,
+          "retrieval": true,
+          "not_swallowed": true,
+          "turn_recorded": true,
+          "brain_attributed": null,
+          "vacuous": false,
+          "passed": true,
+          "brain_passed": true
+        }
+      }
+    },
+    {
+      "case_id": "D003",
+      "query": "你知道成龙是谁么",
+      "category": "chat",
+      "repeat": 0,
+      "error": null,
+      "timed_out": false,
+      "metrics": {
+        "events_seen": 7,
+        "intent_called": true,
+        "intent_returned_tools": false,
+        "intent_trace_complete": true,
+        "chat_swallowed_edit": false,
+        "retrieved": false,
+        "keyword_fallback": false,
+        "final_source": "qnn_genie_intent",
+        "clarified": false,
+        "clarification": null,
+        "planned_tools": [],
+        "executed": false,
+        "step_raw": "",
+        "intent_raw": "\n{\"intent\":\"chat\",\"reply\":\"成龙是中国著名演员、导演、制片人，以动作片闻名，代表作包括《警察故事》《英雄》等。\",\"tool_calls\":[]}",
+        "latency_ms": {
+          "intent": 5516,
+          "plan": null
+        },
+        "reply": "成龙是中国著名演员、导演、制片人，以动作片闻名，代表作包括《警察故事》《英雄》等。",
+        "has_step_output": false,
+        "hollow_params": [],
+        "unresolved_style": [],
+        "brain_authored_params": [],
+        "table_authored_params": [],
+        "style_tools_planned": 0,
+        "checks": {
+          "outcome_match": true,
+          "tools_must_include": null,
+          "tools_must_not_include": null,
+          "retrieval": true,
+          "not_swallowed": true,
+          "turn_recorded": true,
+          "brain_attributed": null,
+          "vacuous": false,
+          "passed": true,
+          "brain_passed": true
+        }
+      }
+    },
+    {
+      "case_id": "D003",
+      "query": "你知道成龙是谁么",
+      "category": "chat",
+      "repeat": 1,
+      "error": null,
+      "timed_out": false,
+      "metrics": {
+        "events_seen": 7,
+        "intent_called": true,
+        "intent_returned_tools": false,
+        "intent_trace_complete": true,
+        "chat_swallowed_edit": false,
+        "retrieved": false,
+        "keyword_fallback": false,
+        "final_source": "qnn_genie_intent",
+        "clarified": false,
+        "clarification": null,
+        "planned_tools": [],
+        "executed": false,
+        "step_raw": "",
+        "intent_raw": "\n{\"intent\":\"chat\",\"reply\":\"成龙是中国著名演员、导演、制片人，以动作片闻名，代表作包括《警察故事》《英雄》等。\",\"tool_calls\":[]}",
+        "latency_ms": {
+          "intent": 5515,
+          "plan": null
+        },
+        "reply": "成龙是中国著名演员、导演、制片人，以动作片闻名，代表作包括《警察故事》《英雄》等。",
+        "has_step_output": false,
+        "hollow_params": [],
+        "unresolved_style": [],
+        "brain_authored_params": [],
+        "table_authored_params": [],
+        "style_tools_planned": 0,
+        "checks": {
+          "outcome_match": true,
+          "tools_must_include": null,
+          "tools_must_not_include": null,
+          "retrieval": true,
+          "not_swallowed": true,
+          "turn_recorded": true,
+          "brain_attributed": null,
+          "vacuous": false,
+          "passed": true,
+          "brain_passed": true
+        }
+      }
+    },
+    {
+      "case_id": "D003",
+      "query": "你知道成龙是谁么",
+      "category": "chat",
+      "repeat": 2,
+      "error": null,
+      "timed_out": false,
+      "metrics": {
+        "events_seen": 7,
+        "intent_called": true,
+        "intent_returned_tools": false,
+        "intent_trace_complete": true,
+        "chat_swallowed_edit": false,
+        "retrieved": false,
+        "keyword_fallback": false,
+        "final_source": "qnn_genie_intent",
+        "clarified": false,
+        "clarification": null,
+        "planned_tools": [],
+        "executed": false,
+        "step_raw": "",
+        "intent_raw": "\n{\"intent\":\"chat\",\"reply\":\"成龙是中国著名演员、导演、制片人，以动作片闻名，代表作包括《警察故事》《英雄》等。\",\"tool_calls\":[]}",
+        "latency_ms": {
+          "intent": 5618,
+          "plan": null
+        },
+        "reply": "成龙是中国著名演员、导演、制片人，以动作片闻名，代表作包括《警察故事》《英雄》等。",
+        "has_step_output": false,
+        "hollow_params": [],
+        "unresolved_style": [],
+        "brain_authored_params": [],
+        "table_authored_params": [],
+        "style_tools_planned": 0,
+        "checks": {
+          "outcome_match": true,
+          "tools_must_include": null,
+          "tools_must_not_include": null,
+          "retrieval": true,
+          "not_swallowed": true,
+          "turn_recorded": true,
+          "brain_attributed": null,
+          "vacuous": false,
+          "passed": true,
+          "brain_passed": true
+        }
+      }
+    },
+    {
+      "case_id": "D004",
+      "query": "今天天气怎么样",
+      "category": "chat",
+      "repeat": 0,
+      "error": null,
+      "timed_out": false,
+      "metrics": {
+        "events_seen": 7,
+        "intent_called": true,
+        "intent_returned_tools": false,
+        "intent_trace_complete": true,
+        "chat_swallowed_edit": false,
+        "retrieved": false,
+        "keyword_fallback": false,
+        "final_source": "qnn_genie_intent",
+        "clarified": false,
+        "clarification": null,
+        "planned_tools": [],
+        "executed": false,
+        "step_raw": "",
+        "intent_raw": "\n{\"intent\":\"chat\",\"reply\":\"今天天气晴朗，适合外出。\",\"tool_calls\":[]}",
+        "latency_ms": {
+          "intent": 4617,
+          "plan": null
+        },
+        "reply": "今天天气晴朗，适合外出。",
+        "has_step_output": false,
+        "hollow_params": [],
+        "unresolved_style": [],
+        "brain_authored_params": [],
+        "table_authored_params": [],
+        "style_tools_planned": 0,
+        "checks": {
+          "outcome_match": true,
+          "tools_must_include": null,
+          "tools_must_not_include": null,
+          "retrieval": true,
+          "not_swallowed": true,
+          "turn_recorded": true,
+          "brain_attributed": null,
+          "vacuous": false,
+          "passed": true,
+          "brain_passed": true
+        }
+      }
+    },
+    {
+      "case_id": "D004",
+      "query": "今天天气怎么样",
+      "category": "chat",
+      "repeat": 1,
+      "error": null,
+      "timed_out": false,
+      "metrics": {
+        "events_seen": 7,
+        "intent_called": true,
+        "intent_returned_tools": false,
+        "intent_trace_complete": true,
+        "chat_swallowed_edit": false,
+        "retrieved": false,
+        "keyword_fallback": false,
+        "final_source": "qnn_genie_intent",
+        "clarified": false,
+        "clarification": null,
+        "planned_tools": [],
+        "executed": false,
+        "step_raw": "",
+        "intent_raw": "\n{\"intent\":\"chat\",\"reply\":\"今天天气晴朗，适合外出。\",\"tool_calls\":[]}",
+        "latency_ms": {
+          "intent": 4713,
+          "plan": null
+        },
+        "reply": "今天天气晴朗，适合外出。",
+        "has_step_output": false,
+        "hollow_params": [],
+        "unresolved_style": [],
+        "brain_authored_params": [],
+        "table_authored_params": [],
+        "style_tools_planned": 0,
+        "checks": {
+          "outcome_match": true,
+          "tools_must_include": null,
+          "tools_must_not_include": null,
+          "retrieval": true,
+          "not_swallowed": true,
+          "turn_recorded": true,
+          "brain_attributed": null,
+          "vacuous": false,
+          "passed": true,
+          "brain_passed": true
+        }
+      }
+    },
+    {
+      "case_id": "D004",
+      "query": "今天天气怎么样",
+      "category": "chat",
+      "repeat": 2,
+      "error": null,
+      "timed_out": false,
+      "metrics": {
+        "events_seen": 7,
+        "intent_called": true,
+        "intent_returned_tools": false,
+        "intent_trace_complete": true,
+        "chat_swallowed_edit": false,
+        "retrieved": false,
+        "keyword_fallback": false,
+        "final_source": "qnn_genie_intent",
+        "clarified": false,
+        "clarification": null,
+        "planned_tools": [],
+        "executed": false,
+        "step_raw": "",
+        "intent_raw": "\n{\"intent\":\"chat\",\"reply\":\"今天天气晴朗，适合外出。\",\"tool_calls\":[]}",
+        "latency_ms": {
+          "intent": 4719,
+          "plan": null
+        },
+        "reply": "今天天气晴朗，适合外出。",
+        "has_step_output": false,
+        "hollow_params": [],
+        "unresolved_style": [],
+        "brain_authored_params": [],
+        "table_authored_params": [],
+        "style_tools_planned": 0,
+        "checks": {
+          "outcome_match": true,
+          "tools_must_include": null,
+          "tools_must_not_include": null,
+          "retrieval": true,
+          "not_swallowed": true,
+          "turn_recorded": true,
+          "brain_attributed": null,
+          "vacuous": false,
+          "passed": true,
+          "brain_passed": true
+        }
+      }
+    },
+    {
+      "case_id": "D005",
+      "query": "做个狗的四拼",
+      "category": "retrieval_edit",
+      "repeat": 0,
+      "error": null,
+      "timed_out": false,
+      "metrics": {
+        "events_seen": 374,
+        "intent_called": true,
+        "intent_returned_tools": true,
+        "intent_trace_complete": true,
+        "chat_swallowed_edit": false,
+        "retrieved": true,
+        "keyword_fallback": false,
+        "final_source": "qnn_genie",
+        "clarified": false,
+        "clarification": null,
+        "planned_tools": [
+          "template_collage"
+        ],
+        "executed": true,
+        "step_raw": "\nSTEP=template_collage|4",
+        "intent_raw": "\n{\"user_goal\":\"做个狗的四拼\",\"intent\":\"template_collage\",\"tool_calls\":[{\"tool\":\"search_assets\",\"reason\":\"用户要求做四拼，需要先检索狗相关素材\",\"arguments\":{\"query\":\"狗\",\"k\":3}}]}",
+        "latency_ms": {
+          "intent": 6321,
+          "plan": 4912
+        },
+        "reply": "",
+        "has_step_output": true,
+        "step_rows": 1,
+        "echoed_slots": {},
+        "filled_slots": {
+          "effect": 1
+        },
+        "legacy_header": false,
+        "legacy_field_rows": 0,
+        "legacy_placeholder_leak": 0,
+        "duplicate_tools": [],
+        "current_shape_rows": 1,
+        "pipe_rows": 1,
+        "markdown": false,
+        "hollow_params": [],
+        "unresolved_style": [],
+        "brain_authored_params": [],
+        "table_authored_params": [],
+        "style_tools_planned": 0,
+        "checks": {
+          "outcome_match": true,
+          "tools_must_include": true,
+          "tools_must_not_include": null,
+          "retrieval": true,
+          "not_swallowed": true,
+          "turn_recorded": true,
+          "brain_attributed": true,
+          "vacuous": false,
+          "passed": true,
+          "brain_passed": true
+        }
+      }
+    },
+    {
+      "case_id": "D005",
+      "query": "做个狗的四拼",
+      "category": "retrieval_edit",
+      "repeat": 1,
+      "error": null,
+      "timed_out": false,
+      "metrics": {
+        "events_seen": 374,
+        "intent_called": true,
+        "intent_returned_tools": true,
+        "intent_trace_complete": true,
+        "chat_swallowed_edit": false,
+        "retrieved": true,
+        "keyword_fallback": false,
+        "final_source": "qnn_genie",
+        "clarified": false,
+        "clarification": null,
+        "planned_tools": [
+          "template_collage"
+        ],
+        "executed": true,
+        "step_raw": "\nSTEP=template_collage|4",
+        "intent_raw": "\n{\"user_goal\":\"做个狗的四拼\",\"intent\":\"template_collage\",\"tool_calls\":[{\"tool\":\"search_assets\",\"reason\":\"用户要求做四拼，需要先检索狗相关素材\",\"arguments\":{\"query\":\"狗\",\"k\":3}}]}",
+        "latency_ms": {
+          "intent": 6025,
+          "plan": 4915
+        },
+        "reply": "",
+        "has_step_output": true,
+        "step_rows": 1,
+        "echoed_slots": {},
+        "filled_slots": {
+          "effect": 1
+        },
+        "legacy_header": false,
+        "legacy_field_rows": 0,
+        "legacy_placeholder_leak": 0,
+        "duplicate_tools": [],
+        "current_shape_rows": 1,
+        "pipe_rows": 1,
+        "markdown": false,
+        "hollow_params": [],
+        "unresolved_style": [],
+        "brain_authored_params": [],
+        "table_authored_params": [],
+        "style_tools_planned": 0,
+        "checks": {
+          "outcome_match": true,
+          "tools_must_include": true,
+          "tools_must_not_include": null,
+          "retrieval": true,
+          "not_swallowed": true,
+          "turn_recorded": true,
+          "brain_attributed": true,
+          "vacuous": false,
+          "passed": true,
+          "brain_passed": true
+        }
+      }
+    },
+    {
+      "case_id": "D005",
+      "query": "做个狗的四拼",
+      "category": "retrieval_edit",
+      "repeat": 2,
+      "error": null,
+      "timed_out": false,
+      "metrics": {
+        "events_seen": 374,
+        "intent_called": true,
+        "intent_returned_tools": true,
+        "intent_trace_complete": true,
+        "chat_swallowed_edit": false,
+        "retrieved": true,
+        "keyword_fallback": false,
+        "final_source": "qnn_genie",
+        "clarified": false,
+        "clarification": null,
+        "planned_tools": [
+          "template_collage"
+        ],
+        "executed": true,
+        "step_raw": "\nSTEP=template_collage|4",
+        "intent_raw": "\n{\"user_goal\":\"做个狗的四拼\",\"intent\":\"template_collage\",\"tool_calls\":[{\"tool\":\"search_assets\",\"reason\":\"用户要求做四拼，需要先检索狗相关素材\",\"arguments\":{\"query\":\"狗\",\"k\":3}}]}",
+        "latency_ms": {
+          "intent": 6017,
+          "plan": 5612
+        },
+        "reply": "",
+        "has_step_output": true,
+        "step_rows": 1,
+        "echoed_slots": {},
+        "filled_slots": {
+          "effect": 1
+        },
+        "legacy_header": false,
+        "legacy_field_rows": 0,
+        "legacy_placeholder_leak": 0,
+        "duplicate_tools": [],
+        "current_shape_rows": 1,
+        "pipe_rows": 1,
+        "markdown": false,
+        "hollow_params": [],
+        "unresolved_style": [],
+        "brain_authored_params": [],
+        "table_authored_params": [],
+        "style_tools_planned": 0,
+        "checks": {
+          "outcome_match": true,
+          "tools_must_include": true,
+          "tools_must_not_include": null,
+          "retrieval": true,
+          "not_swallowed": true,
+          "turn_recorded": true,
+          "brain_attributed": true,
+          "vacuous": false,
+          "passed": true,
+          "brain_passed": true
+        }
+      }
+    },
+    {
+      "case_id": "D006",
+      "query": "给我的猫做个三拼",
+      "category": "retrieval_edit",
+      "repeat": 0,
+      "error": null,
+      "timed_out": false,
+      "metrics": {
+        "events_seen": 7,
+        "intent_called": true,
+        "intent_returned_tools": false,
+        "intent_trace_complete": true,
+        "chat_swallowed_edit": true,
+        "retrieved": false,
+        "keyword_fallback": false,
+        "final_source": "qnn_genie_intent",
+        "clarified": false,
+        "clarification": null,
+        "planned_tools": [],
+        "executed": false,
+        "step_raw": "",
+        "intent_raw": "\n{\"intent\":\"chat\",\"reply\":\"我正在等待您的进一步指令，比如具体想要的风格或布局，以便为您规划三拼方案。\"}",
+        "latency_ms": {
+          "intent": 6714,
+          "plan": null
+        },
+        "reply": "我正在等待您的进一步指令，比如具体想要的风格或布局，以便为您规划三拼方案。",
+        "has_step_output": false,
+        "hollow_params": [],
+        "unresolved_style": [],
+        "brain_authored_params": [],
+        "table_authored_params": [],
+        "style_tools_planned": 0,
+        "checks": {
+          "outcome_match": false,
+          "tools_must_include": false,
+          "tools_must_not_include": null,
+          "retrieval": false,
+          "not_swallowed": false,
+          "turn_recorded": true,
+          "brain_attributed": true,
+          "vacuous": false,
+          "passed": false,
+          "brain_passed": false
+        }
+      }
+    },
+    {
+      "case_id": "D006",
+      "query": "给我的猫做个三拼",
+      "category": "retrieval_edit",
+      "repeat": 1,
+      "error": null,
+      "timed_out": false,
+      "metrics": {
+        "events_seen": 7,
+        "intent_called": true,
+        "intent_returned_tools": false,
+        "intent_trace_complete": true,
+        "chat_swallowed_edit": true,
+        "retrieved": false,
+        "keyword_fallback": false,
+        "final_source": "qnn_genie_intent",
+        "clarified": false,
+        "clarification": null,
+        "planned_tools": [],
+        "executed": false,
+        "step_raw": "",
+        "intent_raw": "\n{\"intent\":\"chat\",\"reply\":\"我正在等待您的进一步指令，比如具体想要的风格或布局，以便为您规划三拼方案。\"}",
+        "latency_ms": {
+          "intent": 5220,
+          "plan": null
+        },
+        "reply": "我正在等待您的进一步指令，比如具体想要的风格或布局，以便为您规划三拼方案。",
+        "has_step_output": false,
+        "hollow_params": [],
+        "unresolved_style": [],
+        "brain_authored_params": [],
+        "table_authored_params": [],
+        "style_tools_planned": 0,
+        "checks": {
+          "outcome_match": false,
+          "tools_must_include": false,
+          "tools_must_not_include": null,
+          "retrieval": false,
+          "not_swallowed": false,
+          "turn_recorded": true,
+          "brain_attributed": true,
+          "vacuous": false,
+          "passed": false,
+          "brain_passed": false
+        }
+      }
+    },
+    {
+      "case_id": "D006",
+      "query": "给我的猫做个三拼",
+      "category": "retrieval_edit",
+      "repeat": 2,
+      "error": null,
+      "timed_out": false,
+      "metrics": {
+        "events_seen": 7,
+        "intent_called": true,
+        "intent_returned_tools": false,
+        "intent_trace_complete": true,
+        "chat_swallowed_edit": true,
+        "retrieved": false,
+        "keyword_fallback": false,
+        "final_source": "qnn_genie_intent",
+        "clarified": false,
+        "clarification": null,
+        "planned_tools": [],
+        "executed": false,
+        "step_raw": "",
+        "intent_raw": "\n{\"intent\":\"chat\",\"reply\":\"我正在等待您的进一步指令，比如具体想要的风格或布局，以便为您规划三拼方案。\"}",
+        "latency_ms": {
+          "intent": 7119,
+          "plan": null
+        },
+        "reply": "我正在等待您的进一步指令，比如具体想要的风格或布局，以便为您规划三拼方案。",
+        "has_step_output": false,
+        "hollow_params": [],
+        "unresolved_style": [],
+        "brain_authored_params": [],
+        "table_authored_params": [],
+        "style_tools_planned": 0,
+        "checks": {
+          "outcome_match": false,
+          "tools_must_include": false,
+          "tools_must_not_include": null,
+          "retrieval": false,
+          "not_swallowed": false,
+          "turn_recorded": true,
+          "brain_attributed": true,
+          "vacuous": false,
+          "passed": false,
+          "brain_passed": false
+        }
+      }
+    },
+    {
+      "case_id": "D007",
+      "query": "从相册中选择风景照做拼接",
+      "category": "retrieval_edit",
+      "repeat": 0,
+      "error": null,
+      "timed_out": false,
+      "metrics": {
+        "events_seen": 372,
+        "intent_called": true,
+        "intent_returned_tools": false,
+        "intent_trace_complete": true,
+        "chat_swallowed_edit": false,
+        "retrieved": true,
+        "keyword_fallback": false,
+        "final_source": "qnn_genie",
+        "clarified": false,
+        "clarification": null,
+        "planned_tools": [
+          "template_collage"
+        ],
+        "executed": true,
+        "step_raw": "\nSTEP=template_collage|layout=3x2#1#2#3",
+        "intent_raw": "\n{\"intent\":\"search_assets\",\"reason\":\"用户要求从相册中选择风景照，需先检索符合主题的素材\",\"arguments\":{\"query\":\"风景照\",\"k\":3}}}`",
+        "latency_ms": {
+          "intent": 5620,
+          "plan": 5218
+        },
+        "reply": "",
+        "has_step_output": true,
+        "step_rows": 1,
+        "echoed_slots": {},
+        "filled_slots": {
+          "effect": 1,
+          "ordinal_suffix": 1
+        },
+        "legacy_header": false,
+        "legacy_field_rows": 0,
+        "legacy_placeholder_leak": 0,
+        "duplicate_tools": [],
+        "current_shape_rows": 1,
+        "pipe_rows": 1,
+        "markdown": false,
+        "hollow_params": [],
+        "unresolved_style": [],
+        "brain_authored_params": [],
+        "table_authored_params": [],
+        "style_tools_planned": 0,
+        "checks": {
+          "outcome_match": true,
+          "tools_must_include": true,
+          "tools_must_not_include": null,
+          "retrieval": true,
+          "not_swallowed": true,
+          "turn_recorded": true,
+          "brain_attributed": true,
+          "vacuous": false,
+          "passed": true,
+          "brain_passed": true
+        }
+      }
+    },
+    {
+      "case_id": "D007",
+      "query": "从相册中选择风景照做拼接",
+      "category": "retrieval_edit",
+      "repeat": 1,
+      "error": null,
+      "timed_out": false,
+      "metrics": {
+        "events_seen": 372,
+        "intent_called": true,
+        "intent_returned_tools": false,
+        "intent_trace_complete": true,
+        "chat_swallowed_edit": false,
+        "retrieved": true,
+        "keyword_fallback": false,
+        "final_source": "qnn_genie",
+        "clarified": false,
+        "clarification": null,
+        "planned_tools": [
+          "template_collage"
+        ],
+        "executed": true,
+        "step_raw": "\nSTEP=template_collage|layout=3x2#1#2#3",
+        "intent_raw": "\n{\"intent\":\"search_assets\",\"reason\":\"用户要求从相册中选择风景照，需先检索符合主题的素材\",\"arguments\":{\"query\":\"风景照\",\"k\":3}}}`",
+        "latency_ms": {
+          "intent": 6617,
+          "plan": 7021
+        },
+        "reply": "",
+        "has_step_output": true,
+        "step_rows": 1,
+        "echoed_slots": {},
+        "filled_slots": {
+          "effect": 1,
+          "ordinal_suffix": 1
+        },
+        "legacy_header": false,
+        "legacy_field_rows": 0,
+        "legacy_placeholder_leak": 0,
+        "duplicate_tools": [],
+        "current_shape_rows": 1,
+        "pipe_rows": 1,
+        "markdown": false,
+        "hollow_params": [],
+        "unresolved_style": [],
+        "brain_authored_params": [],
+        "table_authored_params": [],
+        "style_tools_planned": 0,
+        "checks": {
+          "outcome_match": true,
+          "tools_must_include": true,
+          "tools_must_not_include": null,
+          "retrieval": true,
+          "not_swallowed": true,
+          "turn_recorded": true,
+          "brain_attributed": true,
+          "vacuous": false,
+          "passed": true,
+          "brain_passed": true
+        }
+      }
+    },
+    {
+      "case_id": "D007",
+      "query": "从相册中选择风景照做拼接",
+      "category": "retrieval_edit",
+      "repeat": 2,
+      "error": null,
+      "timed_out": false,
+      "metrics": {
+        "events_seen": 372,
+        "intent_called": true,
+        "intent_returned_tools": false,
+        "intent_trace_complete": true,
+        "chat_swallowed_edit": false,
+        "retrieved": true,
+        "keyword_fallback": false,
+        "final_source": "qnn_genie",
+        "clarified": false,
+        "clarification": null,
+        "planned_tools": [
+          "template_collage"
+        ],
+        "executed": true,
+        "step_raw": "\nSTEP=template_collage|layout=3x2#1#2#3",
+        "intent_raw": "\n{\"intent\":\"search_assets\",\"reason\":\"用户要求从相册中选择风景照，需先检索符合主题的素材\",\"arguments\":{\"query\":\"风景照\",\"k\":3}}}`",
+        "latency_ms": {
+          "intent": 6817,
+          "plan": 10522
+        },
+        "reply": "",
+        "has_step_output": true,
+        "step_rows": 1,
+        "echoed_slots": {},
+        "filled_slots": {
+          "effect": 1,
+          "ordinal_suffix": 1
+        },
+        "legacy_header": false,
+        "legacy_field_rows": 0,
+        "legacy_placeholder_leak": 0,
+        "duplicate_tools": [],
+        "current_shape_rows": 1,
+        "pipe_rows": 1,
+        "markdown": false,
+        "hollow_params": [],
+        "unresolved_style": [],
+        "brain_authored_params": [],
+        "table_authored_params": [],
+        "style_tools_planned": 0,
+        "checks": {
+          "outcome_match": true,
+          "tools_must_include": true,
+          "tools_must_not_include": null,
+          "retrieval": true,
+          "not_swallowed": true,
+          "turn_recorded": true,
+          "brain_attributed": true,
+          "vacuous": false,
+          "passed": true,
+          "brain_passed": true
+        }
+      }
+    },
+    {
+      "case_id": "D008",
+      "query": "找几张美食照片拼起来",
+      "category": "retrieval_edit",
+      "repeat": 0,
+      "error": null,
+      "timed_out": false,
+      "metrics": {
+        "events_seen": 372,
+        "intent_called": true,
+        "intent_returned_tools": false,
+        "intent_trace_complete": true,
+        "chat_swallowed_edit": false,
+        "retrieved": true,
+        "keyword_fallback": false,
+        "final_source": "qnn_genie",
+        "clarified": false,
+        "clarification": null,
+        "planned_tools": [
+          "template_collage"
+        ],
+        "executed": true,
+        "step_raw": "\nSTEP=template_collage|2af56c7b5ebd905a#1,567ab121e3f028b2#2,1646687106e8e11d#3",
+        "intent_raw": "\n{\"intent\":\"search_assets\",\"reason\":\"用户要求找美食照片，需先检索相关素材\",\"arguments\":{\"query\":\"美食\",\"k\":3}}",
+        "latency_ms": {
+          "intent": 5420,
+          "plan": 10030
+        },
+        "reply": "",
+        "has_step_output": true,
+        "step_rows": 1,
+        "echoed_slots": {},
+        "filled_slots": {
+          "effect": 1,
+          "ordinal_suffix": 1
+        },
+        "legacy_header": false,
+        "legacy_field_rows": 0,
+        "legacy_placeholder_leak": 0,
+        "duplicate_tools": [],
+        "current_shape_rows": 1,
+        "pipe_rows": 1,
+        "markdown": false,
+        "hollow_params": [],
+        "unresolved_style": [],
+        "brain_authored_params": [],
+        "table_authored_params": [],
+        "style_tools_planned": 0,
+        "checks": {
+          "outcome_match": true,
+          "tools_must_include": true,
+          "tools_must_not_include": null,
+          "retrieval": true,
+          "not_swallowed": true,
+          "turn_recorded": true,
+          "brain_attributed": true,
+          "vacuous": false,
+          "passed": true,
+          "brain_passed": true
+        }
+      }
+    },
+    {
+      "case_id": "D008",
+      "query": "找几张美食照片拼起来",
+      "category": "retrieval_edit",
+      "repeat": 1,
+      "error": null,
+      "timed_out": false,
+      "metrics": {
+        "events_seen": 372,
+        "intent_called": true,
+        "intent_returned_tools": false,
+        "intent_trace_complete": true,
+        "chat_swallowed_edit": false,
+        "retrieved": true,
+        "keyword_fallback": false,
+        "final_source": "qnn_genie",
+        "clarified": false,
+        "clarification": null,
+        "planned_tools": [
+          "template_collage"
+        ],
+        "executed": true,
+        "step_raw": "\nSTEP=template_collage|2af56c7b5ebd905a#1,567ab121e3f028b2#2,1646687106e8e11d#3",
+        "intent_raw": "\n{\"intent\":\"search_assets\",\"reason\":\"用户要求找美食照片，需先检索相关素材\",\"arguments\":{\"query\":\"美食\",\"k\":3}}",
+        "latency_ms": {
+          "intent": 6124,
+          "plan": 6920
+        },
+        "reply": "",
+        "has_step_output": true,
+        "step_rows": 1,
+        "echoed_slots": {},
+        "filled_slots": {
+          "effect": 1,
+          "ordinal_suffix": 1
+        },
+        "legacy_header": false,
+        "legacy_field_rows": 0,
+        "legacy_placeholder_leak": 0,
+        "duplicate_tools": [],
+        "current_shape_rows": 1,
+        "pipe_rows": 1,
+        "markdown": false,
+        "hollow_params": [],
+        "unresolved_style": [],
+        "brain_authored_params": [],
+        "table_authored_params": [],
+        "style_tools_planned": 0,
+        "checks": {
+          "outcome_match": true,
+          "tools_must_include": true,
+          "tools_must_not_include": null,
+          "retrieval": true,
+          "not_swallowed": true,
+          "turn_recorded": true,
+          "brain_attributed": true,
+          "vacuous": false,
+          "passed": true,
+          "brain_passed": true
+        }
+      }
+    },
+    {
+      "case_id": "D008",
+      "query": "找几张美食照片拼起来",
+      "category": "retrieval_edit",
+      "repeat": 2,
+      "error": null,
+      "timed_out": false,
+      "metrics": {
+        "events_seen": 372,
+        "intent_called": true,
+        "intent_returned_tools": false,
+        "intent_trace_complete": true,
+        "chat_swallowed_edit": false,
+        "retrieved": true,
+        "keyword_fallback": false,
+        "final_source": "qnn_genie",
+        "clarified": false,
+        "clarification": null,
+        "planned_tools": [
+          "template_collage"
+        ],
+        "executed": true,
+        "step_raw": "\nSTEP=template_collage|2af56c7b5ebd905a#1,567ab121e3f028b2#2,1646687106e8e11d#3",
+        "intent_raw": "\n{\"intent\":\"search_assets\",\"reason\":\"用户要求找美食照片，需先检索相关素材\",\"arguments\":{\"query\":\"美食\",\"k\":3}}",
+        "latency_ms": {
+          "intent": 7223,
+          "plan": 10025
+        },
+        "reply": "",
+        "has_step_output": true,
+        "step_rows": 1,
+        "echoed_slots": {},
+        "filled_slots": {
+          "effect": 1,
+          "ordinal_suffix": 1
+        },
+        "legacy_header": false,
+        "legacy_field_rows": 0,
+        "legacy_placeholder_leak": 0,
+        "duplicate_tools": [],
+        "current_shape_rows": 1,
+        "pipe_rows": 1,
+        "markdown": false,
+        "hollow_params": [],
+        "unresolved_style": [],
+        "brain_authored_params": [],
+        "table_authored_params": [],
+        "style_tools_planned": 0,
+        "checks": {
+          "outcome_match": true,
+          "tools_must_include": true,
+          "tools_must_not_include": null,
+          "retrieval": true,
+          "not_swallowed": true,
+          "turn_recorded": true,
+          "brain_attributed": true,
+          "vacuous": false,
+          "passed": true,
+          "brain_passed": true
+        }
+      }
+    },
+    {
+      "case_id": "D009",
+      "query": "用海边的照片做个拼图",
+      "category": "retrieval_edit",
+      "repeat": 0,
+      "error": null,
+      "timed_out": false,
+      "metrics": {
+        "events_seen": 372,
+        "intent_called": true,
+        "intent_returned_tools": true,
+        "intent_trace_complete": true,
+        "chat_swallowed_edit": false,
+        "retrieved": true,
+        "keyword_fallback": false,
+        "final_source": "qnn_genie",
+        "clarified": false,
+        "clarification": null,
+        "planned_tools": [
+          "template_collage"
+        ],
+        "executed": true,
+        "step_raw": "\nSTEP=template_collage|布局3",
+        "intent_raw": "\n{\"intent\":\"template_collage\",\"reason\":\"用户请求用海边的照片做个拼图，需调用模板拼接功能\",\"tool_calls\":[{\"tool\":\"search_assets\",\"reason\":\"先检索海边相关素材以获取候选资产\",\"arguments\":{\"query\":\"海边\",\"k\":3}}]}",
+        "latency_ms": {
+          "intent": 10925,
+          "plan": 5320
+        },
+        "reply": "",
+        "has_step_output": true,
+        "step_rows": 1,
+        "echoed_slots": {},
+        "filled_slots": {
+          "effect": 1
+        },
+        "legacy_header": false,
+        "legacy_field_rows": 0,
+        "legacy_placeholder_leak": 0,
+        "duplicate_tools": [],
+        "current_shape_rows": 1,
+        "pipe_rows": 1,
+        "markdown": false,
+        "hollow_params": [],
+        "unresolved_style": [],
+        "brain_authored_params": [],
+        "table_authored_params": [],
+        "style_tools_planned": 0,
+        "checks": {
+          "outcome_match": true,
+          "tools_must_include": true,
+          "tools_must_not_include": null,
+          "retrieval": true,
+          "not_swallowed": true,
+          "turn_recorded": true,
+          "brain_attributed": true,
+          "vacuous": false,
+          "passed": true,
+          "brain_passed": true
+        }
+      }
+    },
+    {
+      "case_id": "D009",
+      "query": "用海边的照片做个拼图",
+      "category": "retrieval_edit",
+      "repeat": 1,
+      "error": null,
+      "timed_out": false,
+      "metrics": {
+        "events_seen": 372,
+        "intent_called": true,
+        "intent_returned_tools": true,
+        "intent_trace_complete": true,
+        "chat_swallowed_edit": false,
+        "retrieved": true,
+        "keyword_fallback": false,
+        "final_source": "qnn_genie",
+        "clarified": false,
+        "clarification": null,
+        "planned_tools": [
+          "template_collage"
+        ],
+        "executed": true,
+        "step_raw": "\nSTEP=template_collage|布局3",
+        "intent_raw": "\n{\"intent\":\"template_collage\",\"reason\":\"用户请求用海边的照片做个拼图，需调用模板拼接功能\",\"tool_calls\":[{\"tool\":\"search_assets\",\"reason\":\"先检索海边相关素材以获取候选资产\",\"arguments\":{\"query\":\"海边\",\"k\":3}}]}",
+        "latency_ms": {
+          "intent": 9434,
+          "plan": 5322
+        },
+        "reply": "",
+        "has_step_output": true,
+        "step_rows": 1,
+        "echoed_slots": {},
+        "filled_slots": {
+          "effect": 1
+        },
+        "legacy_header": false,
+        "legacy_field_rows": 0,
+        "legacy_placeholder_leak": 0,
+        "duplicate_tools": [],
+        "current_shape_rows": 1,
+        "pipe_rows": 1,
+        "markdown": false,
+        "hollow_params": [],
+        "unresolved_style": [],
+        "brain_authored_params": [],
+        "table_authored_params": [],
+        "style_tools_planned": 0,
+        "checks": {
+          "outcome_match": true,
+          "tools_must_include": true,
+          "tools_must_not_include": null,
+          "retrieval": true,
+          "not_swallowed": true,
+          "turn_recorded": true,
+          "brain_attributed": true,
+          "vacuous": false,
+          "passed": true,
+          "brain_passed": true
+        }
+      }
+    },
+    {
+      "case_id": "D009",
+      "query": "用海边的照片做个拼图",
+      "category": "retrieval_edit",
+      "repeat": 2,
+      "error": null,
+      "timed_out": false,
+      "metrics": {
+        "events_seen": 372,
+        "intent_called": true,
+        "intent_returned_tools": true,
+        "intent_trace_complete": true,
+        "chat_swallowed_edit": false,
+        "retrieved": true,
+        "keyword_fallback": false,
+        "final_source": "qnn_genie",
+        "clarified": false,
+        "clarification": null,
+        "planned_tools": [
+          "template_collage"
+        ],
+        "executed": true,
+        "step_raw": "\nSTEP=template_collage|布局3",
+        "intent_raw": "\n{\"intent\":\"template_collage\",\"reason\":\"用户请求用海边的照片做个拼图，需调用模板拼接功能\",\"tool_calls\":[{\"tool\":\"search_assets\",\"reason\":\"先检索海边相关素材以获取候选资产\",\"arguments\":{\"query\":\"海边\",\"k\":3}}]}",
+        "latency_ms": {
+          "intent": 10234,
+          "plan": 9620
+        },
+        "reply": "",
+        "has_step_output": true,
+        "step_rows": 1,
+        "echoed_slots": {},
+        "filled_slots": {
+          "effect": 1
+        },
+        "legacy_header": false,
+        "legacy_field_rows": 0,
+        "legacy_placeholder_leak": 0,
+        "duplicate_tools": [],
+        "current_shape_rows": 1,
+        "pipe_rows": 1,
+        "markdown": false,
+        "hollow_params": [],
+        "unresolved_style": [],
+        "brain_authored_params": [],
+        "table_authored_params": [],
+        "style_tools_planned": 0,
+        "checks": {
+          "outcome_match": true,
+          "tools_must_include": true,
+          "tools_must_not_include": null,
+          "retrieval": true,
+          "not_swallowed": true,
+          "turn_recorded": true,
+          "brain_attributed": true,
+          "vacuous": false,
+          "passed": true,
+          "brain_passed": true
+        }
+      }
+    },
+    {
+      "case_id": "D010",
+      "query": "把视频调成黑白的",
+      "category": "style",
+      "repeat": 0,
+      "error": null,
+      "timed_out": false,
+      "metrics": {
+        "events_seen": 710,
+        "intent_called": true,
+        "intent_returned_tools": true,
+        "intent_trace_complete": true,
+        "chat_swallowed_edit": false,
+        "retrieved": true,
+        "keyword_fallback": false,
+        "final_source": "qnn_genie",
+        "clarified": false,
+        "clarification": null,
+        "planned_tools": [
+          "video_filter"
+        ],
+        "executed": true,
+        "step_raw": "\nSTEP=video_filter|黑白",
+        "intent_raw": "\n{\"intent\":\"video_filter\",\"tool_calls\":[{\"tool\":\"video_filter\",\"reason\":\"将视频调成黑白\",\"arguments\":{\"effect\":\"black_and_white\"}}]}",
+        "latency_ms": {
+          "intent": 9625,
+          "plan": 7925
+        },
+        "reply": "",
+        "has_step_output": true,
+        "step_rows": 1,
+        "echoed_slots": {},
+        "filled_slots": {
+          "effect": 1
+        },
+        "legacy_header": false,
+        "legacy_field_rows": 0,
+        "legacy_placeholder_leak": 0,
+        "duplicate_tools": [],
+        "current_shape_rows": 1,
+        "pipe_rows": 1,
+        "markdown": false,
+        "hollow_params": [
+          "video_filter"
+        ],
+        "unresolved_style": [],
+        "brain_authored_params": [],
+        "table_authored_params": [],
+        "style_tools_planned": 1,
+        "checks": {
+          "outcome_match": true,
+          "tools_must_include": true,
+          "tools_must_not_include": true,
+          "not_swallowed": true,
+          "turn_recorded": true,
+          "brain_attributed": true,
+          "vacuous": false,
+          "passed": true,
+          "brain_passed": true
+        }
+      }
+    },
+    {
+      "case_id": "D010",
+      "query": "把视频调成黑白的",
+      "category": "style",
+      "repeat": 1,
+      "error": null,
+      "timed_out": false,
+      "metrics": {
+        "events_seen": 710,
+        "intent_called": true,
+        "intent_returned_tools": true,
+        "intent_trace_complete": true,
+        "chat_swallowed_edit": false,
+        "retrieved": true,
+        "keyword_fallback": false,
+        "final_source": "qnn_genie",
+        "clarified": false,
+        "clarification": null,
+        "planned_tools": [
+          "video_filter"
+        ],
+        "executed": true,
+        "step_raw": "\nSTEP=video_filter|黑白",
+        "intent_raw": "\n{\"intent\":\"video_filter\",\"tool_calls\":[{\"tool\":\"video_filter\",\"reason\":\"将视频调成黑白\",\"arguments\":{\"effect\":\"black_and_white\"}}]}",
+        "latency_ms": {
+          "intent": 9829,
+          "plan": 7121
+        },
+        "reply": "",
+        "has_step_output": true,
+        "step_rows": 1,
+        "echoed_slots": {},
+        "filled_slots": {
+          "effect": 1
+        },
+        "legacy_header": false,
+        "legacy_field_rows": 0,
+        "legacy_placeholder_leak": 0,
+        "duplicate_tools": [],
+        "current_shape_rows": 1,
+        "pipe_rows": 1,
+        "markdown": false,
+        "hollow_params": [
+          "video_filter"
+        ],
+        "unresolved_style": [],
+        "brain_authored_params": [],
+        "table_authored_params": [],
+        "style_tools_planned": 1,
+        "checks": {
+          "outcome_match": true,
+          "tools_must_include": true,
+          "tools_must_not_include": true,
+          "not_swallowed": true,
+          "turn_recorded": true,
+          "brain_attributed": true,
+          "vacuous": false,
+          "passed": true,
+          "brain_passed": true
+        }
+      }
+    },
+    {
+      "case_id": "D010",
+      "query": "把视频调成黑白的",
+      "category": "style",
+      "repeat": 2,
+      "error": null,
+      "timed_out": false,
+      "metrics": {
+        "events_seen": 710,
+        "intent_called": true,
+        "intent_returned_tools": true,
+        "intent_trace_complete": true,
+        "chat_swallowed_edit": false,
+        "retrieved": true,
+        "keyword_fallback": false,
+        "final_source": "qnn_genie",
+        "clarified": false,
+        "clarification": null,
+        "planned_tools": [
+          "video_filter"
+        ],
+        "executed": true,
+        "step_raw": "\nSTEP=video_filter|黑白",
+        "intent_raw": "\n{\"intent\":\"video_filter\",\"tool_calls\":[{\"tool\":\"video_filter\",\"reason\":\"将视频调成黑白\",\"arguments\":{\"effect\":\"black_and_white\"}}]}",
+        "latency_ms": {
+          "intent": 12743,
+          "plan": 11330
+        },
+        "reply": "",
+        "has_step_output": true,
+        "step_rows": 1,
+        "echoed_slots": {},
+        "filled_slots": {
+          "effect": 1
+        },
+        "legacy_header": false,
+        "legacy_field_rows": 0,
+        "legacy_placeholder_leak": 0,
+        "duplicate_tools": [],
+        "current_shape_rows": 1,
+        "pipe_rows": 1,
+        "markdown": false,
+        "hollow_params": [
+          "video_filter"
+        ],
+        "unresolved_style": [],
+        "brain_authored_params": [],
+        "table_authored_params": [],
+        "style_tools_planned": 1,
+        "checks": {
+          "outcome_match": true,
+          "tools_must_include": true,
+          "tools_must_not_include": true,
+          "not_swallowed": true,
+          "turn_recorded": true,
+          "brain_attributed": true,
+          "vacuous": false,
+          "passed": true,
+          "brain_passed": true
+        }
+      }
+    },
+    {
+      "case_id": "D011",
+      "query": "给这张加个复古滤镜",
+      "category": "style",
+      "repeat": 0,
+      "error": null,
+      "timed_out": false,
+      "metrics": {
+        "events_seen": 7,
+        "intent_called": true,
+        "intent_returned_tools": false,
+        "intent_trace_complete": true,
+        "chat_swallowed_edit": true,
+        "retrieved": false,
+        "keyword_fallback": false,
+        "final_source": "qnn_genie_intent",
+        "clarified": false,
+        "clarification": null,
+        "planned_tools": [],
+        "executed": false,
+        "step_raw": "",
+        "intent_raw": "\n{\"intent\":\"chat\",\"reply\":\"用一句话直接回答用户\"}",
+        "latency_ms": {
+          "intent": 8029,
+          "plan": null
+        },
+        "reply": "用一句话直接回答用户",
+        "has_step_output": false,
+        "hollow_params": [],
+        "unresolved_style": [],
+        "brain_authored_params": [],
+        "table_authored_params": [],
+        "style_tools_planned": 0,
+        "checks": {
+          "outcome_match": false,
+          "tools_must_include": null,
+          "tools_must_not_include": true,
+          "not_swallowed": false,
+          "turn_recorded": true,
+          "brain_attributed": true,
+          "vacuous": false,
+          "passed": false,
+          "brain_passed": false
+        }
+      }
+    },
+    {
+      "case_id": "D011",
+      "query": "给这张加个复古滤镜",
+      "category": "style",
+      "repeat": 1,
+      "error": null,
+      "timed_out": false,
+      "metrics": {
+        "events_seen": 7,
+        "intent_called": true,
+        "intent_returned_tools": false,
+        "intent_trace_complete": true,
+        "chat_swallowed_edit": true,
+        "retrieved": false,
+        "keyword_fallback": false,
+        "final_source": "qnn_genie_intent",
+        "clarified": false,
+        "clarification": null,
+        "planned_tools": [],
+        "executed": false,
+        "step_raw": "",
+        "intent_raw": "\n{\"intent\":\"chat\",\"reply\":\"用一句话直接回答用户\"}",
+        "latency_ms": {
+          "intent": 5333,
+          "plan": null
+        },
+        "reply": "用一句话直接回答用户",
+        "has_step_output": false,
+        "hollow_params": [],
+        "unresolved_style": [],
+        "brain_authored_params": [],
+        "table_authored_params": [],
+        "style_tools_planned": 0,
+        "checks": {
+          "outcome_match": false,
+          "tools_must_include": null,
+          "tools_must_not_include": true,
+          "not_swallowed": false,
+          "turn_recorded": true,
+          "brain_attributed": true,
+          "vacuous": false,
+          "passed": false,
+          "brain_passed": false
+        }
+      }
+    },
+    {
+      "case_id": "D011",
+      "query": "给这张加个复古滤镜",
+      "category": "style",
+      "repeat": 2,
+      "error": null,
+      "timed_out": false,
+      "metrics": {
+        "events_seen": 7,
+        "intent_called": true,
+        "intent_returned_tools": false,
+        "intent_trace_complete": true,
+        "chat_swallowed_edit": true,
+        "retrieved": false,
+        "keyword_fallback": false,
+        "final_source": "qnn_genie_intent",
+        "clarified": false,
+        "clarification": null,
+        "planned_tools": [],
+        "executed": false,
+        "step_raw": "",
+        "intent_raw": "\n{\"intent\":\"chat\",\"reply\":\"用一句话直接回答用户\"}",
+        "latency_ms": {
+          "intent": 5127,
+          "plan": null
+        },
+        "reply": "用一句话直接回答用户",
+        "has_step_output": false,
+        "hollow_params": [],
+        "unresolved_style": [],
+        "brain_authored_params": [],
+        "table_authored_params": [],
+        "style_tools_planned": 0,
+        "checks": {
+          "outcome_match": false,
+          "tools_must_include": null,
+          "tools_must_not_include": true,
+          "not_swallowed": false,
+          "turn_recorded": true,
+          "brain_attributed": true,
+          "vacuous": false,
+          "passed": false,
+          "brain_passed": false
+        }
+      }
+    },
+    {
+      "case_id": "D012",
+      "query": "画面调暖一点",
+      "category": "style",
+      "repeat": 0,
+      "error": null,
+      "timed_out": false,
+      "metrics": {
+        "events_seen": 24,
+        "intent_called": true,
+        "intent_returned_tools": false,
+        "intent_trace_complete": true,
+        "chat_swallowed_edit": false,
+        "retrieved": true,
+        "keyword_fallback": false,
+        "final_source": "qnn_genie",
+        "clarified": false,
+        "clarification": null,
+        "planned_tools": [
+          "color_tone"
+        ],
+        "executed": true,
+        "step_raw": "\nSTEP=color_tone|调暖",
+        "intent_raw": "\n{\"intent\":\"live_photo_filter_effect\",\"reason\":\"根据用户请求‘画面调暖一点’，需应用滤镜调整画面色彩，tool: live_photo_filter_effect\",\"arguments\":{\"filter\":\"warm\"}}",
+        "latency_ms": {
+          "intent": 6925,
+          "plan": 5726
+        },
+        "reply": "",
+        "has_step_output": true,
+        "step_rows": 1,
+        "echoed_slots": {},
+        "filled_slots": {
+          "effect": 1
+        },
+        "legacy_header": false,
+        "legacy_field_rows": 0,
+        "legacy_placeholder_leak": 0,
+        "duplicate_tools": [],
+        "current_shape_rows": 1,
+        "pipe_rows": 1,
+        "markdown": false,
+        "hollow_params": [],
+        "unresolved_style": [
+          "color_tone"
+        ],
+        "brain_authored_params": [],
+        "table_authored_params": [],
+        "style_tools_planned": 1,
+        "checks": {
+          "outcome_match": true,
+          "tools_must_include": null,
+          "tools_must_not_include": true,
+          "not_swallowed": true,
+          "turn_recorded": true,
+          "brain_attributed": true,
+          "vacuous": false,
+          "passed": true,
+          "brain_passed": true
+        }
+      }
+    },
+    {
+      "case_id": "D012",
+      "query": "画面调暖一点",
+      "category": "style",
+      "repeat": 1,
+      "error": null,
+      "timed_out": false,
+      "metrics": {
+        "events_seen": 24,
+        "intent_called": true,
+        "intent_returned_tools": false,
+        "intent_trace_complete": true,
+        "chat_swallowed_edit": false,
+        "retrieved": true,
+        "keyword_fallback": false,
+        "final_source": "qnn_genie",
+        "clarified": false,
+        "clarification": null,
+        "planned_tools": [
+          "color_tone"
+        ],
+        "executed": true,
+        "step_raw": "\nSTEP=color_tone|调暖",
+        "intent_raw": "\n{\"intent\":\"live_photo_filter_effect\",\"reason\":\"根据用户请求‘画面调暖一点’，需应用滤镜调整画面色彩，tool: live_photo_filter_effect\",\"arguments\":{\"filter\":\"warm\"}}",
+        "latency_ms": {
+          "intent": 8830,
+          "plan": 5625
+        },
+        "reply": "",
+        "has_step_output": true,
+        "step_rows": 1,
+        "echoed_slots": {},
+        "filled_slots": {
+          "effect": 1
+        },
+        "legacy_header": false,
+        "legacy_field_rows": 0,
+        "legacy_placeholder_leak": 0,
+        "duplicate_tools": [],
+        "current_shape_rows": 1,
+        "pipe_rows": 1,
+        "markdown": false,
+        "hollow_params": [],
+        "unresolved_style": [
+          "color_tone"
+        ],
+        "brain_authored_params": [],
+        "table_authored_params": [],
+        "style_tools_planned": 1,
+        "checks": {
+          "outcome_match": true,
+          "tools_must_include": null,
+          "tools_must_not_include": true,
+          "not_swallowed": true,
+          "turn_recorded": true,
+          "brain_attributed": true,
+          "vacuous": false,
+          "passed": true,
+          "brain_passed": true
+        }
+      }
+    },
+    {
+      "case_id": "D012",
+      "query": "画面调暖一点",
+      "category": "style",
+      "repeat": 2,
+      "error": null,
+      "timed_out": false,
+      "metrics": {
+        "events_seen": 24,
+        "intent_called": true,
+        "intent_returned_tools": false,
+        "intent_trace_complete": true,
+        "chat_swallowed_edit": false,
+        "retrieved": true,
+        "keyword_fallback": false,
+        "final_source": "qnn_genie",
+        "clarified": false,
+        "clarification": null,
+        "planned_tools": [
+          "color_tone"
+        ],
+        "executed": true,
+        "step_raw": "\nSTEP=color_tone|调暖",
+        "intent_raw": "\n{\"intent\":\"live_photo_filter_effect\",\"reason\":\"根据用户请求‘画面调暖一点’，需应用滤镜调整画面色彩，tool: live_photo_filter_effect\",\"arguments\":{\"filter\":\"warm\"}}",
+        "latency_ms": {
+          "intent": 6627,
+          "plan": 8333
+        },
+        "reply": "",
+        "has_step_output": true,
+        "step_rows": 1,
+        "echoed_slots": {},
+        "filled_slots": {
+          "effect": 1
+        },
+        "legacy_header": false,
+        "legacy_field_rows": 0,
+        "legacy_placeholder_leak": 0,
+        "duplicate_tools": [],
+        "current_shape_rows": 1,
+        "pipe_rows": 1,
+        "markdown": false,
+        "hollow_params": [],
+        "unresolved_style": [
+          "color_tone"
+        ],
+        "brain_authored_params": [],
+        "table_authored_params": [],
+        "style_tools_planned": 1,
+        "checks": {
+          "outcome_match": true,
+          "tools_must_include": null,
+          "tools_must_not_include": true,
+          "not_swallowed": true,
+          "turn_recorded": true,
+          "brain_attributed": true,
+          "vacuous": false,
+          "passed": true,
+          "brain_passed": true
+        }
+      }
+    },
+    {
+      "case_id": "D013",
+      "query": "把颜色调鲜艳一些",
+      "category": "style",
+      "repeat": 0,
+      "error": null,
+      "timed_out": false,
+      "metrics": {
+        "events_seen": 24,
+        "intent_called": true,
+        "intent_returned_tools": true,
+        "intent_trace_complete": true,
+        "chat_swallowed_edit": false,
+        "retrieved": true,
+        "keyword_fallback": false,
+        "final_source": "qnn_genie",
+        "clarified": false,
+        "clarification": null,
+        "planned_tools": [
+          "color_tone"
+        ],
+        "executed": true,
+        "step_raw": "\nSTEP=color_tone|鲜艳",
+        "intent_raw": "\n{\"intent\":\"color_tone\",\"tool_calls\":[{\"tool\":\"color_analysis\",\"reason\":\"分析当前素材的主色调，为调鲜艳做准备\",\"arguments\":{\"query\":\"color analysis\",\"k\":1}},{\"tool\":\"color_tone\",\"reason\":\"将颜色调鲜艳一些\",\"arguments\":{\"asset_id\":\"null\",\"tone\":\"vibrant\"}}]}",
+        "latency_ms": {
+          "intent": 7728,
+          "plan": 5430
+        },
+        "reply": "",
+        "has_step_output": true,
+        "step_rows": 1,
+        "echoed_slots": {},
+        "filled_slots": {
+          "effect": 1
+        },
+        "legacy_header": false,
+        "legacy_field_rows": 0,
+        "legacy_placeholder_leak": 0,
+        "duplicate_tools": [],
+        "current_shape_rows": 1,
+        "pipe_rows": 1,
+        "markdown": false,
+        "hollow_params": [
+          "color_tone"
+        ],
+        "unresolved_style": [],
+        "brain_authored_params": [],
+        "table_authored_params": [],
+        "style_tools_planned": 1,
+        "checks": {
+          "outcome_match": true,
+          "tools_must_include": null,
+          "tools_must_not_include": true,
+          "not_swallowed": true,
+          "turn_recorded": true,
+          "brain_attributed": true,
+          "vacuous": false,
+          "passed": true,
+          "brain_passed": true
+        }
+      }
+    },
+    {
+      "case_id": "D013",
+      "query": "把颜色调鲜艳一些",
+      "category": "style",
+      "repeat": 1,
+      "error": null,
+      "timed_out": false,
+      "metrics": {
+        "events_seen": 24,
+        "intent_called": true,
+        "intent_returned_tools": true,
+        "intent_trace_complete": true,
+        "chat_swallowed_edit": false,
+        "retrieved": true,
+        "keyword_fallback": false,
+        "final_source": "qnn_genie",
+        "clarified": false,
+        "clarification": null,
+        "planned_tools": [
+          "color_tone"
+        ],
+        "executed": true,
+        "step_raw": "\nSTEP=color_tone|鲜艳",
+        "intent_raw": "\n{\"intent\":\"color_tone\",\"tool_calls\":[{\"tool\":\"color_analysis\",\"reason\":\"分析当前素材的主色调，为调鲜艳做准备\",\"arguments\":{\"query\":\"color analysis\",\"k\":1}},{\"tool\":\"color_tone\",\"reason\":\"将颜色调鲜艳一些\",\"arguments\":{\"asset_id\":\"null\",\"tone\":\"vibrant\"}}]}",
+        "latency_ms": {
+          "intent": 10327,
+          "plan": 5730
+        },
+        "reply": "",
+        "has_step_output": true,
+        "step_rows": 1,
+        "echoed_slots": {},
+        "filled_slots": {
+          "effect": 1
+        },
+        "legacy_header": false,
+        "legacy_field_rows": 0,
+        "legacy_placeholder_leak": 0,
+        "duplicate_tools": [],
+        "current_shape_rows": 1,
+        "pipe_rows": 1,
+        "markdown": false,
+        "hollow_params": [
+          "color_tone"
+        ],
+        "unresolved_style": [],
+        "brain_authored_params": [],
+        "table_authored_params": [],
+        "style_tools_planned": 1,
+        "checks": {
+          "outcome_match": true,
+          "tools_must_include": null,
+          "tools_must_not_include": true,
+          "not_swallowed": true,
+          "turn_recorded": true,
+          "brain_attributed": true,
+          "vacuous": false,
+          "passed": true,
+          "brain_passed": true
+        }
+      }
+    },
+    {
+      "case_id": "D013",
+      "query": "把颜色调鲜艳一些",
+      "category": "style",
+      "repeat": 2,
+      "error": null,
+      "timed_out": false,
+      "metrics": {
+        "events_seen": 24,
+        "intent_called": true,
+        "intent_returned_tools": true,
+        "intent_trace_complete": true,
+        "chat_swallowed_edit": false,
+        "retrieved": true,
+        "keyword_fallback": false,
+        "final_source": "qnn_genie",
+        "clarified": false,
+        "clarification": null,
+        "planned_tools": [
+          "color_tone"
+        ],
+        "executed": true,
+        "step_raw": "\nSTEP=color_tone|鲜艳",
+        "intent_raw": "\n{\"intent\":\"color_tone\",\"tool_calls\":[{\"tool\":\"color_analysis\",\"reason\":\"分析当前素材的主色调，为调鲜艳做准备\",\"arguments\":{\"query\":\"color analysis\",\"k\":1}},{\"tool\":\"color_tone\",\"reason\":\"将颜色调鲜艳一些\",\"arguments\":{\"asset_id\":\"null\",\"tone\":\"vibrant\"}}]}",
+        "latency_ms": {
+          "intent": 7836,
+          "plan": 8133
+        },
+        "reply": "",
+        "has_step_output": true,
+        "step_rows": 1,
+        "echoed_slots": {},
+        "filled_slots": {
+          "effect": 1
+        },
+        "legacy_header": false,
+        "legacy_field_rows": 0,
+        "legacy_placeholder_leak": 0,
+        "duplicate_tools": [],
+        "current_shape_rows": 1,
+        "pipe_rows": 1,
+        "markdown": false,
+        "hollow_params": [
+          "color_tone"
+        ],
+        "unresolved_style": [],
+        "brain_authored_params": [],
+        "table_authored_params": [],
+        "style_tools_planned": 1,
+        "checks": {
+          "outcome_match": true,
+          "tools_must_include": null,
+          "tools_must_not_include": true,
+          "not_swallowed": true,
+          "turn_recorded": true,
+          "brain_attributed": true,
+          "vacuous": false,
+          "passed": true,
+          "brain_passed": true
+        }
+      }
+    },
+    {
+      "case_id": "D014",
+      "query": "处理一下",
+      "category": "ambiguity",
+      "repeat": 0,
+      "error": null,
+      "timed_out": false,
+      "metrics": {
+        "events_seen": 7,
+        "intent_called": true,
+        "intent_returned_tools": false,
+        "intent_trace_complete": true,
+        "chat_swallowed_edit": false,
+        "retrieved": false,
+        "keyword_fallback": false,
+        "final_source": "qnn_genie_intent",
+        "clarified": false,
+        "clarification": null,
+        "planned_tools": [],
+        "executed": false,
+        "step_raw": "",
+        "intent_raw": "```json\n{\"intent\":\"chat\",\"reply\":\"用一句话直接回答用户\",\"tool_calls\":[]}\n```",
+        "latency_ms": {
+          "intent": 5925,
+          "plan": null
+        },
+        "reply": "用一句话直接回答用户",
+        "has_step_output": false,
+        "hollow_params": [],
+        "unresolved_style": [],
+        "brain_authored_params": [],
+        "table_authored_params": [],
+        "style_tools_planned": 0,
+        "checks": {
+          "outcome_match": true,
+          "tools_must_include": null,
+          "tools_must_not_include": null,
+          "not_swallowed": true,
+          "turn_recorded": true,
+          "brain_attributed": null,
+          "vacuous": false,
+          "passed": true,
+          "brain_passed": true
+        }
+      }
+    },
+    {
+      "case_id": "D014",
+      "query": "处理一下",
+      "category": "ambiguity",
+      "repeat": 1,
+      "error": null,
+      "timed_out": false,
+      "metrics": {
+        "events_seen": 7,
+        "intent_called": true,
+        "intent_returned_tools": false,
+        "intent_trace_complete": true,
+        "chat_swallowed_edit": false,
+        "retrieved": false,
+        "keyword_fallback": false,
+        "final_source": "qnn_genie_intent",
+        "clarified": false,
+        "clarification": null,
+        "planned_tools": [],
+        "executed": false,
+        "step_raw": "",
+        "intent_raw": "```json\n{\"intent\":\"chat\",\"reply\":\"用一句话直接回答用户\",\"tool_calls\":[]}\n```",
+        "latency_ms": {
+          "intent": 5831,
+          "plan": null
+        },
+        "reply": "用一句话直接回答用户",
+        "has_step_output": false,
+        "hollow_params": [],
+        "unresolved_style": [],
+        "brain_authored_params": [],
+        "table_authored_params": [],
+        "style_tools_planned": 0,
+        "checks": {
+          "outcome_match": true,
+          "tools_must_include": null,
+          "tools_must_not_include": null,
+          "not_swallowed": true,
+          "turn_recorded": true,
+          "brain_attributed": null,
+          "vacuous": false,
+          "passed": true,
+          "brain_passed": true
+        }
+      }
+    },
+    {
+      "case_id": "D014",
+      "query": "处理一下",
+      "category": "ambiguity",
+      "repeat": 2,
+      "error": null,
+      "timed_out": false,
+      "metrics": {
+        "events_seen": 7,
+        "intent_called": true,
+        "intent_returned_tools": false,
+        "intent_trace_complete": true,
+        "chat_swallowed_edit": false,
+        "retrieved": false,
+        "keyword_fallback": false,
+        "final_source": "qnn_genie_intent",
+        "clarified": false,
+        "clarification": null,
+        "planned_tools": [],
+        "executed": false,
+        "step_raw": "",
+        "intent_raw": "```json\n{\"intent\":\"chat\",\"reply\":\"用一句话直接回答用户\",\"tool_calls\":[]}\n```",
+        "latency_ms": {
+          "intent": 6030,
+          "plan": null
+        },
+        "reply": "用一句话直接回答用户",
+        "has_step_output": false,
+        "hollow_params": [],
+        "unresolved_style": [],
+        "brain_authored_params": [],
+        "table_authored_params": [],
+        "style_tools_planned": 0,
+        "checks": {
+          "outcome_match": true,
+          "tools_must_include": null,
+          "tools_must_not_include": null,
+          "not_swallowed": true,
+          "turn_recorded": true,
+          "brain_attributed": null,
+          "vacuous": false,
+          "passed": true,
+          "brain_passed": true
+        }
+      }
+    },
+    {
+      "case_id": "D015",
+      "query": "这个弄好看点",
+      "category": "ambiguity",
+      "repeat": 0,
+      "error": null,
+      "timed_out": false,
+      "metrics": {
+        "events_seen": 7,
+        "intent_called": true,
+        "intent_returned_tools": false,
+        "intent_trace_complete": true,
+        "chat_swallowed_edit": false,
+        "retrieved": false,
+        "keyword_fallback": false,
+        "final_source": "qnn_genie_intent",
+        "clarified": false,
+        "clarification": null,
+        "planned_tools": [],
+        "executed": false,
+        "step_raw": "",
+        "intent_raw": "\n{\"intent\":\"chat\",\"reply\":\"用一句话直接回答用户\"}",
+        "latency_ms": {
+          "intent": 5432,
+          "plan": null
+        },
+        "reply": "用一句话直接回答用户",
+        "has_step_output": false,
+        "hollow_params": [],
+        "unresolved_style": [],
+        "brain_authored_params": [],
+        "table_authored_params": [],
+        "style_tools_planned": 0,
+        "checks": {
+          "outcome_match": true,
+          "tools_must_include": null,
+          "tools_must_not_include": null,
+          "not_swallowed": true,
+          "turn_recorded": true,
+          "brain_attributed": true,
+          "vacuous": false,
+          "passed": true,
+          "brain_passed": true
+        }
+      }
+    },
+    {
+      "case_id": "D015",
+      "query": "这个弄好看点",
+      "category": "ambiguity",
+      "repeat": 1,
+      "error": null,
+      "timed_out": false,
+      "metrics": {
+        "events_seen": 7,
+        "intent_called": true,
+        "intent_returned_tools": false,
+        "intent_trace_complete": true,
+        "chat_swallowed_edit": false,
+        "retrieved": false,
+        "keyword_fallback": false,
+        "final_source": "qnn_genie_intent",
+        "clarified": false,
+        "clarification": null,
+        "planned_tools": [],
+        "executed": false,
+        "step_raw": "",
+        "intent_raw": "\n{\"intent\":\"chat\",\"reply\":\"用一句话直接回答用户\"}",
+        "latency_ms": {
+          "intent": 5629,
+          "plan": null
+        },
+        "reply": "用一句话直接回答用户",
+        "has_step_output": false,
+        "hollow_params": [],
+        "unresolved_style": [],
+        "brain_authored_params": [],
+        "table_authored_params": [],
+        "style_tools_planned": 0,
+        "checks": {
+          "outcome_match": true,
+          "tools_must_include": null,
+          "tools_must_not_include": null,
+          "not_swallowed": true,
+          "turn_recorded": true,
+          "brain_attributed": true,
+          "vacuous": false,
+          "passed": true,
+          "brain_passed": true
+        }
+      }
+    },
+    {
+      "case_id": "D015",
+      "query": "这个弄好看点",
+      "category": "ambiguity",
+      "repeat": 2,
+      "error": null,
+      "timed_out": false,
+      "metrics": {
+        "events_seen": 7,
+        "intent_called": true,
+        "intent_returned_tools": false,
+        "intent_trace_complete": true,
+        "chat_swallowed_edit": false,
+        "retrieved": false,
+        "keyword_fallback": false,
+        "final_source": "qnn_genie_intent",
+        "clarified": false,
+        "clarification": null,
+        "planned_tools": [],
+        "executed": false,
+        "step_raw": "",
+        "intent_raw": "\n{\"intent\":\"chat\",\"reply\":\"用一句话直接回答用户\"}",
+        "latency_ms": {
+          "intent": 5633,
+          "plan": null
+        },
+        "reply": "用一句话直接回答用户",
+        "has_step_output": false,
+        "hollow_params": [],
+        "unresolved_style": [],
+        "brain_authored_params": [],
+        "table_authored_params": [],
+        "style_tools_planned": 0,
+        "checks": {
+          "outcome_match": true,
+          "tools_must_include": null,
+          "tools_must_not_include": null,
+          "not_swallowed": true,
+          "turn_recorded": true,
+          "brain_attributed": true,
+          "vacuous": false,
+          "passed": true,
+          "brain_passed": true
+        }
+      }
+    },
+    {
+      "case_id": "D016",
+      "query": "把视频左右翻转",
+      "category": "robustness",
+      "repeat": 0,
+      "error": null,
+      "timed_out": false,
+      "metrics": {
+        "events_seen": 21,
+        "intent_called": true,
+        "intent_returned_tools": false,
+        "intent_trace_complete": true,
+        "chat_swallowed_edit": false,
+        "retrieved": true,
+        "keyword_fallback": false,
+        "final_source": "qnn_genie",
+        "clarified": false,
+        "clarification": null,
+        "planned_tools": [
+          "video_mirror"
+        ],
+        "executed": true,
+        "step_raw": "\nSTEP=video_mirror",
+        "intent_raw": "\n{\"intent\":\"video_mirror\",\"tool_calls\":[]}",
+        "latency_ms": {
+          "intent": 5530,
+          "plan": 5430
+        },
+        "reply": "",
+        "has_step_output": true,
+        "step_rows": 1,
+        "echoed_slots": {},
+        "filled_slots": {},
+        "legacy_header": false,
+        "legacy_field_rows": 0,
+        "legacy_placeholder_leak": 0,
+        "duplicate_tools": [],
+        "current_shape_rows": 1,
+        "pipe_rows": 0,
+        "markdown": false,
+        "hollow_params": [],
+        "unresolved_style": [],
+        "brain_authored_params": [],
+        "table_authored_params": [],
+        "style_tools_planned": 0,
+        "checks": {
+          "outcome_match": true,
+          "tools_must_include": true,
+          "tools_must_not_include": null,
+          "not_swallowed": true,
+          "turn_recorded": true,
+          "brain_attributed": true,
+          "vacuous": false,
+          "passed": true,
+          "brain_passed": true
+        }
+      }
+    },
+    {
+      "case_id": "D016",
+      "query": "把视频左右翻转",
+      "category": "robustness",
+      "repeat": 1,
+      "error": null,
+      "timed_out": false,
+      "metrics": {
+        "events_seen": 21,
+        "intent_called": true,
+        "intent_returned_tools": false,
+        "intent_trace_complete": true,
+        "chat_swallowed_edit": false,
+        "retrieved": true,
+        "keyword_fallback": false,
+        "final_source": "qnn_genie",
+        "clarified": false,
+        "clarification": null,
+        "planned_tools": [
+          "video_mirror"
+        ],
+        "executed": true,
+        "step_raw": "\nSTEP=video_mirror",
+        "intent_raw": "\n{\"intent\":\"video_mirror\",\"tool_calls\":[]}",
+        "latency_ms": {
+          "intent": 5427,
+          "plan": 5634
+        },
+        "reply": "",
+        "has_step_output": true,
+        "step_rows": 1,
+        "echoed_slots": {},
+        "filled_slots": {},
+        "legacy_header": false,
+        "legacy_field_rows": 0,
+        "legacy_placeholder_leak": 0,
+        "duplicate_tools": [],
+        "current_shape_rows": 1,
+        "pipe_rows": 0,
+        "markdown": false,
+        "hollow_params": [],
+        "unresolved_style": [],
+        "brain_authored_params": [],
+        "table_authored_params": [],
+        "style_tools_planned": 0,
+        "checks": {
+          "outcome_match": true,
+          "tools_must_include": true,
+          "tools_must_not_include": null,
+          "not_swallowed": true,
+          "turn_recorded": true,
+          "brain_attributed": true,
+          "vacuous": false,
+          "passed": true,
+          "brain_passed": true
+        }
+      }
+    },
+    {
+      "case_id": "D016",
+      "query": "把视频左右翻转",
+      "category": "robustness",
+      "repeat": 2,
+      "error": null,
+      "timed_out": false,
+      "metrics": {
+        "events_seen": 21,
+        "intent_called": true,
+        "intent_returned_tools": false,
+        "intent_trace_complete": true,
+        "chat_swallowed_edit": false,
+        "retrieved": true,
+        "keyword_fallback": false,
+        "final_source": "qnn_genie",
+        "clarified": false,
+        "clarification": null,
+        "planned_tools": [
+          "video_mirror"
+        ],
+        "executed": true,
+        "step_raw": "\nSTEP=video_mirror",
+        "intent_raw": "\n{\"intent\":\"video_mirror\",\"tool_calls\":[]}",
+        "latency_ms": {
+          "intent": 5839,
+          "plan": 5828
+        },
+        "reply": "",
+        "has_step_output": true,
+        "step_rows": 1,
+        "echoed_slots": {},
+        "filled_slots": {},
+        "legacy_header": false,
+        "legacy_field_rows": 0,
+        "legacy_placeholder_leak": 0,
+        "duplicate_tools": [],
+        "current_shape_rows": 1,
+        "pipe_rows": 0,
+        "markdown": false,
+        "hollow_params": [],
+        "unresolved_style": [],
+        "brain_authored_params": [],
+        "table_authored_params": [],
+        "style_tools_planned": 0,
+        "checks": {
+          "outcome_match": true,
+          "tools_must_include": true,
+          "tools_must_not_include": null,
+          "not_swallowed": true,
+          "turn_recorded": true,
+          "brain_attributed": true,
+          "vacuous": false,
+          "passed": true,
+          "brain_passed": true
+        }
+      }
+    },
+    {
+      "case_id": "D017",
+      "query": "视频背景虚化",
+      "category": "robustness",
+      "repeat": 0,
+      "error": null,
+      "timed_out": false,
+      "metrics": {
+        "events_seen": 21,
+        "intent_called": true,
+        "intent_returned_tools": false,
+        "intent_trace_complete": true,
+        "chat_swallowed_edit": false,
+        "retrieved": true,
+        "keyword_fallback": false,
+        "final_source": "qnn_genie",
+        "clarified": false,
+        "clarification": null,
+        "planned_tools": [
+          "video_blur"
+        ],
+        "executed": true,
+        "step_raw": "\nSTEP=video_blur|背景虚化",
+        "intent_raw": "\n{\"intent\":\"video_blur\",\"tool_calls\":[]}",
+        "latency_ms": {
+          "intent": 5738,
+          "plan": 6031
+        },
+        "reply": "",
+        "has_step_output": true,
+        "step_rows": 1,
+        "echoed_slots": {},
+        "filled_slots": {
+          "effect": 1
+        },
+        "legacy_header": false,
+        "legacy_field_rows": 0,
+        "legacy_placeholder_leak": 0,
+        "duplicate_tools": [],
+        "current_shape_rows": 1,
+        "pipe_rows": 1,
+        "markdown": false,
+        "hollow_params": [],
+        "unresolved_style": [],
+        "brain_authored_params": [],
+        "table_authored_params": [],
+        "style_tools_planned": 0,
+        "checks": {
+          "outcome_match": true,
+          "tools_must_include": true,
+          "tools_must_not_include": null,
+          "not_swallowed": true,
+          "turn_recorded": true,
+          "brain_attributed": true,
+          "vacuous": false,
+          "passed": true,
+          "brain_passed": true
+        }
+      }
+    },
+    {
+      "case_id": "D017",
+      "query": "视频背景虚化",
+      "category": "robustness",
+      "repeat": 1,
+      "error": null,
+      "timed_out": false,
+      "metrics": {
+        "events_seen": 21,
+        "intent_called": true,
+        "intent_returned_tools": false,
+        "intent_trace_complete": true,
+        "chat_swallowed_edit": false,
+        "retrieved": true,
+        "keyword_fallback": false,
+        "final_source": "qnn_genie",
+        "clarified": false,
+        "clarification": null,
+        "planned_tools": [
+          "video_blur"
+        ],
+        "executed": true,
+        "step_raw": "\nSTEP=video_blur|背景虚化",
+        "intent_raw": "\n{\"intent\":\"video_blur\",\"tool_calls\":[]}",
+        "latency_ms": {
+          "intent": 5730,
+          "plan": 5933
+        },
+        "reply": "",
+        "has_step_output": true,
+        "step_rows": 1,
+        "echoed_slots": {},
+        "filled_slots": {
+          "effect": 1
+        },
+        "legacy_header": false,
+        "legacy_field_rows": 0,
+        "legacy_placeholder_leak": 0,
+        "duplicate_tools": [],
+        "current_shape_rows": 1,
+        "pipe_rows": 1,
+        "markdown": false,
+        "hollow_params": [],
+        "unresolved_style": [],
+        "brain_authored_params": [],
+        "table_authored_params": [],
+        "style_tools_planned": 0,
+        "checks": {
+          "outcome_match": true,
+          "tools_must_include": true,
+          "tools_must_not_include": null,
+          "not_swallowed": true,
+          "turn_recorded": true,
+          "brain_attributed": true,
+          "vacuous": false,
+          "passed": true,
+          "brain_passed": true
+        }
+      }
+    },
+    {
+      "case_id": "D017",
+      "query": "视频背景虚化",
+      "category": "robustness",
+      "repeat": 2,
+      "error": null,
+      "timed_out": false,
+      "metrics": {
+        "events_seen": 21,
+        "intent_called": true,
+        "intent_returned_tools": false,
+        "intent_trace_complete": true,
+        "chat_swallowed_edit": false,
+        "retrieved": true,
+        "keyword_fallback": false,
+        "final_source": "qnn_genie",
+        "clarified": false,
+        "clarification": null,
+        "planned_tools": [
+          "video_blur"
+        ],
+        "executed": true,
+        "step_raw": "\nSTEP=video_blur|背景虚化",
+        "intent_raw": "\n{\"intent\":\"video_blur\",\"tool_calls\":[]}",
+        "latency_ms": {
+          "intent": 5734,
+          "plan": 6033
+        },
+        "reply": "",
+        "has_step_output": true,
+        "step_rows": 1,
+        "echoed_slots": {},
+        "filled_slots": {
+          "effect": 1
+        },
+        "legacy_header": false,
+        "legacy_field_rows": 0,
+        "legacy_placeholder_leak": 0,
+        "duplicate_tools": [],
+        "current_shape_rows": 1,
+        "pipe_rows": 1,
+        "markdown": false,
+        "hollow_params": [],
+        "unresolved_style": [],
+        "brain_authored_params": [],
+        "table_authored_params": [],
+        "style_tools_planned": 0,
+        "checks": {
+          "outcome_match": true,
+          "tools_must_include": true,
+          "tools_must_not_include": null,
+          "not_swallowed": true,
+          "turn_recorded": true,
+          "brain_attributed": true,
+          "vacuous": false,
+          "passed": true,
+          "brain_passed": true
+        }
+      }
+    },
+    {
+      "case_id": "D018",
+      "query": "把视频倒放",
+      "category": "robustness",
+      "repeat": 0,
+      "error": null,
+      "timed_out": false,
+      "metrics": {
+        "events_seen": 21,
+        "intent_called": true,
+        "intent_returned_tools": false,
+        "intent_trace_complete": true,
+        "chat_swallowed_edit": false,
+        "retrieved": true,
+        "keyword_fallback": false,
+        "final_source": "qnn_genie",
+        "clarified": false,
+        "clarification": null,
+        "planned_tools": [
+          "video_reverse"
+        ],
+        "executed": true,
+        "step_raw": "\nSTEP=video_reverse|",
+        "intent_raw": "\n{\"intent\":\"video_reverse\",\"tool_calls\":[]}",
+        "latency_ms": {
+          "intent": 5638,
+          "plan": 6046
+        },
+        "reply": "",
+        "has_step_output": true,
+        "step_rows": 1,
+        "echoed_slots": {},
+        "filled_slots": {},
+        "legacy_header": false,
+        "legacy_field_rows": 0,
+        "legacy_placeholder_leak": 0,
+        "duplicate_tools": [],
+        "current_shape_rows": 1,
+        "pipe_rows": 1,
+        "markdown": false,
+        "hollow_params": [],
+        "unresolved_style": [],
+        "brain_authored_params": [],
+        "table_authored_params": [],
+        "style_tools_planned": 0,
+        "checks": {
+          "outcome_match": true,
+          "tools_must_include": true,
+          "tools_must_not_include": null,
+          "not_swallowed": true,
+          "turn_recorded": true,
+          "brain_attributed": true,
+          "vacuous": false,
+          "passed": true,
+          "brain_passed": true
+        }
+      }
+    },
+    {
+      "case_id": "D018",
+      "query": "把视频倒放",
+      "category": "robustness",
+      "repeat": 1,
+      "error": null,
+      "timed_out": false,
+      "metrics": {
+        "events_seen": 21,
+        "intent_called": true,
+        "intent_returned_tools": false,
+        "intent_trace_complete": true,
+        "chat_swallowed_edit": false,
+        "retrieved": true,
+        "keyword_fallback": false,
+        "final_source": "qnn_genie",
+        "clarified": false,
+        "clarification": null,
+        "planned_tools": [
+          "video_reverse"
+        ],
+        "executed": true,
+        "step_raw": "\nSTEP=video_reverse|",
+        "intent_raw": "\n{\"intent\":\"video_reverse\",\"tool_calls\":[]}",
+        "latency_ms": {
+          "intent": 5531,
+          "plan": 5730
+        },
+        "reply": "",
+        "has_step_output": true,
+        "step_rows": 1,
+        "echoed_slots": {},
+        "filled_slots": {},
+        "legacy_header": false,
+        "legacy_field_rows": 0,
+        "legacy_placeholder_leak": 0,
+        "duplicate_tools": [],
+        "current_shape_rows": 1,
+        "pipe_rows": 1,
+        "markdown": false,
+        "hollow_params": [],
+        "unresolved_style": [],
+        "brain_authored_params": [],
+        "table_authored_params": [],
+        "style_tools_planned": 0,
+        "checks": {
+          "outcome_match": true,
+          "tools_must_include": true,
+          "tools_must_not_include": null,
+          "not_swallowed": true,
+          "turn_recorded": true,
+          "brain_attributed": true,
+          "vacuous": false,
+          "passed": true,
+          "brain_passed": true
+        }
+      }
+    },
+    {
+      "case_id": "D018",
+      "query": "把视频倒放",
+      "category": "robustness",
+      "repeat": 2,
+      "error": null,
+      "timed_out": false,
+      "metrics": {
+        "events_seen": 21,
+        "intent_called": true,
+        "intent_returned_tools": false,
+        "intent_trace_complete": true,
+        "chat_swallowed_edit": false,
+        "retrieved": true,
+        "keyword_fallback": false,
+        "final_source": "qnn_genie",
+        "clarified": false,
+        "clarification": null,
+        "planned_tools": [
+          "video_reverse"
+        ],
+        "executed": true,
+        "step_raw": "\nSTEP=video_reverse|",
+        "intent_raw": "\n{\"intent\":\"video_reverse\",\"tool_calls\":[]}",
+        "latency_ms": {
+          "intent": 5739,
+          "plan": 5631
+        },
+        "reply": "",
+        "has_step_output": true,
+        "step_rows": 1,
+        "echoed_slots": {},
+        "filled_slots": {},
+        "legacy_header": false,
+        "legacy_field_rows": 0,
+        "legacy_placeholder_leak": 0,
+        "duplicate_tools": [],
+        "current_shape_rows": 1,
+        "pipe_rows": 1,
+        "markdown": false,
+        "hollow_params": [],
+        "unresolved_style": [],
+        "brain_authored_params": [],
+        "table_authored_params": [],
+        "style_tools_planned": 0,
+        "checks": {
+          "outcome_match": true,
+          "tools_must_include": true,
+          "tools_must_not_include": null,
+          "not_swallowed": true,
+          "turn_recorded": true,
+          "brain_attributed": true,
+          "vacuous": false,
+          "passed": true,
+          "brain_passed": true
+        }
+      }
+    },
+    {
+      "case_id": "D019",
+      "query": "视频加速两倍",
+      "category": "robustness",
+      "repeat": 0,
+      "error": null,
+      "timed_out": false,
+      "metrics": {
+        "events_seen": 21,
+        "intent_called": true,
+        "intent_returned_tools": true,
+        "intent_trace_complete": true,
+        "chat_swallowed_edit": false,
+        "retrieved": true,
+        "keyword_fallback": false,
+        "final_source": "qnn_genie",
+        "clarified": false,
+        "clarification": null,
+        "planned_tools": [
+          "video_speed"
+        ],
+        "executed": true,
+        "step_raw": "\nSTEP=video_speed|2x",
+        "intent_raw": "\n{\"intent\":\"video_speed\",\"tool_calls\":[{\"tool\":\"video_speed\",\"reason\":\"用户请求视频加速两倍，需对视频进行变速处理\",\"arguments\":{\"speed\":2}}]}",
+        "latency_ms": {
+          "intent": 6661,
+          "plan": 5826
+        },
+        "reply": "",
+        "has_step_output": true,
+        "step_rows": 1,
+        "echoed_slots": {},
+        "filled_slots": {
+          "effect": 1
+        },
+        "legacy_header": false,
+        "legacy_field_rows": 0,
+        "legacy_placeholder_leak": 0,
+        "duplicate_tools": [],
+        "current_shape_rows": 1,
+        "pipe_rows": 1,
+        "markdown": false,
+        "hollow_params": [],
+        "unresolved_style": [],
+        "brain_authored_params": [],
+        "table_authored_params": [],
+        "style_tools_planned": 0,
+        "checks": {
+          "outcome_match": true,
+          "tools_must_include": true,
+          "tools_must_not_include": null,
+          "not_swallowed": true,
+          "turn_recorded": true,
+          "brain_attributed": true,
+          "vacuous": false,
+          "passed": true,
+          "brain_passed": true
+        }
+      }
+    },
+    {
+      "case_id": "D019",
+      "query": "视频加速两倍",
+      "category": "robustness",
+      "repeat": 1,
+      "error": null,
+      "timed_out": false,
+      "metrics": {
+        "events_seen": 21,
+        "intent_called": true,
+        "intent_returned_tools": true,
+        "intent_trace_complete": true,
+        "chat_swallowed_edit": false,
+        "retrieved": true,
+        "keyword_fallback": false,
+        "final_source": "qnn_genie",
+        "clarified": false,
+        "clarification": null,
+        "planned_tools": [
+          "video_speed"
+        ],
+        "executed": true,
+        "step_raw": "\nSTEP=video_speed|2x",
+        "intent_raw": "\n{\"intent\":\"video_speed\",\"tool_calls\":[{\"tool\":\"video_speed\",\"reason\":\"用户请求视频加速两倍，需对视频进行变速处理\",\"arguments\":{\"speed\":2}}]}",
+        "latency_ms": {
+          "intent": 6655,
+          "plan": 6036
+        },
+        "reply": "",
+        "has_step_output": true,
+        "step_rows": 1,
+        "echoed_slots": {},
+        "filled_slots": {
+          "effect": 1
+        },
+        "legacy_header": false,
+        "legacy_field_rows": 0,
+        "legacy_placeholder_leak": 0,
+        "duplicate_tools": [],
+        "current_shape_rows": 1,
+        "pipe_rows": 1,
+        "markdown": false,
+        "hollow_params": [],
+        "unresolved_style": [],
+        "brain_authored_params": [],
+        "table_authored_params": [],
+        "style_tools_planned": 0,
+        "checks": {
+          "outcome_match": true,
+          "tools_must_include": true,
+          "tools_must_not_include": null,
+          "not_swallowed": true,
+          "turn_recorded": true,
+          "brain_attributed": true,
+          "vacuous": false,
+          "passed": true,
+          "brain_passed": true
+        }
+      }
+    },
+    {
+      "case_id": "D019",
+      "query": "视频加速两倍",
+      "category": "robustness",
+      "repeat": 2,
+      "error": null,
+      "timed_out": false,
+      "metrics": {
+        "events_seen": 21,
+        "intent_called": true,
+        "intent_returned_tools": true,
+        "intent_trace_complete": true,
+        "chat_swallowed_edit": false,
+        "retrieved": true,
+        "keyword_fallback": false,
+        "final_source": "qnn_genie",
+        "clarified": false,
+        "clarification": null,
+        "planned_tools": [
+          "video_speed"
+        ],
+        "executed": true,
+        "step_raw": "\nSTEP=video_speed|2x",
+        "intent_raw": "\n{\"intent\":\"video_speed\",\"tool_calls\":[{\"tool\":\"video_speed\",\"reason\":\"用户请求视频加速两倍，需对视频进行变速处理\",\"arguments\":{\"speed\":2}}]}",
+        "latency_ms": {
+          "intent": 6936,
+          "plan": 5830
+        },
+        "reply": "",
+        "has_step_output": true,
+        "step_rows": 1,
+        "echoed_slots": {},
+        "filled_slots": {
+          "effect": 1
+        },
+        "legacy_header": false,
+        "legacy_field_rows": 0,
+        "legacy_placeholder_leak": 0,
+        "duplicate_tools": [],
+        "current_shape_rows": 1,
+        "pipe_rows": 1,
+        "markdown": false,
+        "hollow_params": [],
+        "unresolved_style": [],
+        "brain_authored_params": [],
+        "table_authored_params": [],
+        "style_tools_planned": 0,
+        "checks": {
+          "outcome_match": true,
+          "tools_must_include": true,
+          "tools_must_not_include": null,
+          "not_swallowed": true,
+          "turn_recorded": true,
+          "brain_attributed": true,
+          "vacuous": false,
+          "passed": true,
+          "brain_passed": true
+        }
+      }
+    },
+    {
+      "case_id": "D020",
+      "query": "make a collage of my cat",
+      "category": "robustness",
+      "repeat": 0,
+      "error": null,
+      "timed_out": false,
+      "metrics": {
+        "events_seen": 372,
+        "intent_called": true,
+        "intent_returned_tools": true,
+        "intent_trace_complete": true,
+        "chat_swallowed_edit": false,
+        "retrieved": true,
+        "keyword_fallback": false,
+        "final_source": "qnn_genie",
+        "clarified": false,
+        "clarification": null,
+        "planned_tools": [
+          "template_collage"
+        ],
+        "executed": true,
+        "step_raw": "\nSTEP=template_collage|layout=3x2#1#2#3",
+        "intent_raw": "\n{\"intent\":\"template_collage\",\"tool_calls\":[{\"tool\":\"search_assets\",\"reason\":\"用户要求制作猫的拼贴图，首先需要检索与猫相关的素材\",\"arguments\":{\"query\":\"cat\",\"k\":3}}]}",
+        "latency_ms": {
+          "intent": 7031,
+          "plan": 6133
+        },
+        "reply": "",
+        "has_step_output": true,
+        "step_rows": 1,
+        "echoed_slots": {},
+        "filled_slots": {
+          "effect": 1,
+          "ordinal_suffix": 1
+        },
+        "legacy_header": false,
+        "legacy_field_rows": 0,
+        "legacy_placeholder_leak": 0,
+        "duplicate_tools": [],
+        "current_shape_rows": 1,
+        "pipe_rows": 1,
+        "markdown": false,
+        "hollow_params": [],
+        "unresolved_style": [],
+        "brain_authored_params": [],
+        "table_authored_params": [],
+        "style_tools_planned": 0,
+        "checks": {
+          "outcome_match": true,
+          "tools_must_include": true,
+          "tools_must_not_include": null,
+          "retrieval": true,
+          "not_swallowed": true,
+          "turn_recorded": true,
+          "brain_attributed": true,
+          "vacuous": false,
+          "passed": true,
+          "brain_passed": true
+        }
+      }
+    },
+    {
+      "case_id": "D020",
+      "query": "make a collage of my cat",
+      "category": "robustness",
+      "repeat": 1,
+      "error": null,
+      "timed_out": false,
+      "metrics": {
+        "events_seen": 372,
+        "intent_called": true,
+        "intent_returned_tools": true,
+        "intent_trace_complete": true,
+        "chat_swallowed_edit": false,
+        "retrieved": true,
+        "keyword_fallback": false,
+        "final_source": "qnn_genie",
+        "clarified": false,
+        "clarification": null,
+        "planned_tools": [
+          "template_collage"
+        ],
+        "executed": true,
+        "step_raw": "\nSTEP=template_collage|layout=3x2#1#2#3",
+        "intent_raw": "\n{\"intent\":\"template_collage\",\"tool_calls\":[{\"tool\":\"search_assets\",\"reason\":\"用户要求制作猫的拼贴图，首先需要检索与猫相关的素材\",\"arguments\":{\"query\":\"cat\",\"k\":3}}]}",
+        "latency_ms": {
+          "intent": 7652,
+          "plan": 7376
+        },
+        "reply": "",
+        "has_step_output": true,
+        "step_rows": 1,
+        "echoed_slots": {},
+        "filled_slots": {
+          "effect": 1,
+          "ordinal_suffix": 1
+        },
+        "legacy_header": false,
+        "legacy_field_rows": 0,
+        "legacy_placeholder_leak": 0,
+        "duplicate_tools": [],
+        "current_shape_rows": 1,
+        "pipe_rows": 1,
+        "markdown": false,
+        "hollow_params": [],
+        "unresolved_style": [],
+        "brain_authored_params": [],
+        "table_authored_params": [],
+        "style_tools_planned": 0,
+        "checks": {
+          "outcome_match": true,
+          "tools_must_include": true,
+          "tools_must_not_include": null,
+          "retrieval": true,
+          "not_swallowed": true,
+          "turn_recorded": true,
+          "brain_attributed": true,
+          "vacuous": false,
+          "passed": true,
+          "brain_passed": true
+        }
+      }
+    },
+    {
+      "case_id": "D020",
+      "query": "make a collage of my cat",
+      "category": "robustness",
+      "repeat": 2,
+      "error": null,
+      "timed_out": false,
+      "metrics": {
+        "events_seen": 372,
+        "intent_called": true,
+        "intent_returned_tools": true,
+        "intent_trace_complete": true,
+        "chat_swallowed_edit": false,
+        "retrieved": true,
+        "keyword_fallback": false,
+        "final_source": "qnn_genie",
+        "clarified": false,
+        "clarification": null,
+        "planned_tools": [
+          "template_collage"
+        ],
+        "executed": true,
+        "step_raw": "\nSTEP=template_collage|layout=3x2#1#2#3",
+        "intent_raw": "\n{\"intent\":\"template_collage\",\"tool_calls\":[{\"tool\":\"search_assets\",\"reason\":\"用户要求制作猫的拼贴图，首先需要检索与猫相关的素材\",\"arguments\":{\"query\":\"cat\",\"k\":3}}]}",
+        "latency_ms": {
+          "intent": 7136,
+          "plan": 5938
+        },
+        "reply": "",
+        "has_step_output": true,
+        "step_rows": 1,
+        "echoed_slots": {},
+        "filled_slots": {
+          "effect": 1,
+          "ordinal_suffix": 1
+        },
+        "legacy_header": false,
+        "legacy_field_rows": 0,
+        "legacy_placeholder_leak": 0,
+        "duplicate_tools": [],
+        "current_shape_rows": 1,
+        "pipe_rows": 1,
+        "markdown": false,
+        "hollow_params": [],
+        "unresolved_style": [],
+        "brain_authored_params": [],
+        "table_authored_params": [],
+        "style_tools_planned": 0,
+        "checks": {
+          "outcome_match": true,
+          "tools_must_include": true,
+          "tools_must_not_include": null,
+          "retrieval": true,
+          "not_swallowed": true,
+          "turn_recorded": true,
+          "brain_attributed": true,
+          "vacuous": false,
+          "passed": true,
+          "brain_passed": true
+        }
+      }
+    }
+  ]
+}

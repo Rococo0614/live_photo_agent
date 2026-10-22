@@ -102,7 +102,6 @@ public final class VivoSdkExecutor {
         for (String path : sdkInputs) clips.add(requireMediaClip(path));
 
         boolean collage = "template_collage".equals(operation)
-                || "smart_collage".equals(operation)
                 || "concat_clips".equals(operation);
         int width = even(clips.get(0).getWidth());
         int height = even(clips.get(0).getHeight());

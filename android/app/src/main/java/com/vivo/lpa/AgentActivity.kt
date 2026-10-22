@@ -647,6 +647,10 @@ preparedAssets = prepared
         input.text.clear()
         setBusy(true)
         resetProgressBar()
+        // Show the spinning bubble the instant the message is sent. The first onProgress can be
+        // 5-12s away while the on-device brain reads the sentence, and users read silence as a
+        // dead app -- the circle must turn from the trigger, not from the first callback.
+        thinking("正在理解你的请求…")
         state.text = "运行中 | 前处理 -> 规划 -> vivo SDK 执行"
         val runner = MobileAgentRunner(this)
         val generation = sessionGeneration
@@ -685,6 +689,24 @@ preparedAssets = prepared
                     renderPreparedPreviews(assets)
                     persistSessionState()
                 }
+                override fun onIntentTrace(trace: BrainTrace) = uiFor(generation) {
+                    // Intent runs on its own throwaway planner and its plan is consumed for search
+                    // params then discarded, so this is the only place its raw output is captured.
+                    // Logged under INTENT_BRAIN (not PLAN_BRAIN) so the two brain stages never
+                    // overwrite each other in the audit -- the survivorship that made
+                    // intent_returned_tools unmeasurable (planner_reliability_plan.md §3.4).
+                    logAudit("INTENT_BRAIN", JSONObject()
+                        .put("query", query)
+                        .put("source", trace.source)
+                        .put("parsed", trace.parsed)
+                        .put("prompt_chars", trace.promptChars)
+                        .put("elapsed_ms", trace.elapsedMs)
+                        .put("strategy", trace.strategy)
+                        .put("reasoning_output", trace.reasoningOutput)
+                        .put("reasoning_elapsed_ms", trace.reasoningElapsedMs)
+                        .put("format_elapsed_ms", trace.formatElapsedMs)
+                        .put("raw_output", trace.rawOutput))
+                }
                 override fun onPlan(plan: MobilePlan) = uiFor(generation) {
                     lastPlan = plan.toJson()
                     lastToolResults.clear()
@@ -700,6 +722,10 @@ preparedAssets = prepared
                         .put("parsed", brainProduced)
                         .put("prompt_chars", trace?.promptChars ?: 0)
                         .put("elapsed_ms", trace?.elapsedMs ?: 0)
+                        .put("strategy", trace?.strategy ?: BuildConfig.PLANNER_EXPERIMENT)
+                        .put("reasoning_output", trace?.reasoningOutput ?: "")
+                        .put("reasoning_elapsed_ms", trace?.reasoningElapsedMs ?: 0)
+                        .put("format_elapsed_ms", trace?.formatElapsedMs ?: 0)
                         .put("raw_output", trace?.rawOutput ?: "")
                         .put("selected_asset_ids", JSONArray(selectedAssetIds.toList())))
                     logAudit("PLAN_FINAL", JSONObject()
@@ -709,14 +735,25 @@ preparedAssets = prepared
                         .put("tool_calls", JSONArray(plan.toolCalls.map { it.toJson() }))
                         .put("clarification", plan.clarification ?: JSONObject.NULL))
                     val steps = plan.toolCalls.joinToString("、") { it.tool }
-                    if (steps.isEmpty()) {
+                    if (steps.isEmpty() && plan.clarification == null) {
                         append("我暂时没有需要执行的编辑动作")
+                    } else if (steps.isEmpty()) {
+                        // The plan carries a spoken answer (capability / chat); onFinished renders
+                        // it as the reply bubble, so nothing is appended here.
                     } else {
                         thinking("规划意图：${plan.intent}" +
                             (if (brainProduced) "（${trace!!.source} ${trace.elapsedMs}ms）" else "（关键词兜底）"))
                         // Show the brain's own words, collapsed. This is the difference between an
                         // agent whose reasoning can be inspected and one that is a black box.
-                        trace?.rawOutput?.takeIf { it.isNotBlank() }?.let { thinkingBrain(it) }
+                        trace?.let { brain ->
+                            val visible = listOf(
+                                brain.reasoningOutput.takeIf { it.isNotBlank() }
+                                    ?.let { "自由规划：\n${it.trim()}" },
+                                brain.rawOutput.takeIf { it.isNotBlank() }
+                                    ?.let { "最终结构：\n${it.trim()}" }
+                            ).filterNotNull().joinToString("\n\n")
+                            visible.takeIf { it.isNotBlank() }?.let { thinkingBrain(it) }
+                        }
                         plan.toolCalls.forEachIndexed { index, call ->
                             thinking("步骤 ${index + 1}/${plan.toolCalls.size} ${call.tool}" +
                                 (call.reason.takeIf { it.isNotBlank() }?.let { "（$it）" } ?: ""))
@@ -734,7 +771,7 @@ preparedAssets = prepared
                 }
                 override fun onResult(result: MobileToolResult) = uiFor(generation) {
                     when (result.tool) {
-                        "template_collage", "smart_collage", "layout_swap", "asset_replace" -> {
+                        "template_collage", "layout_swap", "asset_replace" -> {
                             // Only adopt a layout that actually carries slots; asset_replace emits
                             // an empty object when there was no prior collage, which must not
                             // clobber a good layout.
@@ -826,21 +863,18 @@ preparedAssets = prepared
         sessionButton.isEnabled = !busy
     }
 
-    private fun _openResult_UNUSED() {
-        val uri = lastResult ?: return
-        null
-    }
-
-    private fun _openUri_UNUSED(uri: Uri) {
+    private fun openUri(uri: Uri) {
         val mime = contentResolver.getType(uri) ?: if (uri.toString().contains(".jpg")) {
             "image/jpeg"
         } else {
             "video/mp4"
         }
-        startActivity(Intent(Intent.ACTION_VIEW).apply {
-            setDataAndType(uri, mime)
-            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-        })
+        runCatching {
+            startActivity(Intent(Intent.ACTION_VIEW).apply {
+                setDataAndType(uri, mime)
+                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            })
+        }.onFailure { append("无法打开结果文件：${it.message ?: it::class.java.simpleName}") }
     }
 
     private fun updateProgressBar(message: String) {
@@ -1267,7 +1301,8 @@ preparedAssets = prepared
             orientation = LinearLayout.VERTICAL
             setPadding(dp(10), dp(10), dp(10), dp(10))
             background = roundedBackground(Color.rgb(225, 244, 232), Color.rgb(153, 207, 174), dp(18))
-            setOnClickListener { null }
+            isClickable = true
+            setOnClickListener { openUri(uri) }
             addView(TextView(this@AgentActivity).apply {
                 text = "$message\n点击打开结果文件"
                 textSize = 15f

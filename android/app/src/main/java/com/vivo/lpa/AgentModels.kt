@@ -55,6 +55,19 @@ data class BrainTrace(
     val rawOutput: String = "",
     val promptChars: Int = 0,
     val elapsedMs: Long = 0,
+    /** Build-time experiment arm that produced this trace. */
+    val strategy: String = "baseline",
+    /**
+     * Free-form work produced before the final machine-readable answer.
+     *
+     * Kept separate from [rawOutput] so the production parser and evaluator never mistake a
+     * brace, tool name, or STEP-like sentence in a scratchpad for the final answer.
+     */
+    val reasoningOutput: String = "",
+    /** First/free-form call latency; zero for the one-call baseline and P1 arms. */
+    val reasoningElapsedMs: Long = 0,
+    /** Final formatting call latency; equals [elapsedMs] for ordinary one-call arms. */
+    val formatElapsedMs: Long = elapsedMs,
     /**
      * Whether this run actually produced the plan.
      *
@@ -68,6 +81,10 @@ data class BrainTrace(
         .put("source", source)
         .put("prompt_chars", promptChars)
         .put("elapsed_ms", elapsedMs)
+        .put("strategy", strategy)
+        .put("reasoning_output", reasoningOutput)
+        .put("reasoning_elapsed_ms", reasoningElapsedMs)
+        .put("format_elapsed_ms", formatElapsedMs)
         .put("parsed", parsed)
         .put("raw_output", rawOutput)
 }

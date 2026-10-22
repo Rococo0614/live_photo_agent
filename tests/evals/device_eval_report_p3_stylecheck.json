@@ -1,0 +1,317 @@
+{
+  "summary": {
+    "cases_run": 3,
+    "errors": 0,
+    "scored": 3,
+    "pass_rate": 0.667,
+    "brain_pass_rate": 0.333,
+    "rescued_by_tables": 1,
+    "vacuous": 0,
+    "intent_called": {
+      "n": 3,
+      "total": 3,
+      "rate": 1.0
+    },
+    "intent_trace_complete": {
+      "n": 3,
+      "total": 3
+    },
+    "intent_returned_tools": {
+      "n": 1,
+      "total": 3,
+      "rate": 0.333
+    },
+    "chat_swallowed_edit": {
+      "n": 0,
+      "total": 3,
+      "rate": 0.0
+    },
+    "keyword_fallback": {
+      "n": 1,
+      "total": 3,
+      "rate": 0.333
+    },
+    "retrieved": {
+      "n": 3,
+      "total": 3,
+      "rate": 1.0
+    },
+    "executed": {
+      "n": 3,
+      "total": 3,
+      "rate": 1.0
+    },
+    "protocol": {
+      "step_class_turns": 3,
+      "parsed_step_rows": 2,
+      "action_header_rate": 1.0,
+      "protocol_clean_rate": 1.0,
+      "drifted": [
+        "D011"
+      ]
+    },
+    "has_duplicate_tools": {
+      "n": 0,
+      "total": 3,
+      "rate": 0.0
+    },
+    "markdown_pollution": {
+      "n": 0,
+      "total": 3,
+      "rate": 0.0
+    },
+    "param_quality": {
+      "style_tools_planned": 3,
+      "hollow": {
+        "D010": [
+          "live_photo_filter_effect"
+        ]
+      },
+      "unresolved": {
+        "D012": [
+          "video_filter"
+        ]
+      },
+      "brain_authored": {},
+      "table_authored": {
+        "D011": [
+          "live_photo_filter_effect"
+        ]
+      }
+    },
+    "latency_ms": {
+      "intent": {
+        "n": 3,
+        "p50": 5521,
+        "p95": 8788,
+        "max": 8788,
+        "mean": 6609
+      },
+      "plan": {
+        "n": 3,
+        "p50": 5819,
+        "p95": 7022,
+        "max": 7022,
+        "mean": 5919
+      }
+    },
+    "slot_echo": {
+      "effect": {
+        "echoed": 0,
+        "filled": 2,
+        "echo_rate": 0.0
+      },
+      "start_ms": {
+        "echoed": 2,
+        "filled": 0,
+        "echo_rate": 1.0
+      },
+      "end_ms": {
+        "echoed": 2,
+        "filled": 0,
+        "echo_rate": 1.0
+      },
+      "ordinal": {
+        "echoed": 1,
+        "filled": 1,
+        "echo_rate": 0.5
+      },
+      "evidence": {
+        "echoed": 1,
+        "filled": 1,
+        "echo_rate": 0.5
+      }
+    },
+    "sampler_variance": {}
+  },
+  "results": [
+    {
+      "case_id": "D010",
+      "query": "把视频调成黑白的",
+      "category": "style",
+      "repeat": 0,
+      "error": null,
+      "timed_out": false,
+      "metrics": {
+        "events_seen": 713,
+        "intent_called": true,
+        "intent_returned_tools": false,
+        "intent_trace_complete": true,
+        "chat_swallowed_edit": false,
+        "retrieved": true,
+        "keyword_fallback": false,
+        "final_source": "qnn_genie",
+        "clarified": false,
+        "clarification": null,
+        "planned_tools": [
+          "live_photo_filter_effect"
+        ],
+        "executed": true,
+        "step_raw": "\nACTION=PLAN\r\nSTEP=live_photo_filter_effect|黑白|start_ms|end_ms|293d33d55ff57d15|用户原话：把视频调成黑白的",
+        "intent_raw": "\n{\"intent\":\"video_filter\",\"arguments\":{\"filter\":\"black_and_white\"},\"reason\":\"将视频调成黑白效果，使用视频滤镜功能\"}",
+        "latency_ms": {
+          "intent": 8788,
+          "plan": 7022
+        },
+        "reply": "",
+        "has_step_output": true,
+        "step_rows": 1,
+        "echoed_slots": {
+          "start_ms": 1,
+          "end_ms": 1
+        },
+        "filled_slots": {
+          "effect": 1,
+          "ordinal": 1,
+          "evidence": 1
+        },
+        "has_action_header": true,
+        "duplicate_tools": [],
+        "six_field_rows": 1,
+        "pipe_rows": 1,
+        "markdown": false,
+        "hollow_params": [
+          "live_photo_filter_effect"
+        ],
+        "unresolved_style": [],
+        "brain_authored_params": [],
+        "table_authored_params": [],
+        "style_tools_planned": 1,
+        "checks": {
+          "outcome_match": true,
+          "tools_must_include": false,
+          "tools_must_not_include": true,
+          "not_swallowed": true,
+          "turn_recorded": true,
+          "brain_attributed": true,
+          "vacuous": false,
+          "passed": false,
+          "brain_passed": false
+        }
+      }
+    },
+    {
+      "case_id": "D011",
+      "query": "给这张加个复古滤镜",
+      "category": "style",
+      "repeat": 0,
+      "error": null,
+      "timed_out": false,
+      "metrics": {
+        "events_seen": 1899,
+        "intent_called": true,
+        "intent_returned_tools": false,
+        "intent_trace_complete": true,
+        "chat_swallowed_edit": false,
+        "retrieved": true,
+        "keyword_fallback": true,
+        "final_source": "fallback",
+        "clarified": false,
+        "clarification": null,
+        "planned_tools": [
+          "live_photo_filter_effect"
+        ],
+        "executed": true,
+        "step_raw": "\nACTION=CLARIFY",
+        "intent_raw": "\n\n{\"user_goal\":\"给这张加个复古滤镜\",\"intent\":\"video_filter\",\"tool_calls\":[]}",
+        "latency_ms": {
+          "intent": 5521,
+          "plan": 4917
+        },
+        "reply": "",
+        "has_step_output": false,
+        "step_rows": 0,
+        "echoed_slots": {},
+        "filled_slots": {},
+        "has_action_header": true,
+        "duplicate_tools": [],
+        "six_field_rows": 0,
+        "pipe_rows": 0,
+        "markdown": false,
+        "hollow_params": [],
+        "unresolved_style": [],
+        "brain_authored_params": [],
+        "table_authored_params": [
+          "live_photo_filter_effect"
+        ],
+        "style_tools_planned": 1,
+        "checks": {
+          "outcome_match": true,
+          "tools_must_include": null,
+          "tools_must_not_include": true,
+          "not_swallowed": true,
+          "turn_recorded": true,
+          "brain_attributed": false,
+          "vacuous": false,
+          "passed": true,
+          "brain_passed": false
+        }
+      }
+    },
+    {
+      "case_id": "D012",
+      "query": "画面调暖一点",
+      "category": "style",
+      "repeat": 0,
+      "error": null,
+      "timed_out": false,
+      "metrics": {
+        "events_seen": 494,
+        "intent_called": true,
+        "intent_returned_tools": true,
+        "intent_trace_complete": true,
+        "chat_swallowed_edit": false,
+        "retrieved": true,
+        "keyword_fallback": false,
+        "final_source": "qnn_genie",
+        "clarified": false,
+        "clarification": null,
+        "planned_tools": [
+          "video_filter"
+        ],
+        "executed": true,
+        "step_raw": "\nACTION=PLAN  \nSTEP=video_filter|调暖一点|start_ms|end_ms|素材序号|用户原话证据",
+        "intent_raw": "\n\n{\"intent\":\"video_filter\",\"tool_calls\":[{\"tool\":\"video_filter\",\"arguments\":{\"effect\":\"warm\",\"target\":\"video\"}}]}",
+        "latency_ms": {
+          "intent": 5518,
+          "plan": 5819
+        },
+        "reply": "",
+        "has_step_output": true,
+        "step_rows": 1,
+        "echoed_slots": {
+          "start_ms": 1,
+          "end_ms": 1,
+          "ordinal": 1,
+          "evidence": 1
+        },
+        "filled_slots": {
+          "effect": 1
+        },
+        "has_action_header": true,
+        "duplicate_tools": [],
+        "six_field_rows": 1,
+        "pipe_rows": 1,
+        "markdown": false,
+        "hollow_params": [],
+        "unresolved_style": [
+          "video_filter"
+        ],
+        "brain_authored_params": [],
+        "table_authored_params": [],
+        "style_tools_planned": 1,
+        "checks": {
+          "outcome_match": true,
+          "tools_must_include": null,
+          "tools_must_not_include": true,
+          "not_swallowed": true,
+          "turn_recorded": true,
+          "brain_attributed": true,
+          "vacuous": false,
+          "passed": true,
+          "brain_passed": true
+        }
+      }
+    }
+  ]
+}

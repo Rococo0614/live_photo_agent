@@ -1,0 +1,20 @@
+{"case_id": "D001", "category": "chat", "user_text": "你好", "expect": {"outcome": "chat", "retrieval": false}}
+{"case_id": "D002", "category": "chat", "user_text": "你是谁 你可以做什么", "expect": {"outcome": "chat", "retrieval": false}}
+{"case_id": "D003", "category": "chat", "user_text": "你知道成龙是谁么", "expect": {"outcome": "chat", "retrieval": false}}
+{"case_id": "D004", "category": "chat", "user_text": "今天天气怎么样", "expect": {"outcome": "chat", "retrieval": false}}
+{"case_id": "D005", "category": "retrieval_edit", "user_text": "做个狗的四拼", "expect": {"outcome": "plan", "retrieval": true, "tools_must_include": ["template_collage"], "tools_must_not_include": []}}
+{"case_id": "D006", "category": "retrieval_edit", "user_text": "给我的猫做个三拼", "expect": {"outcome": "plan", "retrieval": true, "tools_must_include": ["template_collage"]}}
+{"case_id": "D007", "category": "retrieval_edit", "user_text": "从相册中选择风景照做拼接", "expect": {"outcome": "plan", "retrieval": true, "tools_must_include": ["template_collage"]}}
+{"case_id": "D008", "category": "retrieval_edit", "user_text": "找几张美食照片拼起来", "expect": {"outcome": "plan", "retrieval": true, "tools_must_include": ["template_collage"]}}
+{"case_id": "D009", "category": "retrieval_edit", "user_text": "用海边的照片做个拼图", "expect": {"outcome": "plan", "retrieval": true, "tools_must_include": ["template_collage"]}}
+{"case_id": "D010", "category": "style", "user_text": "把视频调成黑白的", "expect": {"outcome": "plan", "tools_must_include": ["video_filter"], "tools_must_not_include": ["asset_replace"]}}
+{"case_id": "D011", "category": "style", "user_text": "给这张加个复古滤镜", "expect": {"outcome": "plan", "tools_must_not_include": ["asset_replace"]}}
+{"case_id": "D012", "category": "style", "user_text": "画面调暖一点", "expect": {"outcome": "plan", "tools_must_not_include": ["asset_replace"]}}
+{"case_id": "D013", "category": "style", "user_text": "把颜色调鲜艳一些", "expect": {"outcome": "plan", "tools_must_not_include": ["asset_replace"]}}
+{"case_id": "D014", "category": "ambiguity", "user_text": "处理一下", "expect": {"outcome": "chat"}}
+{"case_id": "D015", "category": "ambiguity", "user_text": "这个弄好看点", "expect": {"outcome": "clarify"}}
+{"case_id": "D016", "category": "robustness", "user_text": "把视频左右翻转", "expect": {"outcome": "plan", "tools_must_include": ["video_mirror"]}}
+{"case_id": "D017", "category": "robustness", "user_text": "视频背景虚化", "expect": {"outcome": "plan", "tools_must_include": ["video_blur"]}}
+{"case_id": "D018", "category": "robustness", "user_text": "把视频倒放", "expect": {"outcome": "plan", "tools_must_include": ["video_reverse"]}}
+{"case_id": "D019", "category": "robustness", "user_text": "视频加速两倍", "expect": {"outcome": "plan", "tools_must_include": ["video_speed"]}}
+{"case_id": "D020", "category": "robustness", "user_text": "make a collage of my cat", "expect": {"outcome": "plan", "retrieval": true, "tools_must_include": ["template_collage"]}}

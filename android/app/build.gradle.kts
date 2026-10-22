@@ -3,6 +3,19 @@ plugins {
     id("org.jetbrains.kotlin.android")
 }
 
+val plannerExperiment = providers.gradleProperty("plannerExperiment")
+    .orElse("baseline")
+    .get()
+require(plannerExperiment in setOf("baseline", "p1", "scratchpad", "two_turn")) {
+    "plannerExperiment must be one of baseline, p1, scratchpad, two_turn"
+}
+val plannerEvalOnly = providers.gradleProperty("plannerEvalOnly")
+    .orElse("false")
+    .get()
+require(plannerEvalOnly in setOf("true", "false")) {
+    "plannerEvalOnly must be true or false"
+}
+
 android {
     namespace = "com.vivo.lpa"
     compileSdk = 36
@@ -14,6 +27,13 @@ android {
         targetSdk = 36
         versionCode = 1
         versionName = "0.1-mobile-agent"
+        // One APK source, four reproducible planner arms. Baseline stays the default so a normal
+        // build cannot accidentally ship an experimental prompt. Build an arm with e.g.
+        // `./gradlew assembleDebug -PplannerExperiment=two_turn`.
+        buildConfigField("String", "PLANNER_EXPERIMENT", "\"$plannerExperiment\"")
+        // Test APKs may stop after PLAN_FINAL to measure the planner without repeatedly exporting
+        // media. Normal builds always default to false.
+        buildConfigField("boolean", "PLANNER_EVAL_ONLY", plannerEvalOnly)
         ndk {
             // 两台真机都是 arm64-v8a，只打这一个 ABI，包体减半
             abiFilters += "arm64-v8a"
@@ -36,6 +56,10 @@ android {
 
     kotlinOptions {
         jvmTarget = "17"
+    }
+
+    buildFeatures {
+        buildConfig = true
     }
 
     packaging {
