@@ -1,8 +1,11 @@
 # Live Photo Agent 端侧部署与可靠性优化技术报告
 
-> 日期：2026-10-22  
-> 项目：`live_photo_agent` Android 端侧 Agent  
-> 验证设备：vivo PD2547 / V2547A（Android 16，arm64-v8a，SM8850 平台）  
+> 日期：2026-10-22
+>
+> 项目：`live_photo_agent` Android 端侧 Agent
+>
+> 验证设备：vivo PD2547 / V2547A（Android 16，arm64-v8a，SM8850 平台）
+>
 > 报告范围：端侧模型、素材索引、Agent 规划、vivo SDK 执行、真机测评与可靠性优化
 
 ---
@@ -91,8 +94,8 @@ flowchart TD
 
 ### 3.2 当前大脑的实际运行方式
 
-`agent_brain_design.md` 曾设计常驻 `AgentBrainService` 和逐步监督循环，但这部分目前仍是
-后续目标。当前生产实现是：
+`agent_brain_design.md` 已于 2026-10-26 更新为 Agent Runtime v2：受限候选、显式产物流和
+观察点驱动的有界闭环。该目标架构目前尚未实现；当前生产实现仍是：
 
 - `GenieTextPlanner` 每次调用创建一个 `genie-app` 子进程；
 - 单次 `runText()` 超时上限为 30 秒；
@@ -101,7 +104,7 @@ flowchart TD
 - 尚未实现每个工具结果回喂模型后再决定 `revise/finish` 的监督循环；
 - 正常构建使用 `plannerExperiment=baseline`、`plannerEvalOnly=false`。
 
-因此报告中的“当前架构”不把尚未实现的常驻服务和多步自修正描述成已交付能力。
+因此报告中的“当前架构”不把尚未实现的 Runtime v2、常驻服务或多步自修正描述成已交付能力。
 
 ---
 
@@ -425,6 +428,11 @@ UI 选择是确定性事实，不能由模型猜测：
 
 结果文件卡片恢复点击打开能力，无法打开时显示明确错误，而不是静默无响应。
 
+新增 Live Photo 的 VLM 进度也改为由 indexer 的第一条真实工作回调触发。旧实现只统计启动前
+已经存在于 SQLite 的 pending 行；全新 MediaStore 素材尚未入库，因此虽然后台正在跑 QNN，
+界面却不弹进度。现在只要真正开始处理新增/变更素材就显示进度；用户选择“后台运行”后，本轮
+不会被后续逐素材回调反复打扰。
+
 ### 8.2 会话状态
 
 SQLite 会话状态保存：
@@ -572,16 +580,21 @@ pre-router，只缩小候选集合，不直接替模型作出最终意图决定�
 当前 20 条真机集适合回归，但复杂组合、否定表达、多轮指代、选中态和不支持能力覆盖仍不足。
 建议新增独立困难集与留出集，避免围绕固定 20 条过拟合 prompt。
 
-### 12.4 常驻大脑与执行监督尚未落地
+### 12.4 Agent Runtime v2 已完成验收并切换生产默认
 
-当前每次规划都会启动 `genie-app`，模型加载占据主要延迟。后续可评估：
+2026-10-26 已在独立 `agentRuntime=loop` 中实现：
 
-- 常驻 CLI dialog 或 JNI `GenieDialog`；
-- 会话空闲卸载；
-- 工具失败结果回喂模型并允许一次 revise；
-- 明确步数和重试上限。
+- 统一 `AgentRuntimeState`、ArtifactRef 与 ToolSpec；
+- 将 `search_assets` 纳入普通工具循环；
+- 只向模型展示不超过 10 个当前可执行工具；
+- 在检索结果、状态失效或工具失败时局部修订 pending 后缀；
+- 显式串联工具产物，并通过真机完成“检索→三拼→黑白→发布”；
+- 31/31 注册 executor 与 30/30 动态绑定真机验收通过；
+- 生产默认切换为 `agentRuntime=loop`，保留 `agentRuntime=static` 回滚路径。
 
-这些属于下一阶段架构升级，不应在汇报中描述为当前已有能力。
+当前每次模型决策仍会启动 `genie-app`。后续继续扩展真实长链轨迹集，并评估常驻 CLI dialog
+或 JNI `GenieDialog` 以降低多步骤延迟。详细规则、阶段 Gate 和证据见
+`agent_brain_design.md`、`agent_runtime_migration_plan.md` 与 `agent_runtime_v2_validation.md`。
 
 ### 12.5 原生 Thinking 需要独立模型工程
 
@@ -591,6 +604,13 @@ pre-router，只缩小候选集合，不直接替模型作出最终意图决定�
 - NPU 延迟和热负载；
 - reasoning 与最终答案分离；
 - 工具调用准确率，而不只是格式合规率。
+
+### 12.6 相册热更新仍可增强
+
+当前全库增量同步由 `AgentActivity.onCreate()` 触发。App 已在前台时，如果新 Live Photo
+由相机或其他应用写入 MediaStore，系统尚未注册 `ContentObserver` 自动启动新一轮同步；需让
+Activity 真正重建，或通过“+ 素材”选择后在首条指令中按需解析。后续可增加去抖动的
+MediaStore observer / `onResume` 指纹检查，实现无需重启的热更新。
 
 ---
 
@@ -611,6 +631,9 @@ pre-router，只缩小候选集合，不直接替模型作出最终意图决定�
 | UI、会话和审计 | `AgentActivity.kt` |
 | 端侧评测 | `tests/evals/device_harness.py` |
 | 可靠性实测明细 | `android/docs/planner_reliability_plan.md` |
+| Runtime v2 架构 | `android/docs/agent_brain_design.md` |
+| Runtime v2 实施计划 | `android/docs/agent_runtime_migration_plan.md` |
+| Runtime v2 验证记录 | `android/docs/agent_runtime_v2_validation.md` |
 | VLM 时序方案 | `android/docs/vlm_temporal_grid.md` |
 | SDK 离屏探针 | `android/docs/headless_render_findings.md`、`sdk_probe2_findings.md` |
 
@@ -618,8 +641,8 @@ pre-router，只缩小候选集合，不直接替模型作出最终意图决定�
 
 ## 14. 汇报可用的核心结论
 
-1. **完成了真正的端侧闭环，而不是模型 Demo**：素材理解、检索、规划、SDK 执行和相册发布
-   均在手机上完成。
+1. **完成了端侧处理全链路，而不是仅模型 Demo**：素材理解、检索、规划、SDK 执行和相册发布
+   均在手机上完成；这里的“全链路”不等同于工具结果可动态修订计划的 Agent 控制闭环。
 2. **模型与工程边界清晰**：模型负责开放语义，代码负责作用域、兼容性和不可逆操作安全。
 3. **端侧可靠性主要来自减法**：减少槽位、删除冗余工具、过滤不可能候选，比增加 prompt、
    scratchpad 或二次生成更有效。

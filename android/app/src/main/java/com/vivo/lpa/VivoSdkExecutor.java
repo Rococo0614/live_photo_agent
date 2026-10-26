@@ -7,6 +7,7 @@ import android.graphics.Color;
 import android.graphics.Paint;
 import android.media.MediaMetadataRetriever;
 import android.os.Environment;
+import android.util.Log;
 
 import com.vivo.videoeditorsdk.layer.Clip;
 import com.vivo.videoeditorsdk.layer.CropMode;
@@ -60,6 +61,7 @@ public final class VivoSdkExecutor {
     }
 
     private static final long TIMEOUT_SECONDS = 240L;
+    private static final long REVERSE_TIMEOUT_SECONDS = 60L;
     private static final ConcurrentHashMap<String, VideoFactory> ACTIVE =
             new ConcurrentHashMap<String, VideoFactory>();
 
@@ -474,26 +476,47 @@ public final class VivoSdkExecutor {
 
     private static File reverseVideo(String input, File outputDir) throws Exception {
         File output = new File(outputDir, "reversed-output.mp4");
-        File temp = new File(outputDir, "reverse-temp");
-        CountDownLatch done = new CountDownLatch(1);
-        AtomicInteger error = new AtomicInteger(0);
-        VideoReverser reverser = new VideoReverser();
-        reverser.setDataSource(input);
-        reverser.setTargetFile(output.getAbsolutePath());
-        reverser.setTempPath(temp.getAbsolutePath());
-        reverser.setReverseListener(new VideoReverser.ReverseListener() {
-            @Override public void onStart() { }
-            @Override public void onError(int code) { error.set(code == 0 ? -1 : code); done.countDown(); }
-            @Override public void onProgressChange(int percent) { }
-            @Override public void onComplete() { done.countDown(); }
-        });
-        reverser.start();
-        if (!done.await(TIMEOUT_SECONDS, TimeUnit.SECONDS)) throw new IllegalStateException("VideoReverser timeout");
-        reverser.release();
-        if (error.get() != 0 || !output.isFile() || output.length() == 0) {
-            throw new IllegalStateException("VideoReverser failed code=" + error.get());
+        int lastError = 0;
+        for (int attempt = 1; attempt <= 2; attempt++) {
+            // Vendor EditorVideoProcessor leaves codec/surface finalizers queued when several
+            // different tools finish back-to-back. Starting VideoReverser immediately afterwards
+            // can then wait forever without any callback. Give native resources a bounded settle
+            // window; a fresh two-step fit->reverse chain remains fast, while stress no longer
+            // blocks the Agent for the old four-minute timeout.
+            System.gc();
+            System.runFinalization();
+            Thread.sleep(attempt == 1 ? 750L : 1_500L);
+            if (output.exists()) output.delete();
+            File temp = new File(outputDir, "reverse-temp-" + attempt);
+            CountDownLatch done = new CountDownLatch(1);
+            AtomicInteger error = new AtomicInteger(0);
+            VideoReverser reverser = new VideoReverser();
+            try {
+                reverser.setDataSource(input);
+                reverser.setTargetFile(output.getAbsolutePath());
+                reverser.setTempPath(temp.getAbsolutePath());
+                reverser.setReverseListener(new VideoReverser.ReverseListener() {
+                    @Override public void onStart() { }
+                    @Override public void onError(int code) {
+                        error.set(code == 0 ? -1 : code);
+                        done.countDown();
+                    }
+                    @Override public void onProgressChange(int percent) { }
+                    @Override public void onComplete() { done.countDown(); }
+                });
+                reverser.start();
+                boolean completed = done.await(REVERSE_TIMEOUT_SECONDS, TimeUnit.SECONDS);
+                lastError = completed ? error.get() : -2;
+                if (completed && lastError == 0 && output.isFile() && output.length() > 0) {
+                    return output;
+                }
+                Log.w("VivoSdkExecutor", "VideoReverser attempt " + attempt
+                        + " failed code=" + lastError + ", retrying=" + (attempt < 2));
+            } finally {
+                reverser.release();
+            }
         }
-        return output;
+        throw new IllegalStateException("VideoReverser failed after retry code=" + lastError);
     }
 
     private static long mediaDuration(File file) {

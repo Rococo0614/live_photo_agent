@@ -15,6 +15,12 @@ val plannerEvalOnly = providers.gradleProperty("plannerEvalOnly")
 require(plannerEvalOnly in setOf("true", "false")) {
     "plannerEvalOnly must be true or false"
 }
+val agentRuntime = providers.gradleProperty("agentRuntime")
+    .orElse("loop")
+    .get()
+require(agentRuntime in setOf("static", "loop")) {
+    "agentRuntime must be one of static, loop"
+}
 
 android {
     namespace = "com.vivo.lpa"
@@ -27,6 +33,7 @@ android {
         targetSdk = 36
         versionCode = 1
         versionName = "0.1-mobile-agent"
+        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         // One APK source, four reproducible planner arms. Baseline stays the default so a normal
         // build cannot accidentally ship an experimental prompt. Build an arm with e.g.
         // `./gradlew assembleDebug -PplannerExperiment=two_turn`.
@@ -34,6 +41,10 @@ android {
         // Test APKs may stop after PLAN_FINAL to measure the planner without repeatedly exporting
         // media. Normal builds always default to false.
         buildConfigField("boolean", "PLANNER_EVAL_ONLY", plannerEvalOnly)
+        // Runtime architecture is independent from planner prompt experiments. Runtime v2 became
+        // the default only after all 31 executors and 30 dynamic binding cases passed on device;
+        // `-PagentRuntime=static` remains the explicit rollback path.
+        buildConfigField("String", "AGENT_RUNTIME", "\"$agentRuntime\"")
         ndk {
             // 两台真机都是 arm64-v8a，只打这一个 ABI，包体减半
             abiFilters += "arm64-v8a"
@@ -86,4 +97,7 @@ dependencies {
     implementation("androidx.appcompat:appcompat:1.7.0")
     implementation("androidx.core:core-ktx:1.13.1")
     implementation("com.microsoft.onnxruntime:onnxruntime-android:1.19.2")
+    testImplementation("junit:junit:4.13.2")
+    androidTestImplementation("androidx.test:runner:1.6.2")
+    androidTestImplementation("androidx.test.ext:junit:1.2.1")
 }

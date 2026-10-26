@@ -3,6 +3,10 @@
 完整的端侧部署、问题修复、测评数据与当前状态见：
 [`on_device_deployment_technical_report.md`](on_device_deployment_technical_report.md)。
 
+下一阶段 Agent Runtime 架构与分阶段实施计划见：
+[`agent_brain_design.md`](agent_brain_design.md) 和
+[`agent_runtime_migration_plan.md`](agent_runtime_migration_plan.md)。
+
 The Android module is now the phone-side shell for the Python Live Photo Agent.
 
 ## Runtime boundary

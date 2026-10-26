@@ -344,11 +344,14 @@ def score(case: dict[str, Any], result: CaseResult) -> dict[str, Any]:
     traces = [e["payload"] for e in result.events if e["kind"] == "TRACE"]
     brains = [_json_payload(e["payload"]) for e in result.events if e["kind"] == "PLAN_BRAIN"]
     intents = [_json_payload(e["payload"]) for e in result.events if e["kind"] == "INTENT_BRAIN"]
+    runtime_brains = [_json_payload(e["payload"]) for e in result.events if e["kind"] == "RUNTIME_BRAIN"]
     finals = [_json_payload(e["payload"]) for e in result.events if e["kind"] == "PLAN_FINAL"]
     tools = [t for f in finals for t in f.get("tool_calls", [])]
     tool_names = [t.get("tool") for t in tools]
 
-    intent_called = any("端侧大脑正在理解请求" in t for t in traces)
+    runtime_routes = [b for b in runtime_brains if b.get("stage") in ("route", "route_retry")]
+    runtime_binds = [b for b in runtime_brains if b.get("stage") in ("bind", "revise", "revise_retry")]
+    intent_called = any("端侧大脑正在理解请求" in t for t in traces) or bool(runtime_routes)
     # INTENT_BRAIN is logged for every intent attempt, parsed or not. Before it existed the
     # only intent rows in PLAN_BRAIN were the ones that took the chat fast-path, which made
     # intent_returned_tools structurally unmeasurable (planner_reliability_plan.md §3.4).
@@ -356,6 +359,9 @@ def score(case: dict[str, Any], result: CaseResult) -> dict[str, Any]:
     intent_brain = intents[-1] if intents else next(
         (b for b in brains if b.get("source") == "qnn_genie_intent"), None)
     step_brain = next((b for b in brains if b.get("source") == "qnn_genie"), None)
+    runtime_route = next((b for b in reversed(runtime_routes) if b.get("parsed")), None)
+    if runtime_route:
+        intent_brain = runtime_route
 
     final = finals[-1] if finals else {}
     # PLAN_FINAL.source is "fallback" exactly when the brain ran but failed to parse and the
@@ -376,8 +382,14 @@ def score(case: dict[str, Any], result: CaseResult) -> dict[str, Any]:
     wants_edit = (case.get("expect", {}).get("outcome") == "plan")
     swallowed = wants_edit and bool(intent_brain) and not tool_names and not executed
     intent_elapsed = (intent_brain or {}).get("elapsed_ms")
-    plan_elapsed = (step_brain or {}).get("elapsed_ms")
+    plan_elapsed = (
+        sum(b.get("elapsed_ms", 0) for b in runtime_binds if isinstance(b.get("elapsed_ms"), (int, float)))
+        if runtime_binds else (step_brain or {}).get("elapsed_ms")
+    )
     turn_elapsed = sum(v for v in (intent_elapsed, plan_elapsed) if isinstance(v, (int, float)))
+    runtime_step_raw = "\n".join(
+        str(b.get("raw_output") or "") for b in runtime_binds if b.get("stage") == "bind"
+    ).strip()
 
     metrics: dict[str, Any] = {
         "events_seen": len(result.events),
@@ -386,7 +398,7 @@ def score(case: dict[str, Any], result: CaseResult) -> dict[str, Any]:
             _intent_tool_calls(intent_brain.get("raw_output", ""))),
         # Only meaningful once INTENT_BRAIN rows exist; on legacy reports the intent sample
         # is chat-fast-path-only and this field must not be read as a rate.
-        "intent_trace_complete": bool(intents),
+        "intent_trace_complete": bool(intents) or bool(runtime_routes),
         "chat_swallowed_edit": swallowed,
         "retrieved": any("语义检索" in t for t in traces),
         "keyword_fallback": final_source == "fallback",
@@ -395,7 +407,7 @@ def score(case: dict[str, Any], result: CaseResult) -> dict[str, Any]:
         "clarification": clarification if clarified else None,
         "planned_tools": tool_names,
         "executed": executed,
-        "step_raw": (step_brain or {}).get("raw_output", ""),
+        "step_raw": runtime_step_raw or (step_brain or {}).get("raw_output", ""),
         "intent_raw": (intent_brain or {}).get("raw_output", ""),
         "latency_ms": {
             "turn": turn_elapsed or None,

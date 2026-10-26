@@ -72,6 +72,13 @@
             android:name=".AgentKeepAliveService"
             android:exported="false"
             android:foregroundServiceType="dataSync" />
+
+        <!-- VideoReverser inherits poisoned codec state after several heterogeneous SDK calls.
+             Keep it in a disposable process; the bound service exits after every result. -->
+        <service
+            android:name=".ReverseWorkerService"
+            android:exported="false"
+            android:process=":reverse_worker" />
     </application>
 
 </manifest>

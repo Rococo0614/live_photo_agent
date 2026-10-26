@@ -68,6 +68,8 @@ class AgentActivity : Activity() {
     private var libraryReady: Int = 0
     private var libraryPending: Int = 0
     private var libraryIndexDialog: AlertDialog? = null
+    /** User chose “后台运行” for this sync; later per-asset callbacks must not reopen it. */
+    private var libraryIndexDialogDismissed = false
     private var preparedAssets: List<PreparedAsset> = emptyList()
     /**
      * Assets the user tapped in the strip.
@@ -346,6 +348,7 @@ preparedAssets = prepared
 
     private fun startLibrarySync() {
         librarySyncing = true
+        libraryIndexDialogDismissed = false
         val db = LibraryDatabase(this)
         libraryTotal = 0
         libraryReady = 0
@@ -365,6 +368,14 @@ preparedAssets = prepared
                     libraryProgressText = message
                     ui {
                         state.text = "素材库索引 | $message"
+                        // The pre-sync counters only describe rows already in SQLite. A newly
+                        // added MediaStore Live Photo is absent from those counters, so the old
+                        // `libraryTotal > libraryReady` check showed no dialog even while QNN VLM
+                        // was genuinely analysing it in the background. The first real indexer
+                        // callback is the authoritative signal that work exists.
+                        if (libraryIndexDialog == null && !libraryIndexDialogDismissed) {
+                            showIndexingProgress()
+                        }
                         updateIndexingProgress(message)
                     }
                 }
@@ -403,7 +414,11 @@ preparedAssets = prepared
         builder.setTitle("VLM 素材分析进度")
         builder.setMessage("正在分析素材 ${libraryReady}/${libraryTotal}...")
         builder.setCancelable(false)
-        builder.setPositiveButton("后台运行") { dialog, _ -> dialog.dismiss(); libraryIndexDialog = null }
+        builder.setPositiveButton("后台运行") { dialog, _ ->
+            libraryIndexDialogDismissed = true
+            dialog.dismiss()
+            libraryIndexDialog = null
+        }
         libraryIndexDialog = builder.show()
     }
 
@@ -707,6 +722,86 @@ preparedAssets = prepared
                         .put("format_elapsed_ms", trace.formatElapsedMs)
                         .put("raw_output", trace.rawOutput))
                 }
+                override fun onRuntimeRoute(route: SemanticRoute, trace: BrainTrace) {
+                    // Serialize on the worker thread before later state transitions can replace
+                    // the route/trace objects queued for UI audit.
+                    val payload = JSONObject()
+                        .put("query", query)
+                        .put("source", trace.source)
+                        .put("parsed", trace.parsed)
+                        .put("elapsed_ms", trace.elapsedMs)
+                        .put("raw_output", trace.rawOutput)
+                        .put("route", semanticRouteJson(route))
+                    uiFor(generation) {
+                        logAudit("ROUTE_BRAIN", payload)
+                        val visible = route.steps.joinToString(" → ") { it.family.name }
+                        if (visible.isNotBlank()) thinking("任务路线：$visible")
+                    }
+                }
+                override fun onRuntimeBrainTrace(stage: String, trace: BrainTrace) {
+                    val payload = JSONObject()
+                        .put("query", query)
+                        .put("stage", stage)
+                        .put("source", trace.source)
+                        .put("parsed", trace.parsed)
+                        .put("prompt_chars", trace.promptChars)
+                        .put("elapsed_ms", trace.elapsedMs)
+                        .put("strategy", trace.strategy)
+                        .put("raw_output", trace.rawOutput)
+                    uiFor(generation) { logAudit("RUNTIME_BRAIN", payload) }
+                }
+                override fun onToolCatalog(
+                    routeStep: SemanticRouteStep,
+                    decision: ToolCatalogDecision
+                ) {
+                    val payload = JSONObject()
+                        .put("query", query)
+                        .put("route_step_id", routeStep.stepId)
+                        .put("family", routeStep.family.name)
+                        .put("available_count", decision.available.size)
+                        .put("available", JSONArray(decision.available.map { spec ->
+                            JSONObject().put("id", spec.id).put("description", spec.description)
+                        }))
+                        .put("excluded", JSONObject(decision.excluded))
+                    uiFor(generation) { logAudit("TOOL_CATALOG", payload) }
+                }
+                override fun onRuntimePlan(plan: RuntimePlan) {
+                    val payload = runtimePlanJson(plan).put("query", query)
+                    uiFor(generation) { logAudit("PLAN_VERSION", payload) }
+                }
+                override fun onStateDelta(
+                    stepId: String,
+                    delta: StateDelta,
+                    runtimeState: AgentRuntimeState
+                ) {
+                    val payload = JSONObject()
+                        .put("query", query)
+                        .put("step_id", stepId)
+                        .put("delta", stateDeltaJson(delta))
+                        .put("state", JSONObject()
+                            .put("turn_id", runtimeState.turnId)
+                            .put("plan_version", runtimeState.plan?.version ?: 0)
+                            .put("asset_ids", JSONArray(runtimeState.sourceAssets.map { it.assetId }))
+                            .put("selected_asset_ids", JSONArray(runtimeState.selectedAssetIds))
+                            .put("layout_version", runtimeState.layoutVersion)
+                            .put("artifact_ids", JSONArray(runtimeState.artifacts.keys.toList()))
+                            .put("executed_count", runtimeState.executedCount)
+                            .put("replan_count", runtimeState.replanCount)
+                            .put("status", runtimeState.status.name.lowercase()))
+                    uiFor(generation) { logAudit("STATE_DELTA", payload) }
+                }
+                override fun onRuntimeTerminal(runtimeState: AgentRuntimeState, message: String) {
+                    val payload = JSONObject()
+                        .put("query", query)
+                        .put("turn_id", runtimeState.turnId)
+                        .put("plan_version", runtimeState.plan?.version ?: 0)
+                        .put("status", runtimeState.status.name.lowercase())
+                        .put("message", message)
+                        .put("published_uris", JSONArray(runtimeState.publishedUris.map(Uri::toString)))
+                        .put("executed_count", runtimeState.executedCount)
+                        .put("replan_count", runtimeState.replanCount)
+                    uiFor(generation) { logAudit("TERMINAL", payload) }
+                }
                 override fun onPlan(plan: MobilePlan) = uiFor(generation) {
                     lastPlan = plan.toJson()
                     lastToolResults.clear()
@@ -770,6 +865,11 @@ preparedAssets = prepared
                         .put("reason", call.reason))
                 }
                 override fun onResult(result: MobileToolResult) = uiFor(generation) {
+                    logAudit("TOOL_RESULT", JSONObject()
+                        .put("query", query)
+                        .put("tool", result.tool)
+                        .put("success", result.success)
+                        .put("payload", JSONObject(result.payload.toString())))
                     when (result.tool) {
                         "template_collage", "layout_swap", "asset_replace" -> {
                             // Only adopt a layout that actually carries slots; asset_replace emits
@@ -798,7 +898,8 @@ preparedAssets = prepared
                         .put("success", result.success)
                         .put("payload", result.payload)
                     persistSessionState()
-                    thinking("${result.tool} 已完成")
+                    thinking(if (result.success) "${result.tool} 已完成" else
+                        "${result.tool} 失败：${result.payload.optString("message")}")
                 }
                 override fun onFinished(uri: Uri?, message: String) = uiFor(generation) {
                     resetProgressBar()
@@ -930,6 +1031,87 @@ preparedAssets = prepared
      */
     private fun logAudit(kind: String, payload: JSONObject) {
         runCatching { LibraryDatabase(this).logEvent(kind, payload.toString()) }
+    }
+
+    private fun semanticRouteJson(route: SemanticRoute): JSONObject = JSONObject()
+        .put("user_goal", route.userGoal)
+        .put("reply", route.reply ?: JSONObject.NULL)
+        .put("clarification", route.clarification ?: JSONObject.NULL)
+        .put("steps", JSONArray(route.steps.map { step ->
+            JSONObject()
+                .put("step_id", step.stepId)
+                .put("family", step.family.name)
+                .put("instruction", step.instruction)
+                .put("requested_count", step.requestedCount ?: JSONObject.NULL)
+                .put("required_media", step.requiredMedia?.name ?: JSONObject.NULL)
+        }))
+
+    private fun runtimePlanJson(plan: RuntimePlan): JSONObject = JSONObject()
+        .put("plan_id", plan.planId)
+        .put("version", plan.version)
+        .put("parent_version", plan.parentVersion ?: JSONObject.NULL)
+        .put("revision_reason", plan.revisionReason)
+        .put("route", semanticRouteJson(plan.route))
+        .put("steps", JSONArray(plan.steps.map { step ->
+            JSONObject()
+                .put("step_id", step.stepId)
+                .put("family", step.family.name)
+                .put("tool", step.tool)
+                .put("arguments", JSONObject(step.arguments.toString()))
+                .put("inputs", JSONArray(step.inputs.map { input ->
+                    when (input) {
+                        is AgentInputRef.AssetSet -> JSONObject()
+                            .put("type", "asset_set")
+                            .put("asset_ids", JSONArray(input.assetIds))
+                        is AgentInputRef.Artifact -> JSONObject()
+                            .put("type", "artifact")
+                            .put("artifact_id", input.artifactId)
+                        is AgentInputRef.Layout -> JSONObject()
+                            .put("type", "layout")
+                            .put("version", input.version)
+                    }
+                }))
+                .put("status", step.status.name.lowercase())
+                .put("idempotency_key", step.idempotencyKey)
+        }))
+
+    private fun stateDeltaJson(delta: StateDelta): JSONObject = when (delta) {
+        is StateDelta.AddAssets -> JSONObject()
+            .put("type", "add_assets")
+            .put("asset_ids", JSONArray(delta.assets.map { it.assetId }))
+        is StateDelta.ReplaceAsset -> JSONObject()
+            .put("type", "replace_asset")
+            .put("old_asset_id", delta.oldAssetId)
+            .put("new_asset_id", delta.asset.assetId)
+        is StateDelta.RemapSelection -> JSONObject()
+            .put("type", "remap_selection")
+            .put("replacements", JSONObject(delta.replacements))
+        is StateDelta.AddArtifact -> JSONObject()
+            .put("type", "add_artifact")
+            .put("artifact_id", delta.artifact.artifactId)
+            .put("kind", delta.artifact.kind.name)
+            .put("validated", delta.artifact.validated)
+        is StateDelta.ValidateArtifact -> JSONObject()
+            .put("type", "validate_artifact").put("artifact_id", delta.artifactId)
+        is StateDelta.UpdateLayout -> JSONObject()
+            .put("type", "update_layout")
+            .put("template_id", delta.layout.optString("template_id"))
+            .put("slot_count", delta.layout.optJSONArray("items")?.length() ?: 0)
+        is StateDelta.MarkStepCompleted -> JSONObject()
+            .put("type", "step_completed").put("step_id", delta.stepId)
+        is StateDelta.MarkStepFailed -> JSONObject()
+            .put("type", "step_failed").put("step_id", delta.stepId).put("message", delta.message)
+        is StateDelta.PublishArtifact -> JSONObject()
+            .put("type", "publish_artifact")
+            .put("artifact_id", delta.artifactId)
+            .put("uri", delta.uri.toString())
+        is StateDelta.SetStatus -> JSONObject()
+            .put("type", "set_status")
+            .put("status", delta.status.name)
+            .put("message", delta.message ?: JSONObject.NULL)
+        is StateDelta.Batch -> JSONObject()
+            .put("type", "batch")
+            .put("deltas", JSONArray(delta.deltas.map(::stateDeltaJson)))
     }
 
     /**
@@ -1124,6 +1306,15 @@ preparedAssets = prepared
             }
         }
         taskStatus = saved.optString("task_status", "idle")
+        saved.optJSONObject("runtime_checkpoint")?.let { checkpoint ->
+            if (checkpoint.optString("status") == "running") {
+                // The first runtime-v2 release resumes only at a user decision, never by silently
+                // repeating an SDK side effect after process death. Keep the checkpoint for audit
+                // and report the interruption explicitly.
+                taskStatus = "interrupted"
+                append("上次端侧工具链在步骤边界外中断，系统未自动重复执行；可重新发送指令继续。")
+            }
+        }
 
         selectedAssetIds.clear()
         saved.optJSONArray("selected_asset_ids")?.let { values ->
@@ -1342,6 +1533,8 @@ preparedAssets = prepared
         }
         val toolResults = JSONArray()
         lastToolResults.forEach(toolResults::put)
+        val database = LibraryDatabase(this)
+        val existing = runCatching { database.sessionState(sessionId) }.getOrDefault(JSONObject())
         val state = JSONObject()
             .put("schema_version", 1)
             .put("task_status", taskStatus)
@@ -1355,8 +1548,16 @@ preparedAssets = prepared
             .put("last_tool_results", toolResults)
             .put("last_result_uri", lastResult?.toString() ?: "")
             .put("last_result_message", lastResultMessage)
+        // MobileAgentLoop checkpoints on the worker thread. UI persistence must carry those
+        // fields forward instead of replacing the whole session JSON and erasing recovery data.
+        if (existing.has("runtime_state_version")) {
+            state.put("runtime_state_version", existing.optInt("runtime_state_version"))
+        }
+        existing.optJSONObject("runtime_checkpoint")?.let {
+            state.put("runtime_checkpoint", JSONObject(it.toString()))
+        }
         if (!error.isNullOrBlank()) state.put("last_error", error)
-        runCatching { LibraryDatabase(this).saveSessionState(sessionId, state) }
+        runCatching { database.saveSessionState(sessionId, state) }
     }
 
     private fun decodePreparedAssets(values: JSONArray?): List<PreparedAsset> = buildList {

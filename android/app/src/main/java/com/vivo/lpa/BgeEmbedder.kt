@@ -9,17 +9,18 @@ import java.nio.LongBuffer
 import kotlin.math.sqrt
 
 /** CPU ONNX BGE encoder matching the web project's 512-dim search embeddings. */
-class BgeEmbedder(context: Context) {
+class BgeEmbedder(context: Context) : AutoCloseable {
     private val root = File(ModelPack.root(context), "bge")
     private val model = File(root, "bge_small_zh_v1_5.onnx")
     private val tokenizer = File(root, "vocab.txt")
     private val environment by lazy { OrtEnvironment.getEnvironment() }
-    private val session by lazy {
+    private val sessionHolder = lazy {
         environment.createSession(model.absolutePath, OrtSession.SessionOptions().apply {
             setIntraOpNumThreads(2)
             setInterOpNumThreads(1)
         })
     }
+    private val session by sessionHolder
     private val encoder by lazy { BertTokenizer(tokenizer) }
 
     fun available(): Boolean = model.isFile && tokenizer.isFile
@@ -40,5 +41,9 @@ class BgeEmbedder(context: Context) {
                 return FloatArray(vector.size) { index -> vector[index] / scale }
             }
         } } }
+    }
+
+    override fun close() {
+        if (sessionHolder.isInitialized()) sessionHolder.value.close()
     }
 }

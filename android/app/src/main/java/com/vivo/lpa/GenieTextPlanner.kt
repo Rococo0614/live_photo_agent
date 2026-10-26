@@ -119,6 +119,321 @@ class GenieTextPlanner(private val context: Context, private val sessionId: Stri
         return parsed.copy(brainTrace = lastTrace)
     }
 
+    /**
+     * Runtime-v2 route planning. The model sees eight semantic families rather than the concrete
+     * thirty-tool registry, so it can state the whole goal before retrieval without guessing an
+     * SDK implementation or an asset id.
+     */
+    fun tryRoute(
+        query: String,
+        state: AgentRuntimeState,
+        correction: String = ""
+    ): RoutePlanningResult? {
+        if (!ModelPack.qwenReady(context)) return null
+        val prompt = runtimeRoutePrompt(query, state, correction)
+        val run = timedRunText(prompt, 384)
+        val trace = BrainTrace(
+            source = "qnn_genie_route",
+            rawOutput = run.text,
+            promptChars = prompt.length,
+            elapsedMs = run.elapsedMs,
+            strategy = "runtime_loop"
+        )
+        lastTrace = trace
+        val route = parseRuntimeRoute(run.text, query, state) ?: return null
+        val parsedTrace = trace.copy(parsed = true)
+        lastTrace = parsedTrace
+        return RoutePlanningResult(route, parsedTrace)
+    }
+
+    /** Repairs an unusable RETRIEVE instruction without falling back to keyword-selected media. */
+    fun tryRetrieveSpec(
+        query: String,
+        requestedCount: Int,
+        requiredMedia: RuntimeMediaKind?
+    ): RetrievalPlanningResult? {
+        if (!ModelPack.qwenReady(context)) return null
+        val prompt = runtimeRetrievalPrompt(query, requestedCount, requiredMedia)
+        val run = timedRunText(prompt, 192)
+        val trace = BrainTrace(
+            source = "qnn_genie_retrieval",
+            rawOutput = run.text,
+            promptChars = prompt.length,
+            elapsedMs = run.elapsedMs,
+            strategy = "runtime_loop"
+        )
+        lastTrace = trace
+        val row = Regex("(?im)^\\s*(?:SEARCH|RETRIEVE_QUERY)\\s*=\\s*(.+)$")
+            .find(run.text)?.groupValues?.get(1) ?: return null
+        val parts = row.split('|')
+        if (parts.size !in 1..3) return null
+        val searchQuery = parts[0].trim().takeIf { it.isNotBlank() } ?: return null
+        val modelCount = parts.getOrNull(1)?.trim()?.toIntOrNull()?.takeIf { it > 0 }
+        val modelMedia = when (parts.getOrNull(2)?.trim()?.lowercase()) {
+            "image", "photo", "图片", "照片" -> RuntimeMediaKind.IMAGE
+            "video", "视频" -> RuntimeMediaKind.VIDEO
+            "livephoto", "live_photo", "live photo", "动态照片" -> RuntimeMediaKind.LIVE_PHOTO
+            else -> null
+        }
+        val parsedTrace = trace.copy(parsed = true)
+        lastTrace = parsedTrace
+        return RetrievalPlanningResult(
+            RetrievalSpec(
+                searchQuery,
+                requestedCount.takeIf { it > 0 } ?: modelCount ?: 3,
+                requiredMedia ?: modelMedia
+            ),
+            parsedTrace
+        )
+    }
+
+    /** Bind one semantic route step against the <=10 concrete tools available in this state. */
+    fun tryBindStep(
+        query: String,
+        routeStep: SemanticRouteStep,
+        state: AgentRuntimeState,
+        catalog: ToolCatalogDecision,
+        observation: String = ""
+    ): BoundToolResult? {
+        if (!ModelPack.qwenReady(context) || catalog.available.isEmpty()) return null
+        require(catalog.available.size <= MobileToolRegistry.MAX_VISIBLE_TOOLS)
+        val prompt = runtimeBindPrompt(query, routeStep, state, catalog, observation)
+        val run = timedRunText(prompt, 256)
+        val trace = BrainTrace(
+            source = "qnn_genie_bind",
+            rawOutput = run.text,
+            promptChars = prompt.length,
+            elapsedMs = run.elapsedMs,
+            strategy = "runtime_loop"
+        )
+        lastTrace = trace
+        val call = parseBoundCall(run.text, state, catalog.available.map { it.id }.toSet())
+            ?: return null
+        val parsedTrace = trace.copy(parsed = true)
+        lastTrace = parsedTrace
+        return BoundToolResult(call, parsedTrace)
+    }
+
+    /** Replaces only the unexecuted semantic suffix after an observation or tool failure. */
+    fun tryReviseRoute(
+        query: String,
+        state: AgentRuntimeState,
+        completed: List<SemanticRouteStep>,
+        pending: List<SemanticRouteStep>,
+        observation: String
+    ): RoutePlanningResult? {
+        if (!ModelPack.qwenReady(context)) return null
+        val prompt = runtimeRevisePrompt(query, state, completed, pending, observation)
+        val run = timedRunText(prompt, 384)
+        val trace = BrainTrace(
+            source = "qnn_genie_revise",
+            rawOutput = run.text,
+            promptChars = prompt.length,
+            elapsedMs = run.elapsedMs,
+            strategy = "runtime_loop"
+        )
+        lastTrace = trace
+        val route = parseRuntimeRoute(run.text, query, state) ?: return null
+        val parsedTrace = trace.copy(parsed = true)
+        lastTrace = parsedTrace
+        return RoutePlanningResult(route, parsedTrace)
+    }
+
+    private fun parseRuntimeRoute(
+        text: String,
+        query: String,
+        state: AgentRuntimeState
+    ): SemanticRoute? {
+        val countDatabase = LibraryDatabase(context)
+        val explicitCount = try {
+            countDatabase.requestedCount(query, 0).takeIf { it > 0 }
+        } finally {
+            countDatabase.close()
+        }
+        val explicitMedia = explicitMediaRequirement(query)
+        val routePattern = Regex(
+            "(?im)^\\s*(ROUTE|RETRY|RETRIEVE|COMPOSE|STYLE|TEMPORAL|LAYOUT|REPLACE|ANALYZE|PUBLISH)" +
+                "(?:\\s*=\\s*(.*))?\\s*$"
+        )
+        val allowedFamilies = runtimeRouteFamilies(state)
+        val steps = routePattern.findAll(text).mapNotNull { match ->
+                val key = match.groupValues[1].uppercase()
+                val parts = match.groupValues[2].split('|')
+                val family: ToolFamily
+                val argumentOffset: Int
+                if (key == "ROUTE" || key == "RETRY") {
+                    family = runCatching {
+                        ToolFamily.valueOf(parts.getOrNull(0)?.trim()?.uppercase().orEmpty())
+                    }.getOrNull() ?: return@mapNotNull null
+                    argumentOffset = 1
+                } else {
+                    family = runCatching { ToolFamily.valueOf(key) }.getOrNull()
+                        ?: return@mapNotNull null
+                    argumentOffset = 0
+                }
+                if (family !in allowedFamilies) return@mapNotNull null
+                if (parts.size - argumentOffset !in 0..3) return@mapNotNull null
+                val instruction = parts.getOrNull(argumentOffset)?.trim().orEmpty()
+                if (family == ToolFamily.RETRIEVE && state.sourceAssets.isEmpty() && instruction.isBlank()) {
+                    return@mapNotNull null
+                }
+                val modelCount = parts.getOrNull(argumentOffset + 1)
+                    ?.trim()?.toIntOrNull()?.takeIf { it > 0 }
+                SemanticRouteStep(
+                    stepId = "route-${family.name.lowercase()}-${match.range.first}",
+                    family = family,
+                    instruction = instruction,
+                    requestedCount = if (family == ToolFamily.RETRIEVE) {
+                        explicitCount ?: modelCount
+                    } else modelCount,
+                    // A model must not narrow retrieval to IMAGE merely because it imagined a
+                    // representation. Media is a hard search constraint only when the user named it.
+                    requiredMedia = explicitMedia
+                )
+            }
+            // Negative-only safety guard: never add a capability from keywords, but prevent the
+            // model from inventing destructive temporal edits (the nine-collage route once added
+            // "裁剪与倒放" although the user requested neither). Open-ended semantic selection
+            // remains the model's job; this only removes a known, auditable hallucinated family.
+            .filter { step -> routeStepExplicitlyRequested(step.family, query, state) }
+            .take(8)
+            .fold(mutableListOf<SemanticRouteStep>()) { acc, step ->
+                if (acc.lastOrNull()?.family == step.family &&
+                    acc.lastOrNull()?.instruction == step.instruction
+                ) acc else acc.apply { add(step) }
+            }
+        if (steps.isNotEmpty()) {
+            if (state.sourceAssets.isEmpty() && steps.first().family != ToolFamily.RETRIEVE) return null
+            val hasActualOperation = steps.any {
+                it.family !in setOf(ToolFamily.RETRIEVE, ToolFamily.PUBLISH)
+            }
+            // Retrieval plus publish is not a media edit. Reject this incomplete route rather than
+            // letting a structurally valid plan silently omit the user's requested operation.
+            if (MobilePlanner.isExplicitEditQuery(query) && !hasActualOperation) return null
+            return SemanticRoute(query, steps)
+        }
+
+        val question = field(text, "QUESTION").ifBlank { field(text, "ASK") }
+        if (question.isNotBlank()) return SemanticRoute(query, emptyList(), clarification = question)
+        val reply = field(text, "REPLY")
+        if (reply.isNotBlank()) return SemanticRoute(query, emptyList(), reply = reply)
+        return null
+    }
+
+    private fun explicitMediaRequirement(query: String): RuntimeMediaKind? {
+        val lower = query.lowercase()
+        return when {
+            listOf("live photo", "livephoto", "动态照片", "实况照片").any(lower::contains) ->
+                RuntimeMediaKind.LIVE_PHOTO
+            listOf("视频", "video", "clip").any(lower::contains) -> RuntimeMediaKind.VIDEO
+            listOf("普通图片", "静态图片", "jpg", "jpeg", "png", "still image").any(lower::contains) ->
+                RuntimeMediaKind.IMAGE
+            else -> null
+        }
+    }
+
+    private fun hasExplicitTemporalAction(query: String): Boolean {
+        val lower = query.lowercase()
+        return listOf(
+            "裁剪", "截取", "剪成", "trim", "倒放", "reverse", "变速", "加速", "慢放",
+            "speed", "镜像", "翻转", "反转", "mirror", "flip", "转场", "transition",
+            "缩放效果", "时间线", "换封面", "设置封面", "display frame"
+        ).any(lower::contains)
+    }
+
+    /**
+     * Negative-only guard: a model may discover an open-ended synonym, but it may not append a
+     * whole operation family that has no evidence at all in the literal request. This function
+     * never adds a family or selects a concrete tool.
+     */
+    private fun routeStepExplicitlyRequested(
+        family: ToolFamily,
+        query: String,
+        state: AgentRuntimeState
+    ): Boolean {
+        val lower = query.lowercase()
+        fun any(vararg terms: String) = terms.any(lower::contains)
+        return when (family) {
+            ToolFamily.RETRIEVE -> state.sourceAssets.isEmpty() || any(
+                "找", "搜索", "相册", "选择", "我的", "find", "search", "from album"
+            )
+            ToolFamily.COMPOSE -> any(
+                "拼", "拼接", "拼图", "拼贴", "模板", "模版", "版式", "堆叠",
+                "collage", "compose", "stack", "transition", "转场"
+            )
+            ToolFamily.STYLE -> any(
+                "滤镜", "调色", "颜色", "色调", "黑白", "灰度", "暖", "冷", "复古",
+                "鲜艳", "提亮", "锐化", "降噪", "美颜", "虚化", "模糊", "动感",
+                "光效", "贴纸", "边框", "水印", "filter", "style", "color", "tone",
+                "bright", "sharpen", "denoise", "beauty", "blur", "sticker", "watermark"
+            )
+            ToolFamily.TEMPORAL -> hasExplicitTemporalAction(query)
+            ToolFamily.LAYOUT -> any(
+                "交换", "换位置", "布局", "版式", "换模板", "换模版", "swap", "layout"
+            )
+            ToolFamily.REPLACE -> any(
+                "替换素材", "换成", "换掉", "更换素材", "replace"
+            )
+            ToolFamily.ANALYZE -> any(
+                "摘要", "识别", "内容", "主色", "配色", "色板", "取色", "xdr",
+                "summary", "analyze", "palette", "dominant"
+            )
+            ToolFamily.PUBLISH -> true
+        }
+    }
+
+    private fun parseBoundCall(
+        text: String,
+        state: AgentRuntimeState,
+        allowedTools: Set<String>
+    ): MobileToolCall? {
+        val row = Regex("(?im)^\\s*STEP\\s*=\\s*(.+)$").find(text)?.groupValues?.get(1)
+            ?: return null
+        val parts = row.split('|')
+        if (parts.size !in 1..2) return null
+        val tool = parts[0].trim()
+        if (tool !in allowedTools || !MobileToolRegistry.supports(tool)) return null
+        val effectField = parts.getOrNull(1)?.trim().orEmpty()
+        val timeMatches = Regex("@\\s*(\\d+)\\s*-\\s*(\\d+)").findAll(effectField).toList()
+        val ordinalMatches = Regex("#\\s*(\\d+)").findAll(effectField).toList()
+        if (timeMatches.size > 1 || ordinalMatches.size > 1) return null
+        if (timeMatches.isNotEmpty() && tool != "clip_trim") return null
+        if (ordinalMatches.isNotEmpty() && tool == "template_collage") return null
+        val timeMatch = timeMatches.singleOrNull()
+        val ordinalMatch = ordinalMatches.singleOrNull()
+        val effect = effectField
+            .replace(Regex("@\\s*\\d+\\s*-\\s*\\d+"), "")
+            .replace(Regex("#\\s*\\d+"), "")
+            .trim()
+            .takeUnless { it.equals("effect", ignoreCase = true) }
+            .orEmpty()
+        val args = JSONObject()
+        if (effect.isNotEmpty()) args.put("effect", effect)
+        timeMatch?.groupValues?.getOrNull(1)?.toLongOrNull()?.let { args.put("start_ms", it) }
+        timeMatch?.groupValues?.getOrNull(2)?.toLongOrNull()?.let { args.put("end_ms", it) }
+
+        val assets = state.sourceAssets
+        val selected = state.selectedAssetIds.filter { id -> assets.any { it.assetId == id } }
+        val ordinal = ordinalMatch?.groupValues?.getOrNull(1)?.toIntOrNull()
+        if (ordinalMatch != null && (ordinal == null || ordinal !in 1..assets.size)) return null
+        val ordinalId = ordinal?.takeIf { it in 1..assets.size }?.let { assets[it - 1].assetId }
+        val scope = when {
+            tool == "layout_swap" -> selected.takeIf { it.size == 2 } ?: return null
+            tool == "asset_replace" -> selected.takeIf { it.size == 1 } ?: return null
+            tool == "template_collage" -> assets.map { it.assetId }
+            ordinalId != null && (selected.isEmpty() || ordinalId in selected) -> listOf(ordinalId)
+            selected.isNotEmpty() -> selected
+            else -> assets.map { it.assetId }
+        }
+        if (scope.isNotEmpty()) args.put("asset_ids", JSONArray(scope))
+        if (tool == "asset_replace" && effect.isNotEmpty()) args.put("query", effect)
+        if (tool == "template_collage") {
+            args.put("layout", "vertical")
+            args.put("canvas", "1080x1440")
+        }
+        return MobileToolCall(tool, args, effect)
+    }
+
     private fun parse(
         text: String,
         query: String,
@@ -654,7 +969,180 @@ class GenieTextPlanner(private val context: Context, private val sessionId: Stri
         <|im_start|>assistant
     """.trimIndent()
 
+    private fun runtimeRoutePrompt(
+        query: String,
+        state: AgentRuntimeState,
+        correction: String
+    ): String {
+        val materialState = if (state.sourceAssets.isEmpty()) {
+            "当前没有用户指定素材；媒体编辑路线必须先 RETRIEVE。"
+        } else {
+            val formats = state.sourceAssets.groupingBy {
+                it.metadata.optString("media_format", "unknown")
+            }.eachCount().entries.joinToString { "${it.key}:${it.value}" }
+            "当前已有 ${state.sourceAssets.size} 个素材（$formats），不要规划 RETRIEVE。"
+        }
+        val families = runtimeRouteFamilies(state).joinToString("、") { it.name }
+        val correctionLine = correction.takeIf { it.isNotBlank() }
+            ?.let { "上一次输出无效，必须修正：$it" }.orEmpty()
+        return """
+            <|im_start|>system
+            你是手机端 Live Photo Agent 的语义路线规划器。直接输出短结构，不要 Markdown，
+            不要写分析过程，也不要选择具体 SDK 工具。
+
+            普通聊天、提问或能力询问：只输出 REPLY=直接回答。
+            缺少只有用户才能补充的信息：只输出 QUESTION=追问。
+            媒体任务：按执行顺序每步一行 ROUTE=能力族|用户要求的内容|数量|媒体类型。
+            后两个字段可省略；不要输出空占位符。最多 8 步，同一动作只写一次。
+            一旦输出 ROUTE，就绝对不要同时输出 REPLY 或 QUESTION；本地相册可由 RETRIEVE
+            自动查找，不要追问用户提供素材。每一行都必须以 ROUTE= 开头，包括 PUBLISH。
+
+            本轮允许的能力族只有：$families。
+            RETRIEVE 找本地素材；COMPOSE 拼贴/转场/画布组合；STYLE 滤镜、色调和画面风格；
+            TEMPORAL 裁剪、倒放、变速、镜像和时间效果；LAYOUT 调整已有布局；
+            REPLACE 仅表示用户明确要求替换当前单选素材；ANALYZE 摘要或主色分析；
+            PUBLISH 发布最终媒体。没有明确“替换/换掉”要求时绝不能规划 REPLACE。
+
+            $materialState
+            $correctionLine
+            路线必须覆盖用户本轮明确要求的全部动作，但不要增加贴纸、滤镜等未要求动作。
+            “拼、拼接、拼图、几拼”必须包含 COMPOSE；滤镜/颜色风格包含 STYLE；倒放/变速/
+            裁剪/镜像包含 TEMPORAL；不能只写 RETRIEVE 和 PUBLISH 而漏掉中间编辑动作。
+            会产生最终媒体的编辑路线最后加 PUBLISH；仅分析或聊天不需要 PUBLISH。
+            只有用户明确说了图片、视频或 Live Photo 时才填写媒体类型，否则省略该字段。
+            <|im_end|>
+            <|im_start|>user
+            用户原话：$query
+            当前选中素材数：${state.selectedAssetIds.size}
+            最近对话上下文：${sessionContext()}
+            <|im_end|>
+            <|im_start|>assistant
+        """.trimIndent()
+    }
+
+    private fun runtimeRetrievalPrompt(
+        query: String,
+        requestedCount: Int,
+        requiredMedia: RuntimeMediaKind?
+    ): String {
+        val mediaRule = requiredMedia?.let {
+            "用户明确要求的媒体类型是 ${it.name}，第三段写 ${it.name}。"
+        } ?: "用户没有明确限定媒体类型，省略第三段。"
+        return """
+            <|im_start|>system
+            你只负责从用户原话中提取“相册里要找什么画面内容”。直接输出一行，不要解释：
+            SEARCH=内容查询|数量|媒体类型
+            媒体类型可省略。内容查询必须是人物、动物、物体、地点、场景或动作等可在画面中看到的
+            名词短语；必须删除“三拼、拼图、滤镜、倒放、导出、裁剪”等编辑动作和格式词。
+            不要回答用户，不要输出 ROUTE、STEP、QUESTION、Markdown，也不要凭空增加画面内容。
+            明确数量为 $requestedCount。$mediaRule
+            <|im_end|>
+            <|im_start|>user
+            用户原话：$query
+            <|im_end|>
+            <|im_start|>assistant
+        """.trimIndent()
+    }
+
+    private fun runtimeRouteFamilies(state: AgentRuntimeState): Set<ToolFamily> = buildSet {
+        add(ToolFamily.RETRIEVE)
+        add(ToolFamily.COMPOSE)
+        add(ToolFamily.STYLE)
+        add(ToolFamily.TEMPORAL)
+        add(ToolFamily.ANALYZE)
+        add(ToolFamily.PUBLISH)
+        if (state.sourceAssets.isNotEmpty() && state.selectedAssetIds.size == 1) {
+            add(ToolFamily.REPLACE)
+        }
+        if (state.layout != null && state.selectedAssetIds.size == 2) {
+            add(ToolFamily.LAYOUT)
+        }
+    }
+
+    private fun runtimeBindPrompt(
+        query: String,
+        routeStep: SemanticRouteStep,
+        state: AgentRuntimeState,
+        catalog: ToolCatalogDecision,
+        observation: String
+    ): String {
+        val assets = state.sourceAssets.mapIndexed { index, asset ->
+            val selected = if (asset.assetId in state.selectedAssetIds) "[已选中]" else ""
+            val summary = asset.semantic.optString("summary").take(100)
+            "$selected 序号=${index + 1} media=${asset.metadata.optString("media_format", "unknown")} summary=$summary"
+        }.joinToString("\n").ifBlank { "无" }
+        val artifact = state.latestValidatedArtifact()?.let {
+            "id=${it.artifactId}, kind=${it.kind}, producer=${it.producerStepId}, validated=${it.validated}"
+        } ?: "无"
+        val observationLine = observation.ifBlank { "无" }
+        val suffixRule = if (routeStep.family == ToolFamily.TEMPORAL) {
+            "只有用户明确要求裁剪且选择 clip_trim 时可写一个 @起始毫秒-结束毫秒；只有明确指向单个素材时可写一个 #序号。"
+        } else {
+            "本步骤禁止输出 @时间或 #序号；输入范围由运行时绑定。"
+        }
+        return """
+            <|im_start|>system
+            你负责把一个语义路线步骤绑定为当前可执行工具。不要重新规划已完成动作，不要 Markdown，
+            不要输出分析过程。只能从给定目录选择一个工具，并只输出一行：
+            STEP=工具ID|用户要求的效果
+            不需要效果参数时可只写 STEP=工具ID。$suffixRule
+            如果目录里没有能完成该步骤的工具，只输出 QUESTION=说明缺少什么。
+
+            当前路线步骤：${routeStep.family}|${routeStep.instruction}
+            可用工具（共 ${catalog.available.size} 个）：
+            ${catalog.prompt()}
+            <|im_end|>
+            <|im_start|>user
+            原始请求：$query
+            当前素材：
+            $assets
+            当前已验证产物：$artifact
+            最近观察或错误：$observationLine
+            <|im_end|>
+            <|im_start|>assistant
+        """.trimIndent()
+    }
+
+    private fun runtimeRevisePrompt(
+        query: String,
+        state: AgentRuntimeState,
+        completed: List<SemanticRouteStep>,
+        pending: List<SemanticRouteStep>,
+        observation: String
+    ): String {
+        val completedText = completed.joinToString(" > ") { "${it.family}(${it.instruction})" }
+            .ifBlank { "无" }
+        val pendingText = pending.joinToString(" > ") { "${it.family}(${it.instruction})" }
+            .ifBlank { "无" }
+        val media = state.sourceAssets.groupingBy {
+            it.metadata.optString("media_format", "unknown")
+        }.eachCount().entries.joinToString { "${it.key}:${it.value}" }.ifBlank { "无素材" }
+        return """
+            <|im_start|>system
+            你是手机端 Live Photo Agent 的路线修订器。已完成前缀是事实，绝对不能重复或改写。
+            根据最新工具结果，只输出尚未执行的新后缀；不要 Markdown，不要分析过程，不要具体 SDK 工具。
+            每步格式：ROUTE=能力族|用户要求的内容|数量|媒体类型，后两个字段可省略。
+            能力族只有 RETRIEVE、COMPOSE、STYLE、TEMPORAL、LAYOUT、REPLACE、ANALYZE、PUBLISH。
+            无法在现有能力下继续时输出 QUESTION=需要用户决定的事项，或 REPLY=明确失败说明。
+            最多 8 步，不要重复已完成动作。会产生最终媒体的后缀最终必须包含 PUBLISH。
+            <|im_end|>
+            <|im_start|>user
+            原始请求：$query
+            已完成前缀：$completedText
+            原待执行后缀：$pendingText
+            当前素材：${state.sourceAssets.size} 个（$media）
+            最新观察或错误：$observation
+            <|im_end|>
+            <|im_start|>assistant
+        """.trimIndent()
+    }
+
     private fun sessionContext(): String = sessionId?.let {
-        LibraryDatabase(context).plannerContext(it)
+        val database = LibraryDatabase(context)
+        try {
+            database.plannerContext(it)
+        } finally {
+            database.close()
+        }
     }.orEmpty().ifBlank { "无" }
 }
