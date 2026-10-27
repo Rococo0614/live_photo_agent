@@ -12,6 +12,14 @@
 > 2-Turn 等结论继续作为历史证据保留；新的状态、工具数据流和有界闭环改造以 Runtime v2
 > 文档为准，正式长链轨迹集在运行时架构落地后建设。
 >
+> 2026-10-27 已完成可部署 `Qwen3-4B` hybrid 原生thinking对照，结果显著回归；详见
+> `native_thinking_model_comparison.md`。这不等同于测试了尚无兼容QNN包的
+> `Qwen3-4B-Thinking-2507`。
+>
+> 同日后续已通过GGUF/llama.cpp把真正的 `Qwen3-4B-Thinking-2507` 部署到SM8850：自定义
+> 行协议8/12，官方原生tool-call 12/12，OpenCL难例2/2；详见
+> `qwen3_4b_thinking_2507_phone_validation.md`。生产模型尚未切换。
+>
 > 立场声明：本文档**不是**探索性实验设计。原计划的「散文约束 A vs 结构约束 B」
 > 两臂 A/B 已废弃——文献表明该问题的基线设定本身有误（见 §2.1）。
 > 本文档只做一件事：把已验证的文献结论映射到本仓库的具体代码位置。

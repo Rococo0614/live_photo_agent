@@ -10,6 +10,7 @@ import java.util.concurrent.atomic.AtomicBoolean
 import org.json.JSONArray
 import org.json.JSONObject
 import org.junit.Assert.assertTrue
+import org.junit.Ignore
 import org.junit.Test
 import org.junit.runner.RunWith
 
@@ -433,6 +434,17 @@ class RuntimeToolAcceptanceTest {
         val planner = GenieTextPlanner(context, null)
         val result = planner.tryRetrieveSpec("给我的猫做个三拼", 3, null)
             ?: error("retrieval repair did not parse: ${planner.lastTrace?.rawOutput}")
+        val trace = planner.lastTrace
+        val probe = JSONObject()
+            .put("query", result.spec.query)
+            .put("count", result.spec.requestedCount)
+            .put("raw_output", trace?.rawOutput)
+            .put("reasoning_output", trace?.reasoningOutput)
+            .put("elapsed_ms", trace?.elapsedMs ?: 0)
+            .put("strategy", trace?.strategy)
+            .put("parsed", trace?.parsed ?: false)
+        File(context.filesDir, "thinking-retrieval-probe.json").writeText(probe.toString(2))
+        Log.i(TAG, "THINKING_PROBE ${probe.toString()}")
         assertTrue(
             "repaired query is not grounded: ${result.spec.query}",
             RetrievalQueryGuard.isUsable("给我的猫做个三拼", result.spec.query)
@@ -484,6 +496,187 @@ class RuntimeToolAcceptanceTest {
             .put("results", rows)
         File(context.filesDir, "semantic-index-acceptance.json").writeText(report.toString(2))
         assertTrue("semantic index failures:\n${failures.joinToString("\n")}", failures.isEmpty())
+    }
+
+    @Test
+    @Ignore("manual cross-model experiment; some candidate arms are expected to fail")
+    fun evaluateRouteReasoningProbe() {
+        data class RouteCase(
+            val id: String,
+            val query: String,
+            val expectedConversation: Boolean = false,
+            val must: Set<ToolFamily> = emptySet(),
+            val forbid: Set<ToolFamily> = emptySet(),
+            val retrievalSubject: String? = null
+        )
+        val cases = listOf(
+            RouteCase("P01", "你好", expectedConversation = true),
+            RouteCase("P02", "请介绍一下你的能力", expectedConversation = true),
+            RouteCase("P03", "给我的猫做个三拼", must = setOf(ToolFamily.RETRIEVE, ToolFamily.COMPOSE, ToolFamily.PUBLISH), forbid = setOf(ToolFamily.STYLE, ToolFamily.TEMPORAL), retrievalSubject = "猫"),
+            RouteCase("P04", "用海边的照片做个拼图", must = setOf(ToolFamily.RETRIEVE, ToolFamily.COMPOSE, ToolFamily.PUBLISH), forbid = setOf(ToolFamily.STYLE, ToolFamily.TEMPORAL), retrievalSubject = "海边"),
+            RouteCase("P05", "找一段视频调成黑白后导出", must = setOf(ToolFamily.RETRIEVE, ToolFamily.STYLE, ToolFamily.PUBLISH), forbid = setOf(ToolFamily.COMPOSE, ToolFamily.REPLACE)),
+            RouteCase("P06", "找一段猫的视频并倒放后导出", must = setOf(ToolFamily.RETRIEVE, ToolFamily.TEMPORAL, ToolFamily.PUBLISH), forbid = setOf(ToolFamily.STYLE, ToolFamily.COMPOSE), retrievalSubject = "猫"),
+            RouteCase("P07", "找海边视频加速两倍再导出", must = setOf(ToolFamily.RETRIEVE, ToolFamily.TEMPORAL, ToolFamily.PUBLISH), forbid = setOf(ToolFamily.STYLE, ToolFamily.COMPOSE), retrievalSubject = "海边"),
+            RouteCase("P08", "给猫做三拼，不要任何滤镜和贴纸", must = setOf(ToolFamily.RETRIEVE, ToolFamily.COMPOSE, ToolFamily.PUBLISH), forbid = setOf(ToolFamily.STYLE, ToolFamily.TEMPORAL), retrievalSubject = "猫"),
+            RouteCase("P09", "给猫做三拼，再把整体调成黑白并导出", must = setOf(ToolFamily.RETRIEVE, ToolFamily.COMPOSE, ToolFamily.STYLE, ToolFamily.PUBLISH), forbid = setOf(ToolFamily.TEMPORAL), retrievalSubject = "猫"),
+            RouteCase("P10", "找三段海边视频上下竖排后导出", must = setOf(ToolFamily.RETRIEVE, ToolFamily.COMPOSE, ToolFamily.PUBLISH), forbid = setOf(ToolFamily.STYLE, ToolFamily.TEMPORAL), retrievalSubject = "海边"),
+            RouteCase("P11", "make a three-photo collage of my cat", must = setOf(ToolFamily.RETRIEVE, ToolFamily.COMPOSE, ToolFamily.PUBLISH), forbid = setOf(ToolFamily.STYLE, ToolFamily.TEMPORAL), retrievalSubject = "cat"),
+            RouteCase("P12", "找三张猫做三拼再倒放，别加滤镜", must = setOf(ToolFamily.RETRIEVE, ToolFamily.COMPOSE, ToolFamily.TEMPORAL, ToolFamily.PUBLISH), forbid = setOf(ToolFamily.STYLE), retrievalSubject = "猫")
+        )
+        val state = emptyState()
+        val rows = JSONArray()
+        val failures = mutableListOf<String>()
+        cases.forEach { case ->
+            val planner = GenieTextPlanner(context, null)
+            val started = System.currentTimeMillis()
+            var result = planner.tryRoute(case.query, state)
+            if (result == null) {
+                result = planner.tryRoute(
+                    case.query,
+                    state,
+                    "只输出完整 ROUTE 行；编辑请求不能同时输出 REPLY/QUESTION，也不能漏掉实际编辑能力"
+                )
+            }
+            val route = result?.route
+            val families = route?.steps?.map { it.family }?.toSet().orEmpty()
+            val retrieval = route?.steps?.firstOrNull { it.family == ToolFamily.RETRIEVE }
+                ?.instruction.orEmpty()
+            val conversationOk = if (case.expectedConversation) {
+                route != null && route.steps.isEmpty() &&
+                    (!route.reply.isNullOrBlank() || !route.clarification.isNullOrBlank())
+            } else route != null && route.steps.isNotEmpty()
+            val familyOk = case.must.all { it in families } && case.forbid.none { it in families }
+            val retrievalOk = case.retrievalSubject?.let { subject ->
+                RetrievalQueryGuard.canonicalize(case.query, retrieval)
+                    ?.contains(subject, ignoreCase = true) == true
+            } ?: true
+            val passed = conversationOk && familyOk && retrievalOk
+            if (!passed) failures += "${case.id}: families=$families retrieval=$retrieval raw=${planner.lastTrace?.rawOutput}"
+            val trace = planner.lastTrace
+            rows.put(JSONObject()
+                .put("case_id", case.id)
+                .put("query", case.query)
+                .put("success", passed)
+                .put("families", JSONArray(families.map { it.name }))
+                .put("retrieval", retrieval)
+                .put("elapsed_ms", System.currentTimeMillis() - started)
+                .put("reasoning_chars", trace?.reasoningOutput?.length ?: 0)
+                .put("reasoning", trace?.reasoningOutput)
+                .put("final_output", trace?.rawOutput)
+                .put("strategy", trace?.strategy))
+        }
+        val report = JSONObject()
+            .put("case_count", cases.size)
+            .put("passed_count", cases.size - failures.size)
+            .put("failed_count", failures.size)
+            .put("failures", JSONArray(failures))
+            .put("results", rows)
+        File(context.filesDir, "route-reasoning-acceptance.json").writeText(report.toString(2))
+        assertTrue("route reasoning failures:\n${failures.joinToString("\n")}", failures.isEmpty())
+    }
+
+    @Test
+    @Ignore("manual loop experiment; do not include in routine connectedAndroidTest")
+    fun evaluateBoundedLoopPlannerProbe() {
+        check(BuildConfig.PLANNER_EVAL_ONLY) { "planner probe requires plannerEvalOnly=true" }
+        data class LoopCase(
+            val id: String,
+            val query: String,
+            val conversation: Boolean = false,
+            val expectedTool: String? = null,
+            val must: Set<ToolFamily> = emptySet(),
+            val forbid: Set<ToolFamily> = emptySet(),
+            val retrievalSubject: String? = null
+        )
+        val cases = listOf(
+            LoopCase("L01", "你好", conversation = true),
+            LoopCase("L02", "请介绍一下你的能力", conversation = true),
+            LoopCase("L03", "给我的猫做个三拼", expectedTool = "template_collage", must = setOf(ToolFamily.RETRIEVE, ToolFamily.COMPOSE, ToolFamily.PUBLISH), forbid = setOf(ToolFamily.STYLE, ToolFamily.TEMPORAL), retrievalSubject = "猫"),
+            LoopCase("L04", "用海边的照片做个拼图", expectedTool = "template_collage", must = setOf(ToolFamily.RETRIEVE, ToolFamily.COMPOSE, ToolFamily.PUBLISH), forbid = setOf(ToolFamily.STYLE, ToolFamily.TEMPORAL), retrievalSubject = "海边"),
+            LoopCase("L05", "找一段视频调成黑白后导出", expectedTool = "video_filter", must = setOf(ToolFamily.RETRIEVE, ToolFamily.STYLE, ToolFamily.PUBLISH), forbid = setOf(ToolFamily.COMPOSE, ToolFamily.REPLACE)),
+            LoopCase("L06", "找一段猫的视频并倒放后导出", expectedTool = "video_reverse", must = setOf(ToolFamily.RETRIEVE, ToolFamily.TEMPORAL, ToolFamily.PUBLISH), forbid = setOf(ToolFamily.STYLE, ToolFamily.COMPOSE), retrievalSubject = "猫"),
+            LoopCase("L07", "找海边视频加速两倍再导出", expectedTool = "video_speed", must = setOf(ToolFamily.RETRIEVE, ToolFamily.TEMPORAL, ToolFamily.PUBLISH), forbid = setOf(ToolFamily.STYLE, ToolFamily.COMPOSE), retrievalSubject = "海边"),
+            LoopCase("L08", "给猫做三拼，不要任何滤镜和贴纸", expectedTool = "template_collage", must = setOf(ToolFamily.RETRIEVE, ToolFamily.COMPOSE, ToolFamily.PUBLISH), forbid = setOf(ToolFamily.STYLE, ToolFamily.TEMPORAL), retrievalSubject = "猫"),
+            LoopCase("L09", "给猫做三拼，再把整体调成黑白并导出", expectedTool = "template_collage", must = setOf(ToolFamily.RETRIEVE, ToolFamily.COMPOSE, ToolFamily.STYLE, ToolFamily.PUBLISH), forbid = setOf(ToolFamily.TEMPORAL), retrievalSubject = "猫"),
+            LoopCase("L10", "找三段海边视频上下竖排后导出", expectedTool = "video_vertical_stack", must = setOf(ToolFamily.RETRIEVE, ToolFamily.COMPOSE, ToolFamily.PUBLISH), forbid = setOf(ToolFamily.STYLE, ToolFamily.TEMPORAL), retrievalSubject = "海边"),
+            LoopCase("L11", "make a three-photo collage of my cat", expectedTool = "template_collage", must = setOf(ToolFamily.RETRIEVE, ToolFamily.COMPOSE, ToolFamily.PUBLISH), forbid = setOf(ToolFamily.STYLE, ToolFamily.TEMPORAL), retrievalSubject = "cat"),
+            LoopCase("L12", "找三张猫做三拼再倒放，别加滤镜", expectedTool = "template_collage", must = setOf(ToolFamily.RETRIEVE, ToolFamily.COMPOSE, ToolFamily.TEMPORAL, ToolFamily.PUBLISH), forbid = setOf(ToolFamily.STYLE), retrievalSubject = "猫")
+        )
+        val rows = JSONArray()
+        val failures = mutableListOf<String>()
+        cases.forEach { case ->
+            var finalPlan: MobilePlan? = null
+            val routes = mutableListOf<SemanticRoute>()
+            val results = mutableListOf<MobileToolResult>()
+            val traces = mutableListOf<Pair<String, BrainTrace>>()
+            var error: String? = null
+            var finishMessage = ""
+            val started = System.currentTimeMillis()
+            MobileAgentLoop(context).run(
+                query = case.query,
+                uris = emptyList(),
+                layoutContext = null,
+                cancelled = AtomicBoolean(false),
+                listener = object : MobileAgentRunner.Listener {
+                    override fun onProgress(message: String) = Unit
+                    override fun onRuntimeRoute(route: SemanticRoute, trace: BrainTrace) {
+                        routes += route
+                    }
+                    override fun onRuntimeBrainTrace(stage: String, trace: BrainTrace) {
+                        traces += stage to trace
+                    }
+                    override fun onPlan(plan: MobilePlan) { finalPlan = plan }
+                    override fun onResult(result: MobileToolResult) { results += result }
+                    override fun onFinished(uri: Uri?, message: String) { finishMessage = message }
+                    override fun onError(message: String) { error = message }
+                }
+            )
+            val route = routes.firstOrNull { it.steps.isNotEmpty() } ?: routes.firstOrNull()
+            val families = route?.steps?.map { it.family }?.toSet().orEmpty()
+            val searchPayload = results.lastOrNull { it.tool == "search_assets" }?.payload
+            val retrieval = searchPayload?.optString("query").orEmpty()
+            val tools = finalPlan?.toolCalls?.map { it.tool }.orEmpty()
+            val conversationOk = if (case.conversation) {
+                finalPlan?.toolCalls?.isEmpty() == true && error == null
+            } else error == null && case.expectedTool in tools
+            val familyOk = case.must.all { it in families } && case.forbid.none { it in families }
+            val retrievalOk = case.retrievalSubject?.let {
+                RetrievalQueryGuard.canonicalize(case.query, retrieval)?.contains(it, true) == true
+            } ?: true
+            val passed = conversationOk && familyOk && retrievalOk
+            if (!passed) failures += "${case.id}: error=$error tools=$tools families=$families retrieval=$retrieval"
+            val reasoningChars = traces.sumOf { it.second.reasoningOutput.length }
+            rows.put(JSONObject()
+                .put("case_id", case.id)
+                .put("query", case.query)
+                .put("success", passed)
+                .put("error", error)
+                .put("finish_message", finishMessage)
+                .put("tools", JSONArray(tools))
+                .put("families", JSONArray(families.map { it.name }))
+                .put("retrieval", retrieval)
+                .put("elapsed_ms", System.currentTimeMillis() - started)
+                .put("model_elapsed_ms", traces.sumOf { it.second.elapsedMs })
+                .put("reasoning_chars", reasoningChars)
+                .put("model_calls", traces.size)
+                .put("traces", JSONArray(traces.map { (stage, trace) ->
+                    JSONObject()
+                        .put("stage", stage)
+                        .put("parsed", trace.parsed)
+                        .put("elapsed_ms", trace.elapsedMs)
+                        .put("reasoning_chars", trace.reasoningOutput.length)
+                        .put("reasoning", trace.reasoningOutput)
+                        .put("final_output", trace.rawOutput)
+                })))
+        }
+        val report = JSONObject()
+            .put("case_count", cases.size)
+            .put("passed_count", cases.size - failures.size)
+            .put("failed_count", failures.size)
+            .put("failures", JSONArray(failures))
+            .put("results", rows)
+        File(context.filesDir, "bounded-loop-planner-acceptance.json").writeText(report.toString(2))
+        assertTrue("bounded loop planner failures:\n${failures.joinToString("\n")}", failures.isEmpty())
     }
 
     private fun emptyState(): AgentRuntimeState = AgentRuntimeState(

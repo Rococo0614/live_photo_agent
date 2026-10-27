@@ -345,6 +345,8 @@ def score(case: dict[str, Any], result: CaseResult) -> dict[str, Any]:
     brains = [_json_payload(e["payload"]) for e in result.events if e["kind"] == "PLAN_BRAIN"]
     intents = [_json_payload(e["payload"]) for e in result.events if e["kind"] == "INTENT_BRAIN"]
     runtime_brains = [_json_payload(e["payload"]) for e in result.events if e["kind"] == "RUNTIME_BRAIN"]
+    runtime_routes_audit = [_json_payload(e["payload"]) for e in result.events if e["kind"] == "ROUTE_BRAIN"]
+    tool_results = [_json_payload(e["payload"]) for e in result.events if e["kind"] == "TOOL_RESULT"]
     finals = [_json_payload(e["payload"]) for e in result.events if e["kind"] == "PLAN_FINAL"]
     tools = [t for f in finals for t in f.get("tool_calls", [])]
     tool_names = [t.get("tool") for t in tools]
@@ -390,6 +392,14 @@ def score(case: dict[str, Any], result: CaseResult) -> dict[str, Any]:
     runtime_step_raw = "\n".join(
         str(b.get("raw_output") or "") for b in runtime_binds if b.get("stage") == "bind"
     ).strip()
+    routed = [r for r in runtime_routes_audit if (r.get("route") or {}).get("steps")]
+    route_audit = routed[0] if routed else {}
+    final_route_audit = routed[-1] if routed else {}
+    route_steps = (route_audit.get("route") or {}).get("steps") or []
+    route_families = [str(step.get("family") or "") for step in route_steps]
+    final_route_steps = (final_route_audit.get("route") or {}).get("steps") or []
+    search_result = next((r for r in reversed(tool_results) if r.get("tool") == "search_assets"), {})
+    search_payload = search_result.get("payload") or {}
 
     metrics: dict[str, Any] = {
         "events_seen": len(result.events),
@@ -406,6 +416,13 @@ def score(case: dict[str, Any], result: CaseResult) -> dict[str, Any]:
         "clarified": clarified,
         "clarification": clarification if clarified else None,
         "planned_tools": tool_names,
+        "route_families": route_families,
+        "route_steps": route_steps,
+        "final_route_families": [str(step.get("family") or "") for step in final_route_steps],
+        "final_route_steps": final_route_steps,
+        "retrieval_query": str(search_payload.get("query") or ""),
+        "retrieved_asset_ids": search_payload.get("asset_ids") or [],
+        "retrieval_candidates": search_payload.get("candidates") or [],
         "executed": executed,
         "step_raw": runtime_step_raw or (step_brain or {}).get("raw_output", ""),
         "intent_raw": (intent_brain or {}).get("raw_output", ""),
@@ -633,6 +650,27 @@ def _score_expectations(case: dict[str, Any], metrics: dict[str, Any],
 
     if expect.get("retrieval") is not None:
         checks["retrieval"] = metrics["retrieved"] == expect["retrieval"]
+    route_must = expect.get("route_must_include") or []
+    checks["route_must_include"] = (
+        all(family in metrics.get("route_families", []) for family in route_must)
+        if route_must else None
+    )
+    route_forbid = expect.get("route_must_not_include") or []
+    checks["route_must_not_include"] = (
+        not (set(route_forbid) & set(metrics.get("route_families", [])))
+        if route_forbid else None
+    )
+    query_must = expect.get("retrieval_query_must_include") or []
+    retrieval_query = str(metrics.get("retrieval_query") or "").lower()
+    checks["retrieval_query_must_include"] = (
+        all(str(term).lower() in retrieval_query for term in query_must)
+        if query_must else None
+    )
+    query_forbid = expect.get("retrieval_query_must_not_include") or []
+    checks["retrieval_query_must_not_include"] = (
+        not any(str(term).lower() in retrieval_query for term in query_forbid)
+        if query_forbid else None
+    )
 
     # Hard gate: a swallowed edit request is always a failure, whatever else matched.
     checks["not_swallowed"] = not metrics["chat_swallowed_edit"]
@@ -654,7 +692,11 @@ def _score_expectations(case: dict[str, Any], metrics: dict[str, Any],
     # not_swallowed / turn_recorded are near-always-true guards; a case whose expect block
     # is empty (or only carries guards) would otherwise pass on all([]) == True and report
     # a green tick for a turn that verified nothing (D015, planner_reliability_plan.md §3.2).
-    semantic_keys = ("outcome_match", "tools_must_include", "tools_must_not_include", "retrieval")
+    semantic_keys = (
+        "outcome_match", "tools_must_include", "tools_must_not_include", "retrieval",
+        "route_must_include", "route_must_not_include",
+        "retrieval_query_must_include", "retrieval_query_must_not_include"
+    )
     semantic = [checks[k] for k in semantic_keys if checks.get(k) is not None]
     checks["vacuous"] = not semantic
 

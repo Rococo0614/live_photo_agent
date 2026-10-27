@@ -747,6 +747,9 @@ preparedAssets = prepared
                         .put("prompt_chars", trace.promptChars)
                         .put("elapsed_ms", trace.elapsedMs)
                         .put("strategy", trace.strategy)
+                        .put("reasoning_output", trace.reasoningOutput)
+                        .put("reasoning_elapsed_ms", trace.reasoningElapsedMs)
+                        .put("format_elapsed_ms", trace.formatElapsedMs)
                         .put("raw_output", trace.rawOutput)
                     uiFor(generation) { logAudit("RUNTIME_BRAIN", payload) }
                 }

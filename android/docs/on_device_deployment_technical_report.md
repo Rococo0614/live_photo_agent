@@ -634,6 +634,8 @@ MediaStore observer / `onResume` 指纹检查，实现无需重启的热更新�
 | Runtime v2 架构 | `android/docs/agent_brain_design.md` |
 | Runtime v2 实施计划 | `android/docs/agent_runtime_migration_plan.md` |
 | Runtime v2 验证记录 | `android/docs/agent_runtime_v2_validation.md` |
+| 原生 Thinking 对比 | `android/docs/native_thinking_model_comparison.md` |
+| Thinking-2507 真机验证 | `android/docs/qwen3_4b_thinking_2507_phone_validation.md` |
 | VLM 时序方案 | `android/docs/vlm_temporal_grid.md` |
 | SDK 离屏探针 | `android/docs/headless_render_findings.md`、`sdk_probe2_findings.md` |
 

@@ -22,6 +22,13 @@ class GenieTextPlanner(private val context: Context, private val sessionId: Stri
         }
     }
 
+    private enum class RuntimeStage {
+        ROUTE,
+        RETRIEVAL,
+        BIND,
+        REVISE
+    }
+
     private data class TimedText(val text: String, val elapsedMs: Long)
 
     /** One logical planner result, whether it took one generation or two. */
@@ -131,16 +138,19 @@ class GenieTextPlanner(private val context: Context, private val sessionId: Stri
     ): RoutePlanningResult? {
         if (!ModelPack.qwenReady(context)) return null
         val prompt = runtimeRoutePrompt(query, state, correction)
-        val run = timedRunText(prompt, 384)
+        val generated = generateRuntimeText(prompt, 384, RuntimeStage.ROUTE)
         val trace = BrainTrace(
             source = "qnn_genie_route",
-            rawOutput = run.text,
-            promptChars = prompt.length,
-            elapsedMs = run.elapsedMs,
-            strategy = "runtime_loop"
+            rawOutput = generated.finalText,
+            promptChars = generated.promptChars,
+            elapsedMs = generated.elapsedMs,
+            strategy = runtimeStrategy(),
+            reasoningOutput = generated.reasoningText,
+            reasoningElapsedMs = generated.reasoningElapsedMs,
+            formatElapsedMs = generated.formatElapsedMs
         )
         lastTrace = trace
-        val route = parseRuntimeRoute(run.text, query, state) ?: return null
+        val route = parseRuntimeRoute(generated.finalText, query, state) ?: return null
         val parsedTrace = trace.copy(parsed = true)
         lastTrace = parsedTrace
         return RoutePlanningResult(route, parsedTrace)
@@ -154,34 +164,30 @@ class GenieTextPlanner(private val context: Context, private val sessionId: Stri
     ): RetrievalPlanningResult? {
         if (!ModelPack.qwenReady(context)) return null
         val prompt = runtimeRetrievalPrompt(query, requestedCount, requiredMedia)
-        val run = timedRunText(prompt, 192)
+        val generated = generateRuntimeText(prompt, 192, RuntimeStage.RETRIEVAL)
         val trace = BrainTrace(
             source = "qnn_genie_retrieval",
-            rawOutput = run.text,
-            promptChars = prompt.length,
-            elapsedMs = run.elapsedMs,
-            strategy = "runtime_loop"
+            rawOutput = generated.finalText,
+            promptChars = generated.promptChars,
+            elapsedMs = generated.elapsedMs,
+            strategy = runtimeStrategy(),
+            reasoningOutput = generated.reasoningText,
+            reasoningElapsedMs = generated.reasoningElapsedMs,
+            formatElapsedMs = generated.formatElapsedMs
         )
         lastTrace = trace
         val row = Regex("(?im)^\\s*(?:SEARCH|RETRIEVE_QUERY)\\s*=\\s*(.+)$")
-            .find(run.text)?.groupValues?.get(1) ?: return null
+            .find(generated.finalText)?.groupValues?.get(1) ?: return null
         val parts = row.split('|')
-        if (parts.size !in 1..3) return null
+        if (parts.size !in 1..3) return null // legacy multi-field output remains readable
         val searchQuery = parts[0].trim().takeIf { it.isNotBlank() } ?: return null
-        val modelCount = parts.getOrNull(1)?.trim()?.toIntOrNull()?.takeIf { it > 0 }
-        val modelMedia = when (parts.getOrNull(2)?.trim()?.lowercase()) {
-            "image", "photo", "图片", "照片" -> RuntimeMediaKind.IMAGE
-            "video", "视频" -> RuntimeMediaKind.VIDEO
-            "livephoto", "live_photo", "live photo", "动态照片" -> RuntimeMediaKind.LIVE_PHOTO
-            else -> null
-        }
         val parsedTrace = trace.copy(parsed = true)
         lastTrace = parsedTrace
         return RetrievalPlanningResult(
             RetrievalSpec(
                 searchQuery,
-                requestedCount.takeIf { it > 0 } ?: modelCount ?: 3,
-                requiredMedia ?: modelMedia
+                requestedCount.takeIf { it > 0 } ?: 3,
+                requiredMedia
             ),
             parsedTrace
         )
@@ -198,16 +204,19 @@ class GenieTextPlanner(private val context: Context, private val sessionId: Stri
         if (!ModelPack.qwenReady(context) || catalog.available.isEmpty()) return null
         require(catalog.available.size <= MobileToolRegistry.MAX_VISIBLE_TOOLS)
         val prompt = runtimeBindPrompt(query, routeStep, state, catalog, observation)
-        val run = timedRunText(prompt, 256)
+        val generated = generateRuntimeText(prompt, 256, RuntimeStage.BIND)
         val trace = BrainTrace(
             source = "qnn_genie_bind",
-            rawOutput = run.text,
-            promptChars = prompt.length,
-            elapsedMs = run.elapsedMs,
-            strategy = "runtime_loop"
+            rawOutput = generated.finalText,
+            promptChars = generated.promptChars,
+            elapsedMs = generated.elapsedMs,
+            strategy = runtimeStrategy(),
+            reasoningOutput = generated.reasoningText,
+            reasoningElapsedMs = generated.reasoningElapsedMs,
+            formatElapsedMs = generated.formatElapsedMs
         )
         lastTrace = trace
-        val call = parseBoundCall(run.text, state, catalog.available.map { it.id }.toSet())
+        val call = parseBoundCall(generated.finalText, state, catalog.available.map { it.id }.toSet())
             ?: return null
         val parsedTrace = trace.copy(parsed = true)
         lastTrace = parsedTrace
@@ -224,16 +233,19 @@ class GenieTextPlanner(private val context: Context, private val sessionId: Stri
     ): RoutePlanningResult? {
         if (!ModelPack.qwenReady(context)) return null
         val prompt = runtimeRevisePrompt(query, state, completed, pending, observation)
-        val run = timedRunText(prompt, 384)
+        val generated = generateRuntimeText(prompt, 384, RuntimeStage.REVISE)
         val trace = BrainTrace(
             source = "qnn_genie_revise",
-            rawOutput = run.text,
-            promptChars = prompt.length,
-            elapsedMs = run.elapsedMs,
-            strategy = "runtime_loop"
+            rawOutput = generated.finalText,
+            promptChars = generated.promptChars,
+            elapsedMs = generated.elapsedMs,
+            strategy = runtimeStrategy(),
+            reasoningOutput = generated.reasoningText,
+            reasoningElapsedMs = generated.reasoningElapsedMs,
+            formatElapsedMs = generated.formatElapsedMs
         )
         lastTrace = trace
-        val route = parseRuntimeRoute(run.text, query, state) ?: return null
+        val route = parseRuntimeRoute(generated.finalText, query, state) ?: return null
         val parsedTrace = trace.copy(parsed = true)
         lastTrace = parsedTrace
         return RoutePlanningResult(route, parsedTrace)
@@ -358,7 +370,7 @@ class GenieTextPlanner(private val context: Context, private val sessionId: Stri
                 "找", "搜索", "相册", "选择", "我的", "find", "search", "from album"
             )
             ToolFamily.COMPOSE -> any(
-                "拼", "拼接", "拼图", "拼贴", "模板", "模版", "版式", "堆叠",
+                "拼", "拼接", "拼图", "拼贴", "模板", "模版", "版式", "堆叠", "竖排", "上下排列",
                 "collage", "compose", "stack", "transition", "转场"
             )
             ToolFamily.STYLE -> any(
@@ -634,8 +646,78 @@ class GenieTextPlanner(private val context: Context, private val sessionId: Stri
 
     private fun timedRunText(prompt: String, maxTokens: Int): TimedText {
         val started = System.currentTimeMillis()
-        val text = runText(prompt, maxTokens).orEmpty()
+        val text = runText(prompt, maxTokens, 30L).orEmpty()
         return TimedText(text, System.currentTimeMillis() - started)
+    }
+
+    private fun generateRuntimeText(
+        prompt: String,
+        directMaxTokens: Int,
+        stage: RuntimeStage
+    ): GeneratedText {
+        val hybrid = BuildConfig.QWEN_MODEL_PACK == "hybrid"
+        val thinking = hybrid && when (BuildConfig.QWEN_THINKING) {
+            "all" -> true
+            "route" -> stage in setOf(RuntimeStage.ROUTE, RuntimeStage.RETRIEVAL, RuntimeStage.REVISE)
+            else -> false
+        }
+        // This is the exact no-thinking assistant prefix generated by Qwen3's official Jinja
+        // template. Thinking mode uses the ordinary assistant prefix and lets the model emit its
+        // native <think> block; no prompt-induced scratchpad is involved.
+        val controlledPrompt = when {
+            hybrid && thinking -> "${enableNativeThinking(prompt)}\n<think>\n"
+            hybrid -> "$prompt\n<think>\n\n</think>\n\n"
+            else -> prompt
+        }
+        val maxTokens = if (thinking) BuildConfig.QWEN_THINKING_TOKENS else directMaxTokens
+        val started = System.currentTimeMillis()
+        val raw = runText(controlledPrompt, maxTokens, if (thinking) 120L else 30L).orEmpty()
+        val elapsed = System.currentTimeMillis() - started
+        val (reasoning, finalText) = if (thinking) splitNativeThinking(raw) else "" to raw
+        return GeneratedText(
+            finalText = finalText,
+            reasoningText = reasoning,
+            promptChars = controlledPrompt.length,
+            elapsedMs = elapsed,
+            reasoningElapsedMs = if (thinking) elapsed else 0L,
+            formatElapsedMs = if (thinking) 0L else elapsed
+        )
+    }
+
+    private fun enableNativeThinking(prompt: String): String {
+        val userEnd = prompt.lastIndexOf("<|im_end|>")
+        if (userEnd < 0) return "$prompt\n/think"
+        val instruction = """
+
+            /think
+            请先在隐藏的思考区核对用户主体、动作、否定约束和输出格式；思考结束后的最终答案仍须严格遵守上述短结构，不能附带解释。
+        """.trimIndent()
+        return prompt.substring(0, userEnd) + instruction + "\n" + prompt.substring(userEnd)
+    }
+
+    private fun splitNativeThinking(text: String): Pair<String, String> {
+        val close = text.lastIndexOf("</think>")
+        if (close < 0) {
+            // A token-budget-truncated thought is not an executable answer. Preserve it for audit
+            // and return an empty final section so parser success cannot be fabricated.
+            return text.removePrefix("<think>").trim() to ""
+        }
+        val reasoning = text.substring(0, close)
+            .substringAfterLast("<think>")
+            .trim()
+        val finalText = text.substring(close + "</think>".length).trim()
+        return reasoning to finalText
+    }
+
+    private fun runtimeStrategy(): String = buildString {
+        append("runtime_loop:")
+        append(BuildConfig.QWEN_MODEL_PACK)
+        append(':')
+        append(BuildConfig.QWEN_THINKING)
+        if (BuildConfig.QWEN_MODEL_PACK == "hybrid" && BuildConfig.QWEN_THINKING != "off") {
+            append(':')
+            append(BuildConfig.QWEN_THINKING_TOKENS)
+        }
     }
 
     /**
@@ -656,7 +738,7 @@ class GenieTextPlanner(private val context: Context, private val sessionId: Stri
         return text.substring(0, boundary).trim() to text.substring(boundary).trim()
     }
 
-    private fun runText(prompt: String, maxTokens: Int): String? {
+    private fun runText(prompt: String, maxTokens: Int, timeoutSeconds: Long): String? {
         val model = ModelPack.executionRoot(context, ModelPack.qwenRoot(context))
         val runner = ModelPack.genieRunner(context, model) ?: return null
         val work = File(context.cacheDir, "planner-${System.nanoTime()}").apply { mkdirs() }
@@ -680,7 +762,7 @@ class GenieTextPlanner(private val context: Context, private val sessionId: Stri
             // 30s, not 90s: a hung planner used to cost the user 90s before the keyword fallback
             // could take over, and two calls per turn stacked into a ~170s ceiling. Real plans
             // arrive in 6-11s, so 30s already leaves 3x headroom.
-            if (!process.waitFor(30, TimeUnit.SECONDS) || !outputFile.isFile) {
+            if (!process.waitFor(timeoutSeconds, TimeUnit.SECONDS) || !outputFile.isFile) {
                 process.destroyForcibly()
                 null
             } else outputFile.readText(Charsets.UTF_8)
@@ -1025,17 +1107,15 @@ class GenieTextPlanner(private val context: Context, private val sessionId: Stri
         requestedCount: Int,
         requiredMedia: RuntimeMediaKind?
     ): String {
-        val mediaRule = requiredMedia?.let {
-            "用户明确要求的媒体类型是 ${it.name}，第三段写 ${it.name}。"
-        } ?: "用户没有明确限定媒体类型，省略第三段。"
         return """
             <|im_start|>system
             你只负责从用户原话中提取“相册里要找什么画面内容”。直接输出一行，不要解释：
-            SEARCH=内容查询|数量|媒体类型
-            媒体类型可省略。内容查询必须是人物、动物、物体、地点、场景或动作等可在画面中看到的
+            这一行必须以 SEARCH= 开头，等号后只写要寻找的画面主体名词短语，不写其他字段。
+            画面主体必须是人物、动物、物体、地点、场景或动作等可在画面中看到的
             名词短语；必须删除“三拼、拼图、滤镜、倒放、导出、裁剪”等编辑动作和格式词。
             不要回答用户，不要输出 ROUTE、STEP、QUESTION、Markdown，也不要凭空增加画面内容。
-            明确数量为 $requestedCount。$mediaRule
+            数量 $requestedCount 和媒体约束 ${requiredMedia?.name ?: "未限定"} 已由运行时保存，
+            不要在输出中重复数量或媒体类型。
             <|im_end|>
             <|im_start|>user
             用户原话：$query

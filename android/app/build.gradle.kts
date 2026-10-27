@@ -21,6 +21,24 @@ val agentRuntime = providers.gradleProperty("agentRuntime")
 require(agentRuntime in setOf("static", "loop")) {
     "agentRuntime must be one of static, loop"
 }
+val qwenModelPack = providers.gradleProperty("qwenModelPack")
+    .orElse("instruct")
+    .get()
+require(qwenModelPack in setOf("instruct", "hybrid")) {
+    "qwenModelPack must be one of instruct, hybrid"
+}
+val qwenThinking = providers.gradleProperty("qwenThinking")
+    .orElse("off")
+    .get()
+require(qwenThinking in setOf("off", "route", "all")) {
+    "qwenThinking must be one of off, route, all"
+}
+val qwenThinkingTokens = providers.gradleProperty("qwenThinkingTokens")
+    .orElse("1024")
+    .get().toInt()
+require(qwenThinkingTokens in 256..2048) {
+    "qwenThinkingTokens must be in 256..2048"
+}
 
 android {
     namespace = "com.vivo.lpa"
@@ -45,6 +63,11 @@ android {
         // the default only after all 31 executors and 30 dynamic binding cases passed on device;
         // `-PagentRuntime=static` remains the explicit rollback path.
         buildConfigField("String", "AGENT_RUNTIME", "\"$agentRuntime\"")
+        // Native-thinking experiments use a separate model directory and never overwrite the
+        // production Instruct-2507 pack. `route` keeps constrained bind classification direct.
+        buildConfigField("String", "QWEN_MODEL_PACK", "\"$qwenModelPack\"")
+        buildConfigField("String", "QWEN_THINKING", "\"$qwenThinking\"")
+        buildConfigField("int", "QWEN_THINKING_TOKENS", qwenThinkingTokens.toString())
         ndk {
             // 两台真机都是 arm64-v8a，只打这一个 ABI，包体减半
             abiFilters += "arm64-v8a"

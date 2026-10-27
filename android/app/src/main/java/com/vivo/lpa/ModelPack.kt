@@ -11,7 +11,10 @@ object ModelPack {
             ?: internal
     }
 
-    fun qwenRoot(context: Context): File = File(root(context), "qwen")
+    fun qwenRoot(context: Context): File = File(
+        root(context),
+        if (BuildConfig.QWEN_MODEL_PACK == "hybrid") "qwen-hybrid" else "qwen"
+    )
 
     fun vlmRoot(context: Context): File = File(root(context), "vlm")
 

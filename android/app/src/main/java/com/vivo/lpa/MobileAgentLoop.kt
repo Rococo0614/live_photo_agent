@@ -185,6 +185,18 @@ class MobileAgentLoop(private val context: Context) {
                     availableToolIds = catalog.available.map { it.id }
                 )
                 listener.onRuntimePlan(plan)
+                if (BuildConfig.PLANNER_EVAL_ONLY && routeStep.family != ToolFamily.RETRIEVE) {
+                    executedCalls += call
+                    listener.onPlan(MobilePlan(
+                        userGoal = query,
+                        intent = "runtime_loop_eval",
+                        selectedAssetIds = state.selectedAssetIds,
+                        toolCalls = executedCalls,
+                        brainTrace = finalTrace
+                    ))
+                    listener.onFinished(null, "规划评测完成（未执行媒体工具）")
+                    return
+                }
                 listener.onProgress("执行 ${state.executedCount + 1}/$MAX_EXECUTED_STEPS：${call.tool}")
                 listener.onToolCall(state.executedCount, MAX_EXECUTED_STEPS, call)
 
