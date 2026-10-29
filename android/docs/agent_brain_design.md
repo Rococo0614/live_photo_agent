@@ -7,6 +7,10 @@
 > 适用范围：Android 端 Qwen 规划、素材检索、工具执行、状态恢复与审计
 >
 > 配套实施计划：[`agent_runtime_migration_plan.md`](agent_runtime_migration_plan.md)
+>
+> Runtime v2已于2026-10-29冻结为`runtime-v2-linear-prod-20261029`。后续Content Graph与
+> 类型化DAG实验见[`agent_runtime_v3_dag_design.md`](agent_runtime_v3_dag_design.md)；
+> v3在shadow阶段不改变本文规定的生产loop行为。
 
 ## 1. 文档目的与当前边界
 

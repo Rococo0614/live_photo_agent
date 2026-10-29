@@ -86,6 +86,8 @@ data class MobileToolSpec(
     val id: String,
     val family: ToolFamily,
     val description: String,
+    /** Typed compiler contract. Runtime v2 availability fields below remain execution gates. */
+    val contract: AgentActionContract,
     val acceptedMedia: Set<RuntimeMediaKind> = RuntimeMediaKind.entries.toSet(),
     val minAssets: Int = 0,
     val maxAssets: Int = Int.MAX_VALUE,

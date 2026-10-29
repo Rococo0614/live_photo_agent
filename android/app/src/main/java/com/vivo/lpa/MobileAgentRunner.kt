@@ -96,6 +96,8 @@ class MobileAgentRunner(private val context: Context) {
         fun onToolCatalog(routeStep: SemanticRouteStep, decision: ToolCatalogDecision) {}
         /** A new concrete plan snapshot or suffix revision. */
         fun onRuntimePlan(plan: RuntimePlan) {}
+        /** Runtime v3 shadow compilation; no DAG node is executed in this phase. */
+        fun onRuntimeGraph(compilation: AgentDagCompilation) {}
         /** State change after one tool result has been reduced. */
         fun onStateDelta(stepId: String, delta: StateDelta, state: AgentRuntimeState) {}
         /** Runtime-v2 terminal decision after deterministic completion gates. */
@@ -119,7 +121,7 @@ class MobileAgentRunner(private val context: Context) {
         sessionId: String? = null,
         selectedAssetIds: List<String> = emptyList()
     ) {
-        if (BuildConfig.AGENT_RUNTIME == "loop") {
+        if (BuildConfig.AGENT_RUNTIME in setOf("loop", "dag")) {
             MobileAgentLoop(context).run(
                 query = query,
                 uris = uris,
@@ -128,7 +130,8 @@ class MobileAgentRunner(private val context: Context) {
                 listener = listener,
                 preparedAssets = preparedAssets,
                 sessionId = sessionId,
-                selectedAssetIds = selectedAssetIds
+                selectedAssetIds = selectedAssetIds,
+                dagShadow = BuildConfig.AGENT_RUNTIME == "dag"
             )
             return
         }

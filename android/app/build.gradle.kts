@@ -18,8 +18,8 @@ require(plannerEvalOnly in setOf("true", "false")) {
 val agentRuntime = providers.gradleProperty("agentRuntime")
     .orElse("loop")
     .get()
-require(agentRuntime in setOf("static", "loop")) {
-    "agentRuntime must be one of static, loop"
+require(agentRuntime in setOf("static", "loop", "dag")) {
+    "agentRuntime must be one of static, loop, dag"
 }
 val qwenModelPack = providers.gradleProperty("qwenModelPack")
     .orElse("instruct")
@@ -61,7 +61,8 @@ android {
         buildConfigField("boolean", "PLANNER_EVAL_ONLY", plannerEvalOnly)
         // Runtime architecture is independent from planner prompt experiments. Runtime v2 became
         // the default only after all 31 executors and 30 dynamic binding cases passed on device;
-        // `-PagentRuntime=static` remains the explicit rollback path.
+        // `-PagentRuntime=static` remains the explicit rollback path. `dag` is the Runtime v3
+        // shadow compiler: it audits a typed graph while Runtime v2 still performs execution.
         buildConfigField("String", "AGENT_RUNTIME", "\"$agentRuntime\"")
         // Native-thinking experiments use a separate model directory and never overwrite the
         // production Instruct-2507 pack. `route` keeps constrained bind classification direct.
@@ -121,6 +122,9 @@ dependencies {
     implementation("androidx.core:core-ktx:1.13.1")
     implementation("com.microsoft.onnxruntime:onnxruntime-android:1.19.2")
     testImplementation("junit:junit:4.13.2")
+    // Android's local JVM stubs throw for org.json methods; the DAG compiler adapter needs a real
+    // implementation in unit tests. This dependency is test-only and does not enter the APK.
+    testImplementation("org.json:json:20240303")
     androidTestImplementation("androidx.test:runner:1.6.2")
     androidTestImplementation("androidx.test.ext:junit:1.2.1")
 }

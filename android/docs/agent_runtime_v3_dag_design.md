@@ -1,0 +1,243 @@
+# Agent Runtime v3：Content Graph 与类型化执行 DAG
+
+> 状态：实验架构，shadow compiler 已接入；不得替代生产 Runtime v2
+>
+> 建立日期：2026-10-29
+>
+> 冻结基线：`runtime-v2-linear-prod-20261029`（commit `691ebef`）
+>
+> 生产默认：`agentRuntime=loop`；实验构建：`agentRuntime=dag`
+
+## 1. 决策
+
+Runtime v2 已完成31/31 executor、30/30动态绑定与代表性长链验收，作为线性生产基线冻结。
+下一阶段不继续扩展自由文本Tool Calling，而是建设领域通用、无环、有界、可恢复的类型化DAG，
+为Live内容的增加、变化和移除提供执行基础。
+
+核心边界：
+
+1. Qwen负责生成Goal IR，选择用户语义、目标、约束和操作顺序；
+2. Qwen不生成物理节点ID、文件、URI、SDK backend或DAG连线；
+3. 编译器只根据Goal IR、Content Graph、Live状态和ActionSpec生成合法物理图；
+4. 确定性代码可以排除不可能实现和选择语义等价backend，不能替用户发明意图；
+5. 多个合法方案产生不同用户可见结果时，必须由模型进一步消歧或暂停询问用户。
+
+## 2. 冻结基线
+
+冻结制品与证据：
+
+```text
+git tag: runtime-v2-linear-prod-20261029
+/home/jiangrui/.cache/lpa-final/app-runtime-v2-linear-loop-20261029.apk
+/home/jiangrui/.cache/lpa-final/app-runtime-v2-linear-static-20261029.apk
+/home/jiangrui/.cache/lpa-final/runtime-v2-linear-prod-20261029-manifest.json
+```
+
+冻结前，`loop`和`static`分别通过：
+
+```text
+:app:testDebugUnitTest
+:app:lintDebug
+:app:assembleDebug
+```
+
+v3开发期间不得删除`loop`或改变默认值；`static`继续作为第二级回滚。
+
+## 3. 两张图
+
+### 3.1 Content Graph
+
+Content Graph描述当前Live内容，而不是如何处理它。首版节点类型：
+
+```text
+LIVE_ASSET / IMAGE_TRACK / VIDEO_TRACK / AUDIO_TRACK
+OBJECT_TRACK / MASK_TRACK / REGION / LAYER / METADATA
+```
+
+边表示：
+
+```text
+CONTAINS / DERIVED_FROM / SYNCHRONIZED_WITH
+TARGETS / MASKS / OVERLAYS / ANCHORED_TO
+```
+
+所有节点使用稳定ID和revision；图使用乐观并发版本。增加、修改、移除通过原子Patch完成：
+
+```text
+AddNode / UpdateNode / RemoveNode / AddEdge / RemoveEdge
+```
+
+模型不得编造ContentNode ID。自然语言目标必须先经Grounding解析为带图版本的引用；目标不唯一时
+产生`NeedUser`，缺观察时产生`NeedObservation`。
+
+### 3.2 Execution DAG
+
+Execution DAG描述怎样从当前Content Graph得到新版本和最终artifact。节点快照必须包含：
+
+```text
+action id / contract version / typed ports / typed parameters
+resources / effects / destructive / idempotent / status
+```
+
+边分为：
+
+```text
+DATA        显式值流，必须通过端口类型检查
+CONTROL     只表达顺序或副作用边界
+CONSTRAINT  表达必须先满足的验证或确认关系
+```
+
+DAG必须无环、节点数有上限。帧级循环、分块推理和有界重试封装在executor内部，模型和DSL均
+不能生成任意`if/while`。
+
+## 4. 三层程序表示
+
+### 4.1 Goal IR（模型输出）
+
+Goal IR只包含领域语义：
+
+```text
+operation = REMOVE_CONTENT
+target = "右后方的人"
+scope = entire motion track
+preserve = [main subject, audio, duration]
+fill_policy = background reconstruction
+```
+
+当前Runtime v2的`SemanticRoute`通过兼容适配器转换为Goal IR；后续原生tool-call直接生成
+强类型Goal IR，逐步淘汰自由`instruction: String`。
+
+### 4.2 Logical Method / HTN（编译器展开）
+
+同一目标按内容状态展开：
+
+```text
+REMOVE_CONTENT
+  overlay layer  → remove layer
+  image object   → segment + image inpaint
+  video object   → segment + track + temporal inpaint
+  no backend     → Unsupported / NeedUser
+```
+
+### 4.3 Physical DAG（运行时执行）
+
+例如视频内容移除：
+
+```text
+DecodeVideo ───────────────┐
+SegmentTarget → TrackMask ─┼→ TemporalInpaint → TemporalValidate
+EstimateMotion/Background ─┘                         │
+DecodeAudio ─────────────────────────────────────────┼→ RepackLivePhoto
+CoverFrame ──────────────────────────────────────────┘       │
+                                                        Validate → Publish
+```
+
+## 5. ActionSpec
+
+Runtime v2的ToolSpec继续负责真实可执行性，同时增加编译器契约：
+
+```text
+phase
+typed input/output ports
+parameter schema、单位、范围
+state effects
+resource claims
+postcondition validators
+destructive / idempotent / singleton
+```
+
+后续必须补齐：
+
+```text
+compensation action
+semantic equivalence class
+strict parameter validation
+estimated latency / memory / thermal cost
+content graph preconditions and effects
+```
+
+参数必须保留来源：`USER_EXPLICIT / MODEL_INFERRED / PRESET / RUNTIME_FACT`。模型选择
+`MONOCHROME`等领域值，Preset Catalog按媒体/backend转换成SDK数值；编译器不得通过关键词表
+替用户决定风格。
+
+## 6. 编译结果与人机协作
+
+编译器只返回四种结果：
+
+```text
+Ready(planGraph)
+NeedObservation(observationGoal)
+NeedUser(questionSpec, continuationToken)
+Unsupported(reason, alternatives)
+```
+
+歧义处理：
+
+| 类型 | 处理 |
+|---|---|
+| 语言映射，如“黑白” | Qwen映射领域值，编译器校验 |
+| 运行事实，如目标轨道/权限 | observation/runtime，模型不得猜 |
+| 用户偏好，如裁剪或留边 | 结果非等价时询问或展示预览 |
+| 能力不足，如九拼/无inpaint | 编译器给合法替代，用户选择 |
+
+`WAITING_USER`必须保存question id、缺失slot、graph version和continuation token；用户回答后恢复同一
+图，不把答案当成一条全新无状态请求。
+
+## 7. 设备端调度
+
+DAG表达可并行依赖，不代表设备必须并行执行。每个节点声明CPU/GPU/NPU、codec、vendor SDK、
+峰值内存和thermal weight；调度器按资源租约串行化互斥节点。Qwen、VLM、BGE和媒体SDK不得因
+图并行而同时常驻并造成内存或热失控。
+
+所有外部副作用推迟到COMMIT节点。中间结果只写临时artifact；发布、替换等操作使用幂等键，
+失败时执行显式compensation或保留原Content Graph版本。
+
+## 8. 当前shadow实现
+
+已加入：
+
+- `AgentGoalIr`与Runtime v2 route适配；
+- 版本化`AgentContentGraph`及原子Patch reducer；
+- `AgentActionContract`、类型端口、资源和effects；
+- `AgentPlanGraph`、外部值绑定、DATA/CONTROL/CONSTRAINT边；
+- DAG无环、端口、类型、必需输入和节点上限校验；
+- `agentRuntime=dag`实验构建；
+- 每次Runtime v2计划快照同步生成`PLAN_GRAPH`审计；
+- DAG仍由Runtime v2执行，shadow结果不控制任何SDK或发布行为。
+
+首轮host验证结果：
+
+```text
+unit tests = 27, failures = 0, errors = 0
+agentRuntime=dag    test + lint + assemble = PASS
+agentRuntime=loop   test + lint + assemble = PASS
+agentRuntime=static test + lint + assemble = PASS
+```
+
+实验APK只作后续shadow真机审计，未安装、未切换生产：
+
+```text
+/home/jiangrui/.cache/lpa-final/app-runtime-v3-dag-shadow-20261029.apk
+SHA-256 6f906873c6bc373febaea6bbc7194ee0e6a1743f7bcbc24369bf7d7f2b8e008e
+```
+
+## 9. 迁移阶段
+
+| Phase | 内容 | Gate |
+|---|---|---|
+| 0 | 冻结Runtime v2 | tag、APK、manifest和两套构建通过 |
+| 1 | 类型、Content Graph、DAG与shadow compiler | 单元测试、loop行为零变化 |
+| 2 | Goal IR原生协议与严格参数schema | 语义/格式双轴评测，目录外动作全拒绝 |
+| 3 | DAG executor驱动现有31工具 | 与Runtime v2逐事件差分一致 |
+| 4 | Suspend/Resume、checkpoint和reconcile | 进程终止、Activity重建、重复发布故障注入通过 |
+| 5 | Live内容增加/变化/移除 | Grounding、时序一致性、保留约束和回滚验收 |
+| 6 | 资源成本调度与有限并行 | 内存、温度、延迟和中断压力测试通过 |
+| 7 | 生产切换 | 独立真机闭环通过，`loop`仍可回滚 |
+
+## 10. 当前非目标
+
+- 不让模型直接生成物理DAG；
+- 不在Phase 1改动31个executor行为；
+- 不把DAG做成图灵完备脚本语言；
+- 不因shadow graph通过就宣称Live内容编辑已实现；
+- 不在没有Grounding/时序验证/回滚前开放内容移除或生成式修改。

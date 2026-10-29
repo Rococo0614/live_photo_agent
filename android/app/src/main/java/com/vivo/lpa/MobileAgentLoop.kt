@@ -25,7 +25,8 @@ class MobileAgentLoop(private val context: Context) {
         listener: MobileAgentRunner.Listener,
         preparedAssets: List<PreparedAsset>? = null,
         sessionId: String? = null,
-        selectedAssetIds: List<String> = emptyList()
+        selectedAssetIds: List<String> = emptyList(),
+        dagShadow: Boolean = false
     ) {
         val turnId = "turn-${System.currentTimeMillis()}"
         val jobDir = File(context.cacheDir, "agent-loop/$turnId").apply { mkdirs() }
@@ -92,7 +93,7 @@ class MobileAgentLoop(private val context: Context) {
             var route = parsedRoute.route
             var plan = RuntimePlan(planId, version = 1, route = route)
             state = state.copy(route = route, plan = plan)
-            listener.onRuntimePlan(plan)
+            emitPlan(plan, state, listener, dagShadow)
             checkpoint(state)
 
             val pending = ArrayDeque<SemanticRouteStep>().apply { addAll(route.steps) }
@@ -156,7 +157,7 @@ class MobileAgentLoop(private val context: Context) {
                         replanCount = state.replanCount + 1
                     )
                     finalTrace = revised.trace
-                    listener.onRuntimePlan(plan)
+                    emitPlan(plan, state, listener, dagShadow)
                     checkpoint(state)
                     continue
                 }
@@ -184,7 +185,7 @@ class MobileAgentLoop(private val context: Context) {
                     plan = plan,
                     availableToolIds = catalog.available.map { it.id }
                 )
-                listener.onRuntimePlan(plan)
+                emitPlan(plan, state, listener, dagShadow)
                 if (BuildConfig.PLANNER_EVAL_ONLY && routeStep.family != ToolFamily.RETRIEVE) {
                     executedCalls += call
                     listener.onPlan(MobilePlan(
@@ -210,6 +211,7 @@ class MobileAgentLoop(private val context: Context) {
                     plan = state.plan ?: plan
                     listener.onResult(execution.result)
                     listener.onStateDelta(runtimeStep.stepId, execution.delta, state)
+                    emitGraph(plan, state, listener, dagShadow)
                     executedCalls += call
                     propagateAssetCallbacks(execution.delta, state, listener)
                     checkpoint(state)
@@ -260,7 +262,7 @@ class MobileAgentLoop(private val context: Context) {
                             replanCount = state.replanCount + 1
                         )
                         finalTrace = revised.trace
-                        listener.onRuntimePlan(plan)
+                        emitPlan(plan, state, listener, dagShadow)
                         checkpoint(state)
                     }
                 } catch (error: Throwable) {
@@ -279,6 +281,7 @@ class MobileAgentLoop(private val context: Context) {
                         StateDelta.MarkStepFailed(runtimeStep.stepId, message),
                         state
                     )
+                    emitGraph(plan, state, listener, dagShadow)
                     checkpoint(state)
                     failedTools.getOrPut(routeStep.stepId) { linkedSetOf() } += call.tool
                     if (state.replanCount >= MAX_REPLANS) {
@@ -496,6 +499,55 @@ class MobileAgentLoop(private val context: Context) {
         } finally {
             database.close()
         }
+    }
+
+    private fun emitPlan(
+        plan: RuntimePlan,
+        state: AgentRuntimeState,
+        listener: MobileAgentRunner.Listener,
+        dagShadow: Boolean
+    ) {
+        listener.onRuntimePlan(plan)
+        emitGraph(plan, state, listener, dagShadow)
+    }
+
+    private fun emitGraph(
+        plan: RuntimePlan,
+        state: AgentRuntimeState,
+        listener: MobileAgentRunner.Listener,
+        dagShadow: Boolean
+    ) {
+        if (!dagShadow) return
+        val compilation = runCatching { AgentDagCompiler.compileShadow(plan, state) }
+            .getOrElse { error ->
+                val fingerprint = AgentStateFingerprint.of(state)
+                val goal = AgentGoalIrAdapter.from(plan.route, state, fingerprint)
+                val graph = AgentPlanGraph(
+                    graphId = "graph-${plan.planId}",
+                    graphVersion = plan.version,
+                    parentGraphVersion = plan.parentVersion,
+                    goalId = goal.goalId,
+                    stateFingerprint = fingerprint,
+                    toolSpecVersion = MobileToolRegistry.SPEC_VERSION,
+                    nodes = emptyMap(),
+                    edges = emptyMap(),
+                    createdFromPlanId = plan.planId,
+                    revisionReason = plan.revisionReason
+                )
+                AgentDagCompilation(
+                    goal,
+                    graph,
+                    AgentDagValidation(
+                        listOf(AgentDagDiagnostic(
+                            AgentDagDiagnosticSeverity.ERROR,
+                            "compiler_exception",
+                            error.message ?: error::class.java.simpleName
+                        )),
+                        emptyList()
+                    )
+                )
+            }
+        listener.onRuntimeGraph(compilation)
     }
 
     private fun runtimeCheckpoint(state: AgentRuntimeState): JSONObject = JSONObject()

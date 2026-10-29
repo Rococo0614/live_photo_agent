@@ -146,4 +146,20 @@ class MobileToolRegistryTest {
             )
         }
     }
+
+    @Test
+    fun everyRegisteredToolHasTypedCompilerContract() {
+        MobileToolRegistry.allSpecs().forEach { spec ->
+            assertTrue("${spec.id} contract version", spec.contract.version > 0)
+            assertTrue(
+                "${spec.id} must declare an output",
+                spec.contract.outputPorts.isNotEmpty()
+            )
+            assertTrue(
+                "${spec.id} output ports must be unique",
+                spec.contract.outputPorts.map { it.name }.distinct().size ==
+                    spec.contract.outputPorts.size
+            )
+        }
+    }
 }

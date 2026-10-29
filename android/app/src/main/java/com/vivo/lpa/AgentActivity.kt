@@ -772,6 +772,10 @@ preparedAssets = prepared
                     val payload = runtimePlanJson(plan).put("query", query)
                     uiFor(generation) { logAudit("PLAN_VERSION", payload) }
                 }
+                override fun onRuntimeGraph(compilation: AgentDagCompilation) {
+                    val payload = AgentDagJson.toJson(compilation).put("query", query)
+                    uiFor(generation) { logAudit("PLAN_GRAPH", payload) }
+                }
                 override fun onStateDelta(
                     stepId: String,
                     delta: StateDelta,
