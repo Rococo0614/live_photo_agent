@@ -6,7 +6,7 @@
 >
 > 当前生产：Runtime v2 loop；Runtime v3 DAG仅shadow，不执行新增模型
 >
-> 结论性质：公开模型、官方模型卡与本机AI Hub Models 0.64.0元数据调研；未下载或真机运行候选
+> 验证状态：OWLv2语言消歧通过；EdgeTAM组件profile通过但QNN/TFLite语义失败，mask闭环未通过
 
 ## 1. 结论摘要
 
@@ -108,6 +108,10 @@ SAM3擅长短概念词组，不保证理解“顶层书架从右数倒数第二�
 若SAM3许可或约1.3秒/关键帧延迟不可接受，优先用Apache-2.0 OWLv2定位box，再让EdgeTAM生成
 精细mask。YOLOE仅适合预定义概念目录，不满足任意语言目标首选路径。
 
+本项目已把OWLv2 float官方recipe编译到AI Hub真实Galaxy S26：vision 432.8ms、text 2.8ms，
+均全NPU。真实猫拼图中，“移除橘猫”返回6个候选并正确触发`NeedUser`；语言澄清为“草地上行走
+的橘猫”后复用同一vision embedding，只重跑text并收敛到正确的唯一box。
+
 ### 3.2 EdgeTAM：语言mask的跨帧传播器
 
 | 项目 | 结果 |
@@ -119,6 +123,17 @@ SAM3擅长短概念词组，不保证理解“顶层书架从右数倒数第二�
 | 输入 | encoder 1024×1024 |
 | Galaxy S26 W8A8 QNN组件延迟 | 3.763ms / 2.797ms / 1.169ms |
 | 最新公开资产 | Universal QNN DLC / ONNX / TFLite，QAIRT 2.50 |
+
+本项目随后把公开W8A8 QNN DLC提交到AI Hub真实Galaxy S26，encoder / memory encoder /
+video decoder实测为**3.741 / 2.798 / 1.163ms**，三者均全NPU；这仍只是随机输入组件烟测，
+不等于mask语义验证。详见`aihub_remote_grounding_validation.md`。
+
+首次OWLv2唯一box → EdgeTAM float QNN链式测试未通过范围门禁：目标主体可见，但50.14%的mask
+落在扩展语言框外并重复到另一拼图区域。用官方recipe重编译、producer metadata自动适配后仍复现。
+逐组件差分显示`pix_feat`仅23.73dB，远程decoder mask仅8.02dB且上下半幅完全复制；host PyTorch
+同输入mask正常。随后float TFLite也产生相同复制与50.14%框外泄漏。因此当前结论是“EdgeTAM原
+模型可用、AI Hub QNN/TFLite部署导出语义不正确”，不能部署；下一步优先SAM3直接文本mask，
+ONNX只有在确认不复用同一错误转换路径时才测试。
 
 用途（不要求用户点选）：
 
@@ -320,12 +335,13 @@ TrackedComposite
 
 ### P0：只读Grounding probe
 
-1. 自行export SAM3 image text recipe，并在独立runtime部署；
-2. 用自然语言短词组在scene关键帧产生候选mask，不接受点/框输入；
-3. 部署EdgeTAM W8A8，把候选mask传播到完整视频；
-4. 计算候选唯一性、时间覆盖、连续性和排除重叠，只输出mask overlay，不修改媒体；
-5. 模糊时只生成语言澄清问题；
-6. 先解决QAIRT 2.50与当前2.45隔离问题。
+1. AI Hub真实S26上的OWLv2语言box已通过；EdgeTAM float QNN/TFLite语义差分失败，禁止部署；
+2. 宽泛/充分两组语言已分别通过`NeedUser`与唯一候选分支，不接受点/框输入；
+3. SAM3 gated权重授权后，优先验证直接文本mask；float正确后才允许比较W8A8和短视频；
+4. 若EdgeTAM导出回归修复，再用同一最小复现重新验收，不以性能profile代替语义正确性；
+5. 计算候选唯一性、时间覆盖、连续性和排除重叠，只输出mask overlay，不修改媒体；
+6. 模糊时只生成语言澄清问题；
+7. 远程通过后把量化ONNX重编译到QAIRT 2.45，或与当前2.45生产进程隔离。
 
 ### P1：单帧LaMa probe
 
@@ -336,7 +352,7 @@ TrackedComposite
 ### P2：短视频移除MVP
 
 1. 2秒、≤49帧、ROI或512内部处理；
-2. EdgeTAM mask + 每帧LaMa；
+2. 通过远程与本机语义Gate的跟踪mask + 每帧LaMa（当前EdgeTAM部署backend尚未通过）；
 3. 增加flicker/temporal warping/边界残留检查；
 4. 与主机ProPainter或VACE结果做盲评，但非商用模型不进入产品包。
 

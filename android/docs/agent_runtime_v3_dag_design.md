@@ -9,6 +9,8 @@
 > 生产默认：`agentRuntime=loop`；实验构建：`agentRuntime=dag`
 >
 > Live内容模型候选：[`video_content_model_candidates.md`](video_content_model_candidates.md)
+>
+> AI Hub远程验证：[`aihub_remote_grounding_validation.md`](aihub_remote_grounding_validation.md)
 
 ## 1. 决策
 
@@ -221,6 +223,28 @@ DAG表达可并行依赖，不代表设备必须并行执行。每个节点声�
 
 所有外部副作用推迟到COMMIT节点。中间结果只写临时artifact；发布、替换等操作使用幂等键，
 失败时执行显式compensation或保留原Content Graph版本。
+
+### 7.1 AI Hub远程验证backend
+
+Qualcomm AI Hub Workbench只执行编译、量化和模型张量推理作业，不承载任意Android APK、
+MediaStore、vivo SDK或完整Kotlin Agent。远程验证因此采用节点级backend：
+
+```text
+host Qwen / Goal IR / DAG / journal
+              ↓ typed model input
+AI Hub Galaxy S26 model job(s)
+              ↓ boxes / masks / scores
+host validator / Content Graph / next DAG decision
+```
+
+远程backend只用于`OBSERVE`和无副作用`VALIDATE`节点；`TRANSFORM`首测也只能写临时预览。
+`STATE_MUTATION`和`COMMIT`不得远程执行。每次作业必须记录模型ID、job ID、设备/OS、输入哈希、
+输出哈希、阈值和失败原因；缺少输出、类型不符或job失败都按节点失败处理，不能回退成猜测。
+
+迁移顺序固定为：远程float语义正确性 → 远程量化数值对照 → 下载制品 → 本机隔离runtime单节点
+验证 → Android node bridge差分。AI Hub通过只是必要条件，不代表vivo本机runtime、内存、热或SDK
+生命周期已经通过。Workbench支持显式`--qairt_version`；需要与生产2.45共存的模型应优先重编译
+为2.45，或继续使用独立2.50进程，禁止直接混载两套QAIRT库。
 
 ## 8. 当前shadow实现
 
