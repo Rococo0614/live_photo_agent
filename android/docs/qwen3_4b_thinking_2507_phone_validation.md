@@ -2,6 +2,8 @@
 
 > 日期：2026-10-27
 >
+> 最近更新：2026-10-29（本地W4A16量化停止并归档）
+>
 > 设备：vivo PD2547 / SM8850 / Android 36 / 16GB RAM
 >
 > 生产配置始终保持 `Qwen3-4B-Instruct-2507 + Runtime v2 loop`；本实验使用独立目录和进程。
@@ -63,6 +65,49 @@ threads        6
 ```
 
 模型、runner和localhost server均未覆盖生产 `qwen` 模型目录。
+
+### 2.3 本地W4A16量化结论
+
+真实 `Qwen3-4B-Thinking-2507` 官方权重已完整校验，但当前主机无法稳定完成AI Hub
+Models 0.64.0 / AIMET-ONNX 2.28的AdaScale W4A16流程。该结论是**量化工具链和峰值
+内存受阻**，不是模型效果否定，也不构成生产切换依据。
+
+量化阶段并非按8GB BF16推理权重常驻。实测内存构成为：
+
+| 项目 | 实测 |
+|---|---:|
+| 官方BF16 safetensors | 8,045,591,552 bytes |
+| 动态ONNX FP32 initializer | 4,411,424,268 elements / 17,645,697,120 bytes |
+| ONNX外部 `model.data` | 17,645,660,160 bytes |
+| 2048-token完整FP32 logits | 1,244,659,712 bytes |
+| 校准临时文件峰值 | 约95GB（约17GB ORT模型和约78GB prefill mmap） |
+
+ONNX比源权重大，是因为QuantSim保留FP32 master weights，同时QNN导出把源模型共享的
+embedding / `lm_head` 拆开；两个 `[151936, 2560]` FP32矩阵各占1,555,824,640 bytes。
+W4A16是最终编码目标，不是校准期间的实际常驻格式。
+
+主要尝试及停止点：
+
+| 校准context / sequence | 结果 |
+|---|---|
+| 4096 / 2048 | QuantSim重建和Wikitext prefill均出现24GB CUDA OOM |
+| 3072 / 2048 | 128/128 prefill完成；CUDA完整 `lm_head` 申请1,244,659,712 bytes失败 |
+| 2048 / 1536 | 同一 `lm_head` 申请933,494,784 bytes失败 |
+| 2048 / 1024 | 同一节点出现CUBLAS内部错误；关闭TF32无改善，未继续降至512牺牲校准质量 |
+| 3072 / 2048混合CPU/GPU | 参数编码和最终全图校准移至CPU，AdaScale留在GPU；曾进入首个block并达到1699/2048，但无可恢复checkpoint |
+| 独立systemd复跑 | 128/128 prefill完成，CPU计算1873个参数编码时被OOM killer终止 |
+
+最后一次systemd复跑时，主机125GiB RAM仅余约0.8GiB、约10GiB swap已满；GPU仅使用
+约1.3GiB且仍有约22.7GiB空闲，因此该次是明确的**主机RAM OOM**。更早的纯CUDA尝试则是
+明确的**24GB VRAM不足**。两者均是容量/实现峰值问题，不表示CPU或GPU硬件故障。
+
+截至停止时：
+
+- `model.encodings` 不存在，云端QNN编译没有启动；
+- 不原样重试，不把校准sequence继续降至512；
+- 当前没有新增主机内存或更换40GB+ GPU的计划，本地Thinking-2507 W4A16工作停止并归档；
+- 若未来出现官方预量化Thinking-2507 checkpoint或可用的大内存主机，再重新打开QNN路径；
+- 生产仍为 `Qwen3-4B-Instruct-2507`，没有覆盖、切换或降级。
 
 ## 3. 推理控制
 
@@ -229,10 +274,28 @@ Concrete Binder       64 thinking + 192 final reserve（总上限256）
 5. **OpenCL可作为测试后端**：P09/P12为35/44秒且2/2通过，但仍明显慢于生产QNN；
 6. **512 token是有界最优而非充分思考**：初始手机行协议12/12均被强制闭合，不能等同
    官方完整推理质量；原生tool-call中7/12达到预算上限；
-7. **原生tool-call值得继续投入QNN路径**；AI Hub Token与SM8850目标已验证，下一步是完成
-   本地W4A16量化、编译4096 context包并验证真机QNN效果；8192重导出暂缓；
+7. **原生tool-call仍值得保留**，但Thinking-2507本地W4A16路径已被24GB VRAM和主机RAM
+   峰值共同阻断；在没有官方预量化checkpoint或更大内存主机前停止重试，8192重导出继续暂缓；
 8. 具体Binder已在26条非平凡目录上达到26/26，但仍未测试媒体执行与长链Replan；不能把
    组件通过率宣称为生产闭环通过率。
+
+### 6.6 后续对照模型
+
+在引入新模型前，应先让现有 `Qwen3-4B-Instruct-2507` 使用与Thinking-2507完全相同的
+`plan_media_route` 原生tool schema重跑12条Route。当前4/12基线使用旧输出路径，而12/12
+Thinking结果使用原生tool call，不能把全部差异都归因于thinking。
+
+独立模型对照按以下顺序考虑：
+
+| 模型 | 价值 | 当前部署条件 |
+|---|---|---|
+| **Phi-4-Mini-Instruct 3.8B** | MIT、支持中文和function calling、参数量最接近；适合作为首选独立语义对照 | AI Hub 0.64已有2.33GB Q4_0/GenieX llama.cpp资产，并有Galaxy S26数据；不是QNN W4A16 |
+| **Gemma-4-E4B-it** | Apache-2.0、有效4B、多语言、原生function calling，独立于Qwen | AI Hub有QAIRT 2.45 W4A16现成资产；QNN仍为Developer Preview且已知有复读/格式问题 |
+| **Llama-3.2-3B-Instruct** | 成熟的独立架构和tool calling基线 | AI Hub有发布的W4A16 checkpoint；官方支持语言不含中文，中文Route不宜作为主对照 |
+| **Qwen3-1.7B** | 同家族、同thinking协议，可分离“模型规模”影响 | AI Hub有现成W4A16和Q4_0；不是独立架构对照 |
+
+质量比较先统一为4096 context、同一tool schema、同一Route/Retrieval/Binder集合和同一输出预算；
+模型语义成绩与GGUF/QNN后端性能必须分开报告。
 
 ## 7. 证据
 
@@ -253,6 +316,14 @@ Concrete Binder       64 thinking + 192 final reserve（总上限256）
 /home/jiangrui/.cache/lpa-final/2507-thinking-eval-prompts.tar.gz
 /home/jiangrui/.cache/lpa-final/qai-hub-sm8850-device.txt
 /home/jiangrui/.cache/lpa-final/qwen3-4b-thinking-2507-phone-manifest.json
+/home/jiangrui/.cache/lpa-final/2507-hf-weight-verification.json
+/home/jiangrui/.cache/lpa-final/2507-qnn-w4a16-default-attempt-oom.json
+/home/jiangrui/.cache/lpa-final/2507-qnn-w4a16-context3072-seq2048-lmhead-oom.json
+/home/jiangrui/.cache/lpa-final/2507-qnn-w4a16-block0-external-interruption.json
+/home/jiangrui/.cache/lpa-final/2507-qnn-w4a16-systemd-host-oom.json
+/home/jiangrui/.cache/lpa-final/2507-qnn-w4a16-systemd-host-oom.log
+/home/jiangrui/.cache/lpa-final/2507-qnn-w4a16-systemd-host-oom-gpu-trace.csv
+/home/jiangrui/.cache/lpa-final/2507-qnn-w4a16-systemd-host-oom-memory-trace.txt
 /home/jiangrui/.cache/lpa-final/llama-v070-android-arm64-kleidiai-runner.tar.gz
 /home/jiangrui/.cache/lpa-final/llama-v070-android-arm64-opencl-kleidiai-runner.tar.gz
 tests/evals/score_llama_route_responses.py
