@@ -206,6 +206,8 @@ DAG表达可并行依赖，不代表设备必须并行执行。每个节点声�
 - Runtime素材、轨道、artifact和layout到Content Graph的无路径投影；
 - 严格模型侧`plan_live_edit` Goal IR codec；工具ID、图连线、文件、URI和runtime ID全部拒绝；
 - `Ready / NeedBinding / NeedObservation / NeedUser / Unsupported` preflight；
+- backend-independent DAG value store/execution engine；输出端口类型错误或缺失时fail-closed；
+- Runtime v2动作顺序、节点状态与DAG拓扑的逐快照差分；
 - `agentRuntime=dag`实验构建；
 - 每次Runtime v2计划快照同步生成`PLAN_GRAPH`与`CONTENT_GRAPH`审计；
 - DAG仍由Runtime v2执行，shadow结果不控制任何SDK或发布行为。
@@ -213,7 +215,7 @@ DAG表达可并行依赖，不代表设备必须并行执行。每个节点声�
 首轮host验证结果：
 
 ```text
-unit tests = 48, failures = 0, errors = 0
+unit tests = 51, failures = 0, errors = 0
 agentRuntime=dag    test + lint + assemble = PASS
 agentRuntime=loop   test + lint + assemble = PASS
 agentRuntime=static test + lint + assemble = PASS
@@ -223,7 +225,7 @@ agentRuntime=static test + lint + assemble = PASS
 
 ```text
 /home/jiangrui/.cache/lpa-final/app-runtime-v3-dag-shadow-20261029.apk
-SHA-256 48258bde5c467b52a3fd4b70592c1289d391c44fb5e675617cf811a153321abb
+SHA-256 c19752bfc262c86e1431eb59fa928f819522a86c301a64e2b651a2b026eb7645
 ```
 
 首次真机shadow使用旧Instruct已知弱例“给我的猫做个三拼”，在Runtime v2 route解析阶段失败，
@@ -305,6 +307,36 @@ next wave   = video_reverse
 ```text
 /home/jiangrui/.cache/lpa-final/runtime-v3-goal-preflight-phone-acceptance.json
 SHA-256 139c52242b51d74da7b00f23550e360f38c17084b530e83e1048ec0843dbd7f7
+```
+
+Phase 3前半段增加与Android SDK无关的执行内核：typed runtime value、external/data-edge
+物化、ready wave执行、输出端口校验、event journal和最终commit。fake backend已覆盖：
+
+```text
+decode ─┐
+        ├→ inpaint → publish
+segment ┘
+```
+
+两条独立前置节点可同wave执行，fan-in只有在VIDEO与MASK_TRACK都物化后才ready；错误输出
+IMAGE代替VIDEO或漏掉required output时，节点和整图均FAILED，不允许继续publish。
+
+真机仍由Runtime v2执行，只比较每个计划快照。F002四个快照结果：
+
+```text
+structural validation         = 4/4
+Runtime v2 differential match = 4/4
+expected actions              = search_assets → video_reverse
+graph actions                 = search_assets → video_reverse
+issues                        = []
+real DAG SDK execution        = disabled
+```
+
+证据：
+
+```text
+/home/jiangrui/.cache/lpa-final/runtime-v3-dag-differential-phone-acceptance.json
+SHA-256 ea549c189562412064822584f17d73d5352cff7e9e0c76baf4da3673da15131d
 ```
 
 测试结束后已重新安装冻结的Runtime v2 loop APK；vivo输入法启用、ADBKeyboard禁用、stay-awake

@@ -15,6 +15,7 @@ enum class AgentDagEventKind {
     NODE_COMMITTED,
     NODE_FAILED,
     GRAPH_FINISHED,
+    GRAPH_FAILED,
     GRAPH_CANCELLED
 }
 
@@ -216,6 +217,29 @@ object AgentDagScheduler {
             status = AgentDagRunStatus.CANCELLED,
             events = state.events + state.event(
                 AgentDagEventKind.GRAPH_CANCELLED,
+                null,
+                message,
+                timestampMs
+            )
+        )
+    }
+
+    fun failGraph(
+        state: AgentDagRunState,
+        message: String,
+        timestampMs: Long = System.currentTimeMillis()
+    ): AgentDagRunState {
+        if (state.status in setOf(
+                AgentDagRunStatus.FINISHED,
+                AgentDagRunStatus.FAILED,
+                AgentDagRunStatus.CANCELLED
+            )
+        ) return state
+        return state.copy(
+            status = AgentDagRunStatus.FAILED,
+            lastError = message,
+            events = state.events + state.event(
+                AgentDagEventKind.GRAPH_FAILED,
                 null,
                 message,
                 timestampMs

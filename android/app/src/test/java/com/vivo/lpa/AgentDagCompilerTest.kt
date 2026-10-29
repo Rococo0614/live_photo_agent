@@ -46,6 +46,7 @@ class AgentDagCompilerTest {
         assertTrue(compilation.validation.diagnostics.toString(), compilation.validation.valid)
         assertTrue(compilation.complete)
         assertTrue(compilation.executable)
+        assertTrue(compilation.differential?.issues.toString(), compilation.differential?.matches == true)
         assertEquals(3, compilation.graph.nodes.size)
         assertTrue(compilation.graph.edges.values.any {
             it.kind == AgentDagEdgeKind.DATA &&

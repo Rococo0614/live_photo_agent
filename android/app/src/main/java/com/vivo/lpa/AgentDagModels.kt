@@ -155,7 +155,8 @@ data class AgentDagValidation(
 data class AgentDagCompilation(
     val goal: AgentGoalIr,
     val graph: AgentPlanGraph,
-    val validation: AgentDagValidation
+    val validation: AgentDagValidation,
+    val differential: AgentDagDifferentialReport? = null
 ) {
     val complete: Boolean
         get() = goal.operations.all { operation ->
@@ -165,6 +166,13 @@ data class AgentDagCompilation(
     val executable: Boolean
         get() = complete && validation.valid
 }
+
+data class AgentDagDifferentialReport(
+    val matches: Boolean,
+    val expectedActionIds: List<String>,
+    val graphActionIds: List<String>,
+    val issues: List<String>
+)
 
 data class AgentObservationRequirement(
     val requirementId: String,

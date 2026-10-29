@@ -141,7 +141,9 @@ object AgentDagCompiler {
             createdFromPlanId = plan.planId,
             revisionReason = plan.revisionReason
         )
-        return AgentDagCompilation(goal, graph, AgentDagValidator.validate(graph))
+        val validation = AgentDagValidator.validate(graph)
+        val compilation = AgentDagCompilation(goal, graph, validation)
+        return compilation.copy(differential = AgentDagDifferential.compare(plan, compilation))
     }
 
     private fun findInputPort(
@@ -206,6 +208,13 @@ object AgentDagJson {
                 .put("blocked_node_ids", JSONArray(preview.blockedNodeIds))
                 .put("complete_graph", preview.completeGraph)
                 .put("valid_graph", preview.validGraph))
+            .put("runtime_v2_differential", compilation.differential?.let { report ->
+                JSONObject()
+                    .put("matches", report.matches)
+                    .put("expected_action_ids", JSONArray(report.expectedActionIds))
+                    .put("graph_action_ids", JSONArray(report.graphActionIds))
+                    .put("issues", JSONArray(report.issues))
+            } ?: JSONObject.NULL)
             .put("validation", JSONObject()
             .put("valid", compilation.validation.valid)
             .put("complete", compilation.complete)
@@ -368,4 +377,40 @@ object AgentDagJson {
         .put("minimum", parameter.minimum ?: JSONObject.NULL)
         .put("maximum", parameter.maximum ?: JSONObject.NULL)
         .put("enum_values", JSONArray(parameter.enumValues.sorted()))
+}
+
+object AgentDagDifferential {
+    fun compare(plan: RuntimePlan, compilation: AgentDagCompilation): AgentDagDifferentialReport {
+        val expected = plan.steps.map { it.tool }
+        val actual = compilation.validation.topologicalOrder.mapNotNull { nodeId ->
+            compilation.graph.nodes[nodeId]?.actionId
+        }
+        val issues = mutableListOf<String>()
+        if (expected != actual) {
+            issues += "action order differs: expected=$expected graph=$actual"
+        }
+        if (plan.steps.size != compilation.graph.nodes.size) {
+            issues += "node count differs: plan=${plan.steps.size} graph=${compilation.graph.nodes.size}"
+        }
+        plan.steps.forEach { step ->
+            val node = compilation.graph.nodes["node-${step.stepId}"]
+            if (node == null) {
+                issues += "missing graph node for ${step.stepId}"
+            } else {
+                val expectedStatus = when (step.status) {
+                    RuntimeStepStatus.PENDING -> AgentDagNodeStatus.PLANNED
+                    RuntimeStepStatus.RUNNING -> AgentDagNodeStatus.RUNNING
+                    RuntimeStepStatus.COMPLETED -> if (node.phase == AgentActionPhase.COMMIT) {
+                        AgentDagNodeStatus.COMMITTED
+                    } else AgentDagNodeStatus.VALIDATED
+                    RuntimeStepStatus.FAILED -> AgentDagNodeStatus.FAILED
+                    RuntimeStepStatus.CANCELLED -> AgentDagNodeStatus.CANCELLED
+                }
+                if (node.status != expectedStatus) {
+                    issues += "status differs for ${step.stepId}: expected=$expectedStatus graph=${node.status}"
+                }
+            }
+        }
+        return AgentDagDifferentialReport(issues.isEmpty(), expected, actual, issues)
+    }
 }

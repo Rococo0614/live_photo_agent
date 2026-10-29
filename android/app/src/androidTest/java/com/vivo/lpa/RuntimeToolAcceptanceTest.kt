@@ -627,6 +627,7 @@ class RuntimeToolAcceptanceTest {
             .put("query", query)
             .put("graph_count", graphs.size)
             .put("all_structurally_valid", graphs.all { it.validation.valid })
+            .put("all_runtime_v2_differentials_match", graphs.all { it.differential?.matches == true })
             .put("content_graph_count", contentGraphs.size)
             .put("all_content_graphs_valid", contentGraphs.all { it.validation.valid })
             .put("last_content_source_count", contentGraphs.lastOrNull()?.graph?.sourceAssetIds?.size ?: 0)
@@ -657,6 +658,7 @@ class RuntimeToolAcceptanceTest {
         assertTrue("DAG validation errors: ${graphs.flatMap { it.validation.diagnostics }}", graphs.all {
             it.validation.valid
         })
+        assertTrue("Runtime v2 differential mismatch", graphs.all { it.differential?.matches == true })
         assertTrue("search_assets missing from $actions", "search_assets" in actions)
         assertTrue("video_reverse missing from $actions", "video_reverse" in actions)
         assertTrue(
