@@ -328,15 +328,7 @@ class GenieTextPlanner(private val context: Context, private val sessionId: Stri
     }
 
     private fun explicitMediaRequirement(query: String): RuntimeMediaKind? {
-        val lower = query.lowercase()
-        return when {
-            listOf("live photo", "livephoto", "动态照片", "实况照片").any(lower::contains) ->
-                RuntimeMediaKind.LIVE_PHOTO
-            listOf("视频", "video", "clip").any(lower::contains) -> RuntimeMediaKind.VIDEO
-            listOf("普通图片", "静态图片", "jpg", "jpeg", "png", "still image").any(lower::contains) ->
-                RuntimeMediaKind.IMAGE
-            else -> null
-        }
+        return RequestFactExtractor.explicitMedia(query)
     }
 
     private fun hasExplicitTemporalAction(query: String): Boolean {

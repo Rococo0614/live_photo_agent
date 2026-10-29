@@ -11,6 +11,8 @@ enum class AgentDataKind {
     LAYOUT,
     MASK_TRACK,
     OBJECT_TRACK,
+    REGION,
+    MEDIA_ARTIFACT,
     PUBLISHED_URI
 }
 
@@ -176,8 +178,46 @@ data class AgentGoalConstraint(
     val kind: AgentConstraintKind,
     val key: String,
     val value: String,
+    val sourceText: String? = null,
+    val provenance: AgentValueProvenance = AgentValueProvenance.MODEL_INFERRED
+)
+
+enum class AgentValueProvenance {
+    USER_EXPLICIT,
+    MODEL_INFERRED,
+    PRESET,
+    RUNTIME_FACT
+}
+
+sealed interface AgentGoalValue {
+    data class Text(val value: String) : AgentGoalValue
+    data class Number(val value: Double, val unit: String? = null) : AgentGoalValue
+    data class Flag(val value: Boolean) : AgentGoalValue
+    data class TextList(val values: List<String>) : AgentGoalValue
+    data class TimeRangeMs(val startMs: Long, val endMs: Long) : AgentGoalValue {
+        init {
+            require(startMs >= 0 && endMs > startMs) { "invalid time range $startMs..$endMs" }
+        }
+    }
+}
+
+data class AgentGoalArgument(
+    val value: AgentGoalValue,
+    val provenance: AgentValueProvenance,
     val sourceText: String? = null
 )
+
+sealed interface AgentGoalTarget {
+    data class Semantic(
+        val description: String,
+        val sourceText: String? = null
+    ) : AgentGoalTarget
+    data class GroundedContentNode(
+        val contentGraphId: String,
+        val contentGraphVersion: Int,
+        val nodeId: String
+    ) : AgentGoalTarget
+}
 
 data class AgentUnresolvedSlot(
     val slotId: String,
@@ -194,6 +234,8 @@ data class AgentGoalOperation(
     val instruction: String = "",
     val requestedCount: Int? = null,
     val requiredMedia: RuntimeMediaKind? = null,
+    val target: AgentGoalTarget? = null,
+    val parameters: Map<String, AgentGoalArgument> = emptyMap(),
     val constraints: List<AgentGoalConstraint> = emptyList()
 )
 

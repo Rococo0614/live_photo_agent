@@ -100,6 +100,8 @@ class MobileAgentRunner(private val context: Context) {
         fun onRuntimeGraph(compilation: AgentDagCompilation) {}
         /** Versioned view of assets, tracks, artifacts and layout used by the DAG compiler. */
         fun onRuntimeContentGraph(snapshot: AgentContentGraphSnapshot) {}
+        /** Goal IR preflight: bind, observe, ask, ready or unsupported. */
+        fun onRuntimeGoal(goal: AgentGoalIr, result: AgentCompileResult) {}
         /** State change after one tool result has been reduced. */
         fun onStateDelta(stepId: String, delta: StateDelta, state: AgentRuntimeState) {}
         /** Runtime-v2 terminal decision after deterministic completion gates. */

@@ -19,4 +19,12 @@ class RequestFactExtractorTest {
         assertNull(RequestFactExtractor.explicitCount("把视频加速两倍"))
         assertNull(RequestFactExtractor.explicitCount("从第3秒开始倒放"))
     }
+
+    @Test
+    fun extractsOnlyExplicitMediaConstraints() {
+        assertEquals(RuntimeMediaKind.VIDEO, RequestFactExtractor.explicitMedia("找一段猫的视频"))
+        assertEquals(RuntimeMediaKind.LIVE_PHOTO, RequestFactExtractor.explicitMedia("给这张动态照片换封面"))
+        assertEquals(RuntimeMediaKind.IMAGE, RequestFactExtractor.explicitMedia("找三张海边静态图片"))
+        assertNull(RequestFactExtractor.explicitMedia("找三份海边素材"))
+    }
 }

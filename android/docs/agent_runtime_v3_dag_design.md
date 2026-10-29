@@ -162,10 +162,11 @@ content graph preconditions and effects
 
 ## 6. 编译结果与人机协作
 
-编译器只返回四种结果：
+编译器只返回五种结果：
 
 ```text
 Ready(planGraph)
+NeedBinding(operation, candidates<=10)
 NeedObservation(observationGoal)
 NeedUser(questionSpec, continuationToken)
 Unsupported(reason, alternatives)
@@ -203,6 +204,8 @@ DAG表达可并行依赖，不代表设备必须并行执行。每个节点声�
 - DAG无环、端口、类型、必需输入和节点上限校验；
 - 不调用executor的ready-node scheduler、资源互斥、fan-out/fan-in与commit门禁；
 - Runtime素材、轨道、artifact和layout到Content Graph的无路径投影；
+- 严格模型侧`plan_live_edit` Goal IR codec；工具ID、图连线、文件、URI和runtime ID全部拒绝；
+- `Ready / NeedBinding / NeedObservation / NeedUser / Unsupported` preflight；
 - `agentRuntime=dag`实验构建；
 - 每次Runtime v2计划快照同步生成`PLAN_GRAPH`与`CONTENT_GRAPH`审计；
 - DAG仍由Runtime v2执行，shadow结果不控制任何SDK或发布行为。
@@ -210,7 +213,7 @@ DAG表达可并行依赖，不代表设备必须并行执行。每个节点声�
 首轮host验证结果：
 
 ```text
-unit tests = 36, failures = 0, errors = 0
+unit tests = 48, failures = 0, errors = 0
 agentRuntime=dag    test + lint + assemble = PASS
 agentRuntime=loop   test + lint + assemble = PASS
 agentRuntime=static test + lint + assemble = PASS
@@ -220,7 +223,7 @@ agentRuntime=static test + lint + assemble = PASS
 
 ```text
 /home/jiangrui/.cache/lpa-final/app-runtime-v3-dag-shadow-20261029.apk
-SHA-256 8ab56cf72915cf296748e0bd204458e08fa50ccf72f9fb7ce9a75b3bf009ab79
+SHA-256 48258bde5c467b52a3fd4b70592c1289d391c44fb5e675617cf811a153321abb
 ```
 
 首次真机shadow使用旧Instruct已知弱例“给我的猫做个三拼”，在Runtime v2 route解析阶段失败，
@@ -266,6 +269,42 @@ media edit / publish      = 均未执行
 ```text
 /home/jiangrui/.cache/lpa-final/runtime-v3-dag-scheduler-content-phone-acceptance.json
 SHA-256 af16a626ac4aa6fbd935762ea8a2f781a3854c9c8ed2c6d93e4d9958a4cadc27
+```
+
+第三阶段加入严格Goal IR边界。模型只能输出领域操作、语义target、scope、typed parameter、
+preserve/forbid/require约束和未决slot；host分配operation ID。若模型输出`tool/action_id/node_id/
+edge_id/asset_id/file/path/uri/sdk/backend`，codec直接拒绝。用户原话中的明确数量和媒体类型仍由
+事实提取覆盖模型错误值。
+
+内容操作preflight行为已由host测试覆盖：
+
+```text
+remove_content但无target       → NeedUser + continuation token
+remove_content语义target       → NeedObservation(OBJECT_TRACK)
+publish但无validated artifact  → NeedObservation(MEDIA_ARTIFACT)
+旧state fingerprint            → Unsupported(stale state)
+当前已支持语义操作             → NeedBinding(状态过滤候选<=10)
+```
+
+真机F002最后一个shadow快照返回：
+
+```text
+status      = need_binding
+operation   = route-temporal-27
+family      = TEMPORAL
+candidates  = clip_trim / video_mirror / video_timeline_effect /
+              video_speed / video_reverse / set_display_frame
+next wave   = video_reverse
+```
+
+这保持了架构边界：编译器过滤事实候选，Qwen仍负责从候选中选择`video_reverse`。当前生产QNN仍
+使用Runtime v2短行route；严格`plan_live_edit` codec已经可用但尚未替换生产模型协议。
+
+证据：
+
+```text
+/home/jiangrui/.cache/lpa-final/runtime-v3-goal-preflight-phone-acceptance.json
+SHA-256 139c52242b51d74da7b00f23550e360f38c17084b530e83e1048ec0843dbd7f7
 ```
 
 测试结束后已重新安装冻结的Runtime v2 loop APK；vivo输入法启用、ADBKeyboard禁用、stay-awake

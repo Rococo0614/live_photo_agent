@@ -235,7 +235,18 @@ object AgentDagJson {
                 .put("instruction", operation.instruction)
                 .put("requested_count", operation.requestedCount ?: JSONObject.NULL)
                 .put("required_media", operation.requiredMedia?.name ?: JSONObject.NULL)
+                .put("target", operation.target?.let(::targetJson) ?: JSONObject.NULL)
+                .put("parameters", JSONObject().apply {
+                    operation.parameters.toSortedMap().forEach { (name, argument) ->
+                        put(name, JSONObject()
+                            .put("value", goalValueJson(argument.value))
+                            .put("provenance", argument.provenance.name)
+                            .put("source_text", argument.sourceText ?: JSONObject.NULL))
+                    }
+                })
+                .put("constraints", JSONArray(operation.constraints.map(::constraintJson)))
         }))
+        .put("constraints", JSONArray(goal.constraints.map(::constraintJson)))
         .put("unresolved_slots", JSONArray(goal.unresolvedSlots.map { slot ->
             JSONObject()
                 .put("slot_id", slot.slotId)
@@ -260,6 +271,37 @@ object AgentDagJson {
             .put("content_graph_id", scope.contentGraphId)
             .put("content_graph_version", scope.contentGraphVersion)
             .put("node_id", scope.nodeId)
+    }
+
+    private fun targetJson(target: AgentGoalTarget): JSONObject = when (target) {
+        is AgentGoalTarget.Semantic -> JSONObject()
+            .put("type", "semantic")
+            .put("description", target.description)
+            .put("source_text", target.sourceText ?: JSONObject.NULL)
+        is AgentGoalTarget.GroundedContentNode -> JSONObject()
+            .put("type", "content_node")
+            .put("content_graph_id", target.contentGraphId)
+            .put("content_graph_version", target.contentGraphVersion)
+            .put("node_id", target.nodeId)
+    }
+
+    private fun constraintJson(constraint: AgentGoalConstraint): JSONObject = JSONObject()
+        .put("kind", constraint.kind.name)
+        .put("key", constraint.key)
+        .put("value", constraint.value)
+        .put("source_text", constraint.sourceText ?: JSONObject.NULL)
+        .put("provenance", constraint.provenance.name)
+
+    private fun goalValueJson(value: AgentGoalValue): Any = when (value) {
+        is AgentGoalValue.Text -> value.value
+        is AgentGoalValue.Number -> JSONObject()
+            .put("number", value.value)
+            .put("unit", value.unit ?: JSONObject.NULL)
+        is AgentGoalValue.Flag -> value.value
+        is AgentGoalValue.TextList -> JSONArray(value.values)
+        is AgentGoalValue.TimeRangeMs -> JSONObject()
+            .put("start_ms", value.startMs)
+            .put("end_ms", value.endMs)
     }
 
     private fun graphJson(graph: AgentPlanGraph): JSONObject = JSONObject()

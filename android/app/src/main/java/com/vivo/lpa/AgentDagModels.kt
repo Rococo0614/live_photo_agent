@@ -183,9 +183,20 @@ data class AgentQuestionSpec(
     val graphVersion: Int
 )
 
+data class AgentBindingRequest(
+    val operationId: String,
+    val family: ToolFamily,
+    val candidateActionIds: List<String>,
+    val stateFingerprint: String
+)
+
 /** Terminal result of future Goal IR compilation. Shadow lowering currently returns [Ready]. */
 sealed interface AgentCompileResult {
     data class Ready(val compilation: AgentDagCompilation) : AgentCompileResult
+    data class NeedBinding(
+        val goal: AgentGoalIr,
+        val requests: List<AgentBindingRequest>
+    ) : AgentCompileResult
     data class NeedObservation(
         val goal: AgentGoalIr,
         val requirements: List<AgentObservationRequirement>

@@ -584,6 +584,7 @@ class RuntimeToolAcceptanceTest {
         val query = "找一段猫的视频并倒放后导出"
         val graphs = mutableListOf<AgentDagCompilation>()
         val contentGraphs = mutableListOf<AgentContentGraphSnapshot>()
+        val goalResults = mutableListOf<AgentCompileResult>()
         val results = mutableListOf<MobileToolResult>()
         val traces = mutableListOf<Pair<String, BrainTrace>>()
         var finalPlan: MobilePlan? = null
@@ -604,6 +605,9 @@ class RuntimeToolAcceptanceTest {
                 }
                 override fun onRuntimeContentGraph(snapshot: AgentContentGraphSnapshot) {
                     contentGraphs += snapshot
+                }
+                override fun onRuntimeGoal(goal: AgentGoalIr, result: AgentCompileResult) {
+                    goalResults += result
                 }
                 override fun onPlan(plan: MobilePlan) { finalPlan = plan }
                 override fun onResult(result: MobileToolResult) { results += result }
@@ -626,6 +630,7 @@ class RuntimeToolAcceptanceTest {
             .put("content_graph_count", contentGraphs.size)
             .put("all_content_graphs_valid", contentGraphs.all { it.validation.valid })
             .put("last_content_source_count", contentGraphs.lastOrNull()?.graph?.sourceAssetIds?.size ?: 0)
+            .put("goal_result_count", goalResults.size)
             .put("last_complete", last?.complete)
             .put("last_executable", last?.executable)
             .put("actions", JSONArray(actions))
@@ -643,6 +648,8 @@ class RuntimeToolAcceptanceTest {
             }))
             .put("last_compilation", last?.let(AgentDagJson::toJson) ?: JSONObject.NULL)
             .put("last_content_graph", contentGraphs.lastOrNull()?.let(AgentContentGraphJson::toJson)
+                ?: JSONObject.NULL)
+            .put("last_goal_result", goalResults.lastOrNull()?.let(AgentCompileResultJson::toJson)
                 ?: JSONObject.NULL)
         File(context.filesDir, "dag-shadow-acceptance.json").writeText(report.toString(2))
 
@@ -666,6 +673,11 @@ class RuntimeToolAcceptanceTest {
             "content graph has no video track",
             contentGraphs.last().graph.nodes.values.any { it.kind == ContentNodeKind.VIDEO_TRACK }
         )
+        val lastGoalResult = goalResults.lastOrNull()
+        assertTrue("goal preflight did not request binding: $lastGoalResult", lastGoalResult is AgentCompileResult.NeedBinding)
+        val request = (lastGoalResult as AgentCompileResult.NeedBinding).requests.single()
+        assertTrue("goal preflight family is not temporal", request.family == ToolFamily.TEMPORAL)
+        assertTrue("video_reverse is not a binding candidate", "video_reverse" in request.candidateActionIds)
         assertTrue("unexpected loop error: $error", error == null)
     }
 
