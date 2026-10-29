@@ -22,7 +22,8 @@ Runtime v2 已完成31/31 executor、30/30动态绑定与代表性长链验收�
 2. Qwen不生成物理节点ID、文件、URI、SDK backend或DAG连线；
 3. 编译器只根据Goal IR、Content Graph、Live状态和ActionSpec生成合法物理图；
 4. 确定性代码可以排除不可能实现和选择语义等价backend，不能替用户发明意图；
-5. 多个合法方案产生不同用户可见结果时，必须由模型进一步消歧或暂停询问用户。
+5. 多个合法方案产生不同用户可见结果时，必须由模型进一步消歧或暂停询问用户；
+6. Live内容target首版只接受语言，不引入点选/框选；mask是Grounding observation，不是用户输入。
 
 ## 2. 冻结基线
 
@@ -70,7 +71,9 @@ AddNode / UpdateNode / RemoveNode / AddEdge / RemoveEdge
 ```
 
 模型不得编造ContentNode ID。自然语言目标必须先经Grounding解析为带图版本的引用；目标不唯一时
-产生`NeedUser`，缺观察时产生`NeedObservation`。
+产生`NeedUser`，缺观察时产生`NeedObservation`。修改节点还必须依赖一个`ScopeCertificate`，记录
+候选唯一性、时间覆盖率、mask连续性、保护对象重叠和所用Content Graph版本；证书不充分时节点
+不得ready。
 
 ### 3.2 Execution DAG
 
@@ -100,7 +103,13 @@ Goal IR只包含领域语义：
 
 ```text
 operation = REMOVE_CONTENT
-target = "右后方的人"
+target = TargetPredicate(
+  concept=person,
+  attributes=[red clothing],
+  spatial=[right, background],
+  quantifier=one,
+  exclude=[foreground child]
+)
 scope = entire motion track
 preserve = [main subject, audio, duration]
 fill_policy = background reconstruction
@@ -116,8 +125,8 @@ fill_policy = background reconstruction
 ```text
 REMOVE_CONTENT
   overlay layer  → remove layer
-  image object   → segment + image inpaint
-  video object   → segment + track + temporal inpaint
+  image object   → language segment + image inpaint
+  video object   → SAM3 keyframe text masks + EdgeTAM track + temporal inpaint
   no backend     → Unsupported / NeedUser
 ```
 
@@ -185,6 +194,24 @@ Unsupported(reason, alternatives)
 
 `WAITING_USER`必须保存question id、缺失slot、graph version和continuation token；用户回答后恢复同一
 图，不把答案当成一条全新无状态请求。
+
+### 6.1 语言Grounding子图
+
+复杂描述先由Qwen编译成TargetPredicate；Qwen不输出mask或坐标。物理图按scene展开：
+
+```text
+SampleKeyframes
+→ SAM3TextSegment(prompt primitives)           # 关键帧fan-out
+→ EvaluateAttributesRelationsDepthExclusions
+→ AssociateCandidateTracks
+→ EdgeTAMPropagate
+→ ScopeCoverageValidate
+→ Ready(mask certificate) | NeedObservation(more frames) | NeedUser(language clarification)
+```
+
+SAM3只直接处理短概念词组；“右后方穿红衣的人”应拆成`person`、红衣属性、右侧几何关系和背景深度，
+再在候选mask上求值。量词`all/one/exact(n)`、排除条件和时间范围都是DSL一等字段。用户修正也只用
+语言，例如“不是左边的，是后面的”；系统重新编译谓词，不要求用户点或框。
 
 ## 7. 设备端调度
 

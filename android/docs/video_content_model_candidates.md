@@ -13,8 +13,10 @@
 当前最可行的端侧路线不是直接部署一个“全能视频生成模型”，而是把小模型组合进Runtime v3：
 
 ```text
-目标定位/用户点选
-→ EdgeTAM生成OBJECT_TRACK + MASK_TRACK
+Qwen把用户描述编译成TargetPredicate
+→ SAM3在稀疏关键帧上用文本生成候选mask
+→ EdgeTAM把确认的候选传播成OBJECT_TRACK + MASK_TRACK
+→ ScopeCoverageValidator检查唯一性、时间覆盖与排除范围
 → LaMa-Dilated按帧/关键帧填充
 → 时序传播与一致性校验
 → 重封装视频或Live Photo
@@ -28,7 +30,7 @@
 
 ```text
 Stable Diffusion / ControlNet生成对象patch
-→ EdgeTAM跟踪锚点
+→ SAM3按语言定位锚点 + EdgeTAM跨帧跟踪
 → Depth Anything估计遮挡
 → 确定性composite与光照/透明度调整
 ```
@@ -49,9 +51,64 @@ QAIRT 2.50生成。因此：
 - 只有单模型probe通过后，才评估Qwen/VLM/BGE与视频模型的生命周期调度；
 - 下表延迟是单组件模型延迟，不包含解码、缩放、mask后处理、内存拷贝和视频封装。
 
+### 2.1 输入决策：首版只接受语言目标，不引入点选或框选
+
+点选/框选会新增坐标映射、关键帧选择、触控误差、目标被遮挡时的重新输入和多实例判定，而且并不
+天然保证跨帧范围正确。首版因此把语言作为唯一目标输入：
+
+```text
+“移除右后方穿红衣服的人，但保留前面的孩子”
+             ↓ Qwen（只解析语义，不画mask）
+TargetPredicate(
+  concept=person,
+  attributes=[red clothing],
+  spatial=[right, background],
+  quantifier=one,
+  exclude=[child in foreground],
+  temporal=whole_clip
+)
+```
+
+mask是Grounding产生的**事实输出**，不是用户输入。系统可以显示overlay作为预览，但不要求用户
+点击。若候选不唯一，继续使用语言追问，例如“是左侧红衣人物，还是右侧白衣人物？”。用户回答
+后重新编译谓词和Grounding子图。
+
+这也成为DAG范围是否充分的门禁：没有`ScopeCertificate`的内容修改节点不得ready。
+
 ## 3. 可在设备端优先验证的组件
 
-### 3.1 EdgeTAM：首选视频目标分割与跟踪
+### 3.1 SAM3：首选语言到关键帧mask
+
+SAM3（Segment Anything with Concepts）可直接接受短自然语言概念，输出匹配实例的boxes、masks
+和scores；上游还支持文本驱动的视频跟踪。Qualcomm已提供可导出的手机recipe：
+
+| 项目 | 结果 |
+|---|---|
+| 输入 | 1008×1008图像 + 最长32 token文本 |
+| 输出 | 候选boxes、scores、quarter-resolution mask logits |
+| Galaxy S26 vision backbone | 约1099ms |
+| Galaxy S26 text/head | 约215ms；同一关键帧特征可复用多个短prompt |
+| 许可 | Meta SAM自定义许可；AI Hub因许可不提供预编译下载 |
+| 运行时 | AI Hub recipe基于QAIRT 2.50，需自行export |
+
+当前Qualcomm recipe是**单图文本分割**，没有导出上游SAM3 video predictor。因此建议每个scene只在
+少量关键帧运行SAM3，再用EdgeTAM传播mask；不能逐帧跑约1.3秒的SAM3完整前向。
+
+SAM3擅长短概念词组，不保证理解“顶层书架从右数倒数第二本书”等复杂关系。Qwen应把复杂描述
+拆成概念、属性、相对位置、深度、数量和排除谓词；SAM3只负责感知候选，不能替代关系求值。
+
+备选语言定位器：
+
+| 模型 | Galaxy S26公开组件延迟 | 优缺点 |
+|---|---:|---|
+| **OWLv2** | text 2.789ms + vision 431.661ms | Apache-2.0、运行时自由文本、只输出box；可接EdgeTAM，速度快于SAM3 |
+| **YOLO-World** | text约95–104ms + detector约31–47ms | 12.7M detector、运行时文本embedding、只输出box；GPL-3.0且text encoder profile内存较高 |
+| **YOLOE-Seg** | W8A8约3.759ms | 直接输出mask但AI Hub recipe在export前`set_classes(prompt_text)`，更适合固定词表；AGPL-3.0 |
+
+若SAM3许可或约1.3秒/关键帧延迟不可接受，优先用Apache-2.0 OWLv2定位box，再让EdgeTAM生成
+精细mask。YOLOE仅适合预定义概念目录，不满足任意语言目标首选路径。
+
+### 3.2 EdgeTAM：语言mask的跨帧传播器
 
 | 项目 | 结果 |
 |---|---|
@@ -63,9 +120,9 @@ QAIRT 2.50生成。因此：
 | Galaxy S26 W8A8 QNN组件延迟 | 3.763ms / 2.797ms / 1.169ms |
 | 最新公开资产 | Universal QNN DLC / ONNX / TFLite，QAIRT 2.50 |
 
-用途：
+用途（不要求用户点选）：
 
-- 把Qwen的语义target或用户点选ground成稳定`OBJECT_TRACK`；
+- 接收SAM3关键帧mask并传播成稳定`OBJECT_TRACK`；
 - 为remove/change提供逐帧`MASK_TRACK`；
 - 在用户确认前显示mask overlay，避免模型选错同类人物/物体；
 - 作为内容增加时的锚点/遮挡目标跟踪器。
@@ -73,7 +130,7 @@ QAIRT 2.50生成。因此：
 它只生成mask，不做内容填充。相比SAM2，EdgeTAM更适合手机：SAM2 Tiny的公开S26 encoder仍约
 40–68ms，而EdgeTAM W8A8组件明显更轻。
 
-### 3.2 LaMa-Dilated：首选端侧填充MVP
+### 3.3 LaMa-Dilated：首选端侧填充MVP
 
 | 项目 | 结果 |
 |---|---|
@@ -94,7 +151,7 @@ QAIRT 2.50生成。因此：
 - 512输入需要对高分辨率帧做ROI或overlap tile；
 - 大面积运动目标、镜头快速移动和新暴露背景仍可能失败。
 
-### 3.3 AOT-GAN：较小但不是首选
+### 3.4 AOT-GAN：较小但不是首选
 
 | 项目 | 结果 |
 |---|---|
@@ -106,7 +163,7 @@ QAIRT 2.50生成。因此：
 文件更小，但当前checkpoint同样偏人脸，且S26实测比LaMa慢。保留为人像移除/修补对照，不作为
 通用场景首选。
 
-### 3.4 Depth Anything V2：内容添加的遮挡辅助
+### 3.5 Depth Anything V2：内容添加的遮挡辅助
 
 | 项目 | 结果 |
 |---|---|
@@ -117,7 +174,7 @@ QAIRT 2.50生成。因此：
 
 可估计插入对象与原场景的前后关系，但深度不能替代三维重建；只用于遮挡顺序、落点和粗略尺度。
 
-### 3.5 Stable Diffusion 1.5 / ControlNet-Canny：生成静态patch或关键帧
+### 3.6 Stable Diffusion 1.5 / ControlNet-Canny：生成静态patch或关键帧
 
 AI Hub已有SM8850同代目标的W8A16 QNN context：
 
@@ -139,7 +196,7 @@ AI Hub已有SM8850同代目标的W8A16 QNN context：
 若使用自定义inpaint/InstructPix2Pix权重，仍需重新量化与编译，不能假定现成T2I资产可直接替换。
 SD1.5受CreativeML OpenRAIL-M及AI Hub使用限制约束，发布前需单独审核。
 
-### 3.6 FOMM：专用图片动画
+### 3.7 FOMM：专用图片动画
 
 | 项目 | 结果 |
 |---|---|
@@ -213,9 +270,13 @@ src_video + src_mask + reference_images + prompt
 ### 6.1 REMOVE_CONTENT首版
 
 ```text
-ResolveSemanticTarget
-→ NeedUser(mask preview)                     # 多目标时暂停
+CompileTargetPredicate
+→ SampleSceneKeyframes
+→ SAM3TextSegment(keyframes)                 # fan-out候选mask
+→ AssociateAndFilterCandidates               # 属性/位置/深度/排除
 → EdgeTAMTrackMask                           # OBJECT_TRACK + MASK_TRACK
+→ ScopeCoverageValidate                      # 唯一性/漏帧/连续性
+→ NeedUser(language clarification)           # 仍不唯一时暂停
 → DilateAndFeatherMask
 → DecodeVideoChunks
 → LaMaInpaintFrames/Keyframes
@@ -232,9 +293,9 @@ ResolveSemanticTarget
 ### 6.2 ADD_CONTENT首版
 
 ```text
-ResolveAnchorRegion
+CompileAnchorPredicate
+├→ SAM3TextSegment + EdgeTAMTrackAnchor
 ├→ GenerateOrRetrieveImagePatch (SD1.5/ControlNet或素材库)
-├→ EdgeTAMTrackAnchor
 └→ DepthAnythingEstimate
         ↓
 TrackedComposite
@@ -259,10 +320,12 @@ TrackedComposite
 
 ### P0：只读Grounding probe
 
-1. 在独立runtime中部署EdgeTAM W8A8；
-2. 用户点选或框选目标，输出mask overlay，不修改媒体；
-3. 验证mask IoU/J&F、漂移、遮挡恢复、延迟、峰值RAM和温度；
-4. 先解决QAIRT 2.50与当前2.45隔离问题。
+1. 自行export SAM3 image text recipe，并在独立runtime部署；
+2. 用自然语言短词组在scene关键帧产生候选mask，不接受点/框输入；
+3. 部署EdgeTAM W8A8，把候选mask传播到完整视频；
+4. 计算候选唯一性、时间覆盖、连续性和排除重叠，只输出mask overlay，不修改媒体；
+5. 模糊时只生成语言澄清问题；
+6. 先解决QAIRT 2.50与当前2.45隔离问题。
 
 ### P1：单帧LaMa probe
 
@@ -298,13 +361,16 @@ SD/素材库patch + EdgeTAM + Depth Anything + deterministic composite，先支�
 - Safety：错误目标不得执行；生成内容标识、预览确认、不可逆发布门禁；
 - License：代码、checkpoint、基础模型和训练数据条款分别审查。
 
-任何单帧看起来正确但视频闪烁的结果都判失败；任何mask目标不唯一但未询问用户的结果也判失败。
+任何单帧看起来正确但视频闪烁的结果都判失败；任何语言mask目标不唯一、覆盖不足或侵入保护对象，
+但没有阻止修改并触发语言追问的结果也判失败。
 
 ## 9. 官方来源
 
 ```text
 EdgeTAM:       https://github.com/facebookresearch/EdgeTAM
 AI Hub EdgeTAM:https://huggingface.co/qualcomm/EdgeTAM
+SAM3:          https://github.com/facebookresearch/sam3
+AI Hub SAM3:   https://huggingface.co/qualcomm/Segment-Anything-Model-3
 LaMa:          https://github.com/advimman/lama
 AI Hub LaMa:   https://huggingface.co/qualcomm/LaMa-Dilated
 AOT-GAN:       https://github.com/researchmm/AOT-GAN-for-Inpainting
