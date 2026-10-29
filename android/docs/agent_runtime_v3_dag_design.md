@@ -7,6 +7,8 @@
 > 冻结基线：`runtime-v2-linear-prod-20261029`（commit `691ebef`）
 >
 > 生产默认：`agentRuntime=loop`；实验构建：`agentRuntime=dag`
+>
+> Live内容模型候选：[`video_content_model_candidates.md`](video_content_model_candidates.md)
 
 ## 1. 决策
 
