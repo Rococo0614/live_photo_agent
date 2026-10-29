@@ -776,6 +776,10 @@ preparedAssets = prepared
                     val payload = AgentDagJson.toJson(compilation).put("query", query)
                     uiFor(generation) { logAudit("PLAN_GRAPH", payload) }
                 }
+                override fun onRuntimeContentGraph(snapshot: AgentContentGraphSnapshot) {
+                    val payload = AgentContentGraphJson.toJson(snapshot).put("query", query)
+                    uiFor(generation) { logAudit("CONTENT_GRAPH", payload) }
+                }
                 override fun onStateDelta(
                     stepId: String,
                     delta: StateDelta,

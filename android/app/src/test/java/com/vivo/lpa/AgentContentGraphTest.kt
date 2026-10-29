@@ -8,6 +8,25 @@ import org.junit.Test
 
 class AgentContentGraphTest {
     @Test
+    fun descriptorsBootstrapTypedMediaTracks() {
+        val graph = AgentContentGraphFactory.fromDescriptors(
+            graphId = "content-bootstrap",
+            version = 0,
+            descriptors = listOf(
+                ContentAssetDescriptor("live-1", "livephoto", true, true),
+                ContentAssetDescriptor("image-1", "image", true, false)
+            )
+        )
+
+        assertEquals(ContentNodeKind.LIVE_ASSET, graph.nodes["asset:live-1"]?.kind)
+        assertEquals(ContentNodeKind.VIDEO_TRACK, graph.nodes["asset:live-1:video"]?.kind)
+        assertEquals(ContentNodeKind.IMAGE_TRACK, graph.nodes["asset:live-1:image"]?.kind)
+        assertEquals(ContentNodeKind.MEDIA_ASSET, graph.nodes["asset:image-1"]?.kind)
+        assertFalse("asset:image-1:video" in graph.nodes)
+        assertTrue(AgentContentGraphValidator.validate(graph).valid)
+    }
+
+    @Test
     fun patchAddsVersionedNodesAndEdgesAtomically() {
         val graph = AgentContentGraph("content-1")
         val patch = ContentGraphPatch(

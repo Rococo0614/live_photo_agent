@@ -201,24 +201,26 @@ DAG表达可并行依赖，不代表设备必须并行执行。每个节点声�
 - `AgentActionContract`、类型端口、资源和effects；
 - `AgentPlanGraph`、外部值绑定、DATA/CONTROL/CONSTRAINT边；
 - DAG无环、端口、类型、必需输入和节点上限校验；
+- 不调用executor的ready-node scheduler、资源互斥、fan-out/fan-in与commit门禁；
+- Runtime素材、轨道、artifact和layout到Content Graph的无路径投影；
 - `agentRuntime=dag`实验构建；
-- 每次Runtime v2计划快照同步生成`PLAN_GRAPH`审计；
+- 每次Runtime v2计划快照同步生成`PLAN_GRAPH`与`CONTENT_GRAPH`审计；
 - DAG仍由Runtime v2执行，shadow结果不控制任何SDK或发布行为。
 
 首轮host验证结果：
 
 ```text
-unit tests = 30, failures = 0, errors = 0
+unit tests = 36, failures = 0, errors = 0
 agentRuntime=dag    test + lint + assemble = PASS
 agentRuntime=loop   test + lint + assemble = PASS
 agentRuntime=static test + lint + assemble = PASS
 ```
 
-实验APK只作后续shadow真机审计，未安装、未切换生产：
+实验APK只在受控shadow探针中临时安装；测试后恢复冻结的loop APK，从未切换生产默认：
 
 ```text
 /home/jiangrui/.cache/lpa-final/app-runtime-v3-dag-shadow-20261029.apk
-SHA-256 18812ca3594db41f7aef563cb813a730a1227476e992aa224bdf00222c728f39
+SHA-256 8ab56cf72915cf296748e0bd204458e08fa50ccf72f9fb7ce9a75b3bf009ab79
 ```
 
 首次真机shadow使用旧Instruct已知弱例“给我的猫做个三拼”，在Runtime v2 route解析阶段失败，
@@ -242,6 +244,28 @@ publish executed      = false
 ```text
 /home/jiangrui/.cache/lpa-final/runtime-v3-dag-shadow-phone-acceptance.json
 SHA-256 13d0c2740bea18081c6926147c614df9d93ca47be7ebd4f75c166506935ada2d
+```
+
+第二阶段增加不调用executor的确定性DAG scheduler：ready-node、fan-out/fan-in、资源互斥、
+内存/thermal预算、失败阻断、commit全图门禁、取消和不可变event journal。真实状态同时投影为
+Content Graph，且审计不包含本地文件路径。
+
+同一F002再次真机shadow：
+
+```text
+execution graph snapshots = 4，valid 4/4
+content graph snapshots   = 4，valid 4/4
+content source assets     = 1
+content nodes             = LIVE_ASSET + IMAGE_TRACK + VIDEO_TRACK + METADATA
+next scheduler wave       = [video_reverse]
+media edit / publish      = 均未执行
+```
+
+证据：
+
+```text
+/home/jiangrui/.cache/lpa-final/runtime-v3-dag-scheduler-content-phone-acceptance.json
+SHA-256 af16a626ac4aa6fbd935762ea8a2f781a3854c9c8ed2c6d93e4d9958a4cadc27
 ```
 
 测试结束后已重新安装冻结的Runtime v2 loop APK；vivo输入法启用、ADBKeyboard禁用、stay-awake

@@ -583,6 +583,7 @@ class RuntimeToolAcceptanceTest {
 
         val query = "找一段猫的视频并倒放后导出"
         val graphs = mutableListOf<AgentDagCompilation>()
+        val contentGraphs = mutableListOf<AgentContentGraphSnapshot>()
         val results = mutableListOf<MobileToolResult>()
         val traces = mutableListOf<Pair<String, BrainTrace>>()
         var finalPlan: MobilePlan? = null
@@ -601,6 +602,9 @@ class RuntimeToolAcceptanceTest {
                 override fun onRuntimeBrainTrace(stage: String, trace: BrainTrace) {
                     traces += stage to trace
                 }
+                override fun onRuntimeContentGraph(snapshot: AgentContentGraphSnapshot) {
+                    contentGraphs += snapshot
+                }
                 override fun onPlan(plan: MobilePlan) { finalPlan = plan }
                 override fun onResult(result: MobileToolResult) { results += result }
                 override fun onFinished(uri: Uri?, message: String) { finishMessage = message }
@@ -611,13 +615,21 @@ class RuntimeToolAcceptanceTest {
 
         val last = graphs.lastOrNull()
         val actions = last?.graph?.nodes?.values?.map { it.actionId }.orEmpty()
+        val schedulePreview = last?.let(AgentDagScheduler::preview)
+        val scheduleActions = schedulePreview?.waves.orEmpty().map { wave ->
+            wave.mapNotNull { nodeId -> last?.graph?.nodes?.get(nodeId)?.actionId }
+        }
         val report = JSONObject()
             .put("query", query)
             .put("graph_count", graphs.size)
             .put("all_structurally_valid", graphs.all { it.validation.valid })
+            .put("content_graph_count", contentGraphs.size)
+            .put("all_content_graphs_valid", contentGraphs.all { it.validation.valid })
+            .put("last_content_source_count", contentGraphs.lastOrNull()?.graph?.sourceAssetIds?.size ?: 0)
             .put("last_complete", last?.complete)
             .put("last_executable", last?.executable)
             .put("actions", JSONArray(actions))
+            .put("schedule_waves", JSONArray(scheduleActions.map { JSONArray(it) }))
             .put("tool_results", JSONArray(results.map { it.tool }))
             .put("final_tools", JSONArray(finalPlan?.toolCalls?.map { it.tool }.orEmpty()))
             .put("finish_message", finishMessage)
@@ -630,6 +642,8 @@ class RuntimeToolAcceptanceTest {
                     .put("raw_output", trace.rawOutput)
             }))
             .put("last_compilation", last?.let(AgentDagJson::toJson) ?: JSONObject.NULL)
+            .put("last_content_graph", contentGraphs.lastOrNull()?.let(AgentContentGraphJson::toJson)
+                ?: JSONObject.NULL)
         File(context.filesDir, "dag-shadow-acceptance.json").writeText(report.toString(2))
 
         assertTrue("DAG shadow produced no graphs", graphs.isNotEmpty())
@@ -638,6 +652,20 @@ class RuntimeToolAcceptanceTest {
         })
         assertTrue("search_assets missing from $actions", "search_assets" in actions)
         assertTrue("video_reverse missing from $actions", "video_reverse" in actions)
+        assertTrue(
+            "next schedule wave is not video_reverse: $scheduleActions",
+            scheduleActions.firstOrNull() == listOf("video_reverse")
+        )
+        assertTrue("content graph produced no snapshots", contentGraphs.isNotEmpty())
+        assertTrue("content graph validation failed", contentGraphs.all { it.validation.valid })
+        assertTrue(
+            "content graph did not converge to one retrieved asset",
+            contentGraphs.last().graph.sourceAssetIds.size == 1
+        )
+        assertTrue(
+            "content graph has no video track",
+            contentGraphs.last().graph.nodes.values.any { it.kind == ContentNodeKind.VIDEO_TRACK }
+        )
         assertTrue("unexpected loop error: $error", error == null)
     }
 

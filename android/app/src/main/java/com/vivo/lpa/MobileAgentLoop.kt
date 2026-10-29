@@ -548,6 +548,7 @@ class MobileAgentLoop(private val context: Context) {
                 )
             }
         listener.onRuntimeGraph(compilation)
+        listener.onRuntimeContentGraph(AgentContentGraphFactory.fromState(state))
     }
 
     private fun runtimeCheckpoint(state: AgentRuntimeState): JSONObject = JSONObject()

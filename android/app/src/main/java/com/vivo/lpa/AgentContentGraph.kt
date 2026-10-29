@@ -1,8 +1,13 @@
 package com.vivo.lpa
 
+import org.json.JSONArray
+import org.json.JSONObject
+
 /** Domain objects that can be targeted by future add/change/remove operations. */
 enum class ContentNodeKind {
+    MEDIA_ASSET,
     LIVE_ASSET,
+    MEDIA_ARTIFACT,
     IMAGE_TRACK,
     VIDEO_TRACK,
     AUDIO_TRACK,
@@ -10,6 +15,7 @@ enum class ContentNodeKind {
     MASK_TRACK,
     REGION,
     LAYER,
+    LAYOUT,
     METADATA
 }
 
@@ -104,6 +110,20 @@ data class ContentGraphDiagnostic(
 data class ContentGraphValidation(val errors: List<ContentGraphDiagnostic>) {
     val valid: Boolean get() = errors.isEmpty()
 }
+
+data class AgentContentGraphSnapshot(
+    val graph: AgentContentGraph,
+    val validation: ContentGraphValidation,
+    val stateFingerprint: String
+)
+
+data class ContentAssetDescriptor(
+    val assetId: String,
+    val mediaFormat: String,
+    val hasImageTrack: Boolean,
+    val hasVideoTrack: Boolean,
+    val attributes: Map<String, String> = emptyMap()
+)
 
 object AgentContentGraphValidator {
     fun validate(graph: AgentContentGraph): ContentGraphValidation {
@@ -208,4 +228,224 @@ object AgentContentGraphReducer {
         }
         return updated
     }
+}
+
+/** Projects current runtime facts into a versioned content graph without exposing file paths. */
+object AgentContentGraphFactory {
+    fun fromState(state: AgentRuntimeState): AgentContentGraphSnapshot {
+        val fingerprint = AgentStateFingerprint.of(state)
+        val descriptors = state.sourceAssets.map { asset ->
+            ContentAssetDescriptor(
+                assetId = asset.assetId,
+                mediaFormat = asset.metadata.optString("media_format", "unknown"),
+                hasImageTrack = asset.imageFile != null,
+                hasVideoTrack = asset.videoFile != null,
+                attributes = mapOf(
+                    "display_name" to asset.sourceFile.name,
+                    "selected" to (asset.assetId in state.selectedAssetIds).toString()
+                )
+            )
+        }
+        var graph = fromDescriptors(
+            graphId = "content-${state.turnId}",
+            version = state.executedCount,
+            descriptors = descriptors
+        )
+        val nodes = graph.nodes.toMutableMap()
+        val edges = graph.edges.toMutableMap()
+
+        val artifacts = state.artifacts.values.sortedBy { it.artifactId }
+        artifacts.forEach { artifact ->
+            val artifactNodeId = artifactNodeId(artifact.artifactId)
+            nodes[artifactNodeId] = ContentNode(
+                artifactNodeId,
+                ContentNodeKind.MEDIA_ARTIFACT,
+                attributes = mapOf(
+                    "artifact_id" to artifact.artifactId,
+                    "artifact_kind" to artifact.kind.name,
+                    "producer_step_id" to artifact.producerStepId,
+                    "validated" to artifact.validated.toString(),
+                    "published" to artifact.published.toString()
+                ),
+                provenance = artifact.producerStepId
+            )
+        }
+        artifacts.forEach { artifact ->
+            val artifactNodeId = artifactNodeId(artifact.artifactId)
+            val producer = state.plan?.steps?.firstOrNull { it.stepId == artifact.producerStepId }
+            producer?.inputs.orEmpty().forEachIndexed { index, input ->
+                when (input) {
+                    is AgentInputRef.AssetSet -> input.assetIds.forEachIndexed { assetIndex, assetId ->
+                        val source = assetNodeId(assetId)
+                        if (source in nodes) {
+                            val edge = ContentEdge(
+                                "derived-$artifactNodeId-$index-$assetIndex",
+                                artifactNodeId,
+                                source,
+                                ContentEdgeKind.DERIVED_FROM
+                            )
+                            edges[edge.edgeId] = edge
+                        }
+                    }
+                    is AgentInputRef.Artifact -> {
+                        val source = artifactNodeId(input.artifactId)
+                        if (source in nodes) {
+                            val edge = ContentEdge(
+                                "derived-$artifactNodeId-$index",
+                                artifactNodeId,
+                                source,
+                                ContentEdgeKind.DERIVED_FROM
+                            )
+                            edges[edge.edgeId] = edge
+                        }
+                    }
+                    is AgentInputRef.Layout -> Unit
+                }
+            }
+        }
+
+        state.layout?.let { layout ->
+            val layoutNodeId = "layout:${state.layoutVersion}"
+            nodes[layoutNodeId] = ContentNode(
+                layoutNodeId,
+                ContentNodeKind.LAYOUT,
+                revision = state.layoutVersion.coerceAtLeast(1),
+                attributes = mapOf(
+                    "template_id" to layout.optString("template_id"),
+                    "slot_count" to (layout.optJSONArray("items")?.length() ?: 0).toString()
+                ),
+                provenance = "runtime-layout"
+            )
+            val items = layout.optJSONArray("items")
+            if (items != null) {
+                for (index in 0 until items.length()) {
+                    val assetId = items.optJSONObject(index)?.optString("asset_id").orEmpty()
+                    val target = assetNodeId(assetId)
+                    if (target in nodes) {
+                        val edge = ContentEdge(
+                            "layout-target-$index",
+                            layoutNodeId,
+                            target,
+                            ContentEdgeKind.TARGETS,
+                            mapOf("slot" to index.toString())
+                        )
+                        edges[edge.edgeId] = edge
+                    }
+                }
+            }
+        }
+
+        graph = graph.copy(nodes = nodes, edges = edges)
+        return AgentContentGraphSnapshot(
+            graph,
+            AgentContentGraphValidator.validate(graph),
+            fingerprint
+        )
+    }
+
+    fun fromDescriptors(
+        graphId: String,
+        version: Int,
+        descriptors: List<ContentAssetDescriptor>
+    ): AgentContentGraph {
+        val nodes = linkedMapOf<String, ContentNode>()
+        val edges = linkedMapOf<String, ContentEdge>()
+        descriptors.forEach { descriptor ->
+            val rootId = assetNodeId(descriptor.assetId)
+            nodes[rootId] = ContentNode(
+                rootId,
+                if (descriptor.mediaFormat.equals("livephoto", true)) {
+                    ContentNodeKind.LIVE_ASSET
+                } else {
+                    ContentNodeKind.MEDIA_ASSET
+                },
+                attributes = descriptor.attributes + mapOf(
+                    "asset_id" to descriptor.assetId,
+                    "media_format" to descriptor.mediaFormat
+                ),
+                provenance = "runtime-asset"
+            )
+            if (descriptor.hasImageTrack) {
+                addTrack(nodes, edges, rootId, "image", ContentNodeKind.IMAGE_TRACK)
+            }
+            if (descriptor.hasVideoTrack) {
+                addTrack(nodes, edges, rootId, "video", ContentNodeKind.VIDEO_TRACK)
+            }
+            val metadataId = "$rootId:metadata"
+            nodes[metadataId] = ContentNode(
+                metadataId,
+                ContentNodeKind.METADATA,
+                attributes = mapOf("media_format" to descriptor.mediaFormat),
+                provenance = "runtime-metadata"
+            )
+            val edge = ContentEdge(
+                "contains-$rootId-metadata",
+                rootId,
+                metadataId,
+                ContentEdgeKind.CONTAINS
+            )
+            edges[edge.edgeId] = edge
+        }
+        return AgentContentGraph(
+            graphId = graphId,
+            version = version,
+            sourceAssetIds = descriptors.map { it.assetId },
+            nodes = nodes,
+            edges = edges
+        )
+    }
+
+    private fun addTrack(
+        nodes: MutableMap<String, ContentNode>,
+        edges: MutableMap<String, ContentEdge>,
+        rootId: String,
+        suffix: String,
+        kind: ContentNodeKind
+    ) {
+        val trackId = "$rootId:$suffix"
+        nodes[trackId] = ContentNode(trackId, kind, provenance = "runtime-track")
+        val edge = ContentEdge(
+            "contains-$rootId-$suffix",
+            rootId,
+            trackId,
+            ContentEdgeKind.CONTAINS
+        )
+        edges[edge.edgeId] = edge
+    }
+
+    private fun assetNodeId(assetId: String): String = "asset:$assetId"
+    private fun artifactNodeId(artifactId: String): String = "artifact:$artifactId"
+}
+
+object AgentContentGraphJson {
+    fun toJson(snapshot: AgentContentGraphSnapshot): JSONObject = JSONObject()
+        .put("graph_id", snapshot.graph.graphId)
+        .put("schema_version", snapshot.graph.schemaVersion)
+        .put("graph_version", snapshot.graph.version)
+        .put("state_fingerprint", snapshot.stateFingerprint)
+        .put("valid", snapshot.validation.valid)
+        .put("source_asset_ids", JSONArray(snapshot.graph.sourceAssetIds))
+        .put("nodes", JSONArray(snapshot.graph.nodes.values.map { node ->
+            JSONObject()
+                .put("node_id", node.nodeId)
+                .put("kind", node.kind.name)
+                .put("revision", node.revision)
+                .put("attributes", JSONObject(node.attributes))
+                .put("provenance", node.provenance)
+        }))
+        .put("edges", JSONArray(snapshot.graph.edges.values.map { edge ->
+            JSONObject()
+                .put("edge_id", edge.edgeId)
+                .put("from_node_id", edge.fromNodeId)
+                .put("to_node_id", edge.toNodeId)
+                .put("kind", edge.kind.name)
+                .put("attributes", JSONObject(edge.attributes))
+        }))
+        .put("errors", JSONArray(snapshot.validation.errors.map { error ->
+            JSONObject()
+                .put("code", error.code)
+                .put("message", error.message)
+                .put("node_id", error.nodeId ?: JSONObject.NULL)
+                .put("edge_id", error.edgeId ?: JSONObject.NULL)
+        }))
 }

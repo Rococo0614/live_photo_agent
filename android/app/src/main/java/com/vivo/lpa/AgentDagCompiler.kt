@@ -196,10 +196,17 @@ object AgentStateFingerprint {
 
 /** Audit serializer kept outside the graph model so the compiler core remains JSON-independent. */
 object AgentDagJson {
-    fun toJson(compilation: AgentDagCompilation): JSONObject = JSONObject()
-        .put("goal", goalJson(compilation.goal))
-        .put("graph", graphJson(compilation.graph))
-        .put("validation", JSONObject()
+    fun toJson(compilation: AgentDagCompilation): JSONObject {
+        val preview = AgentDagScheduler.preview(compilation)
+        return JSONObject()
+            .put("goal", goalJson(compilation.goal))
+            .put("graph", graphJson(compilation.graph))
+            .put("schedule_preview", JSONObject()
+                .put("waves", JSONArray(preview.waves.map { wave -> JSONArray(wave) }))
+                .put("blocked_node_ids", JSONArray(preview.blockedNodeIds))
+                .put("complete_graph", preview.completeGraph)
+                .put("valid_graph", preview.validGraph))
+            .put("validation", JSONObject()
             .put("valid", compilation.validation.valid)
             .put("complete", compilation.complete)
             .put("executable", compilation.executable)
@@ -213,6 +220,7 @@ object AgentDagJson {
                     .put("edge_id", diagnostic.edgeId ?: JSONObject.NULL)
                     .put("port", diagnostic.port ?: JSONObject.NULL)
             })))
+    }
 
     private fun goalJson(goal: AgentGoalIr): JSONObject = JSONObject()
         .put("goal_id", goal.goalId)
