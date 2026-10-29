@@ -296,6 +296,17 @@ object AgentDagValidator {
                         port = binding.inputPort
                     )
                 }
+                if (input != null && binding.value is AgentDagExternalValue.AssetSet &&
+                    binding.value.assetIds.size !in input.minItems..input.maxItems
+                ) {
+                    diagnostics += error(
+                        "item_cardinality",
+                        "${node.nodeId}.${binding.inputPort} contains ${binding.value.assetIds.size} " +
+                            "items; expected ${input.minItems}..${input.maxItems}",
+                        nodeId = node.nodeId,
+                        port = binding.inputPort
+                    )
+                }
             }
         }
 

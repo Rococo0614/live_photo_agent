@@ -307,6 +307,8 @@ object AgentDagJson {
         .put("kinds", JSONArray(port.kinds.map { it.name }))
         .put("required", port.required)
         .put("variadic", port.variadic)
+        .put("min_items", port.minItems)
+        .put("max_items", if (port.maxItems == Int.MAX_VALUE) JSONObject.NULL else port.maxItems)
 
     private fun parameterJson(parameter: AgentParameterSpec): JSONObject = JSONObject()
         .put("name", parameter.name)

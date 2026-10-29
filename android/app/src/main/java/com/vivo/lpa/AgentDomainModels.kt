@@ -55,11 +55,15 @@ data class AgentPortSpec(
     val name: String,
     val kinds: Set<AgentDataKind>,
     val required: Boolean = true,
-    val variadic: Boolean = false
+    val variadic: Boolean = false,
+    /** Cardinality inside a collection value such as ASSET_SET; distinct from binding count. */
+    val minItems: Int = if (required) 1 else 0,
+    val maxItems: Int = Int.MAX_VALUE
 ) {
     init {
         require(name.isNotBlank()) { "port name cannot be blank" }
         require(kinds.isNotEmpty()) { "port $name must accept at least one kind" }
+        require(minItems >= 0 && maxItems >= minItems) { "port $name has invalid item cardinality" }
     }
 }
 

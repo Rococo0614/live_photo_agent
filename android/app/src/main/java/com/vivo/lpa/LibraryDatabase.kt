@@ -330,15 +330,7 @@ class LibraryDatabase(context: Context) : SQLiteOpenHelper(
     }
 
     fun requestedCount(query: String, fallback: Int = 3): Int {
-        val number = mapOf("一" to 1, "二" to 2, "两" to 2, "三" to 3, "四" to 4,
-            "五" to 5, "六" to 6, "七" to 7, "八" to 8, "九" to 9,
-            "one" to 1, "two" to 2, "three" to 3, "four" to 4, "five" to 5,
-            "six" to 6, "seven" to 7, "eight" to 8, "nine" to 9)
-        Regex("(?i)([1-9]|一|二|两|三|四|五|六|七|八|九|one|two|three|four|five|six|seven|eight|nine)\\s*(?:张|个|拼|photo(?:s)?|asset(?:s)?|collage)").find(query)?.let {
-            val token = it.groupValues[1].lowercase()
-            return number[token] ?: token.toIntOrNull() ?: fallback
-        }
-        return fallback
+        return RequestFactExtractor.explicitCount(query) ?: fallback
     }
 
     fun delete(assetId: String): Int = writableDatabase.delete("assets", "asset_id = ?", arrayOf(assetId))

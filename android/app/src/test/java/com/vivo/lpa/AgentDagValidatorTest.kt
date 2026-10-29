@@ -147,6 +147,26 @@ class AgentDagValidatorTest {
     }
 
     @Test
+    fun assetSetItemCardinalityIsChecked() {
+        val transform = node(
+            "transform",
+            inputs = listOf(AgentPortSpec(
+                "media", setOf(AgentDataKind.ASSET_SET), minItems = 1, maxItems = 1
+            ))
+        )
+        val binding = AgentDagExternalBinding(
+            "transform",
+            "media",
+            AgentDagExternalValue.AssetSet(listOf("asset-1", "asset-2"), "state-test")
+        )
+
+        val validation = AgentDagValidator.validate(graph(listOf(transform), bindings = listOf(binding)))
+
+        assertFalse(validation.valid)
+        assertTrue(validation.diagnostics.any { it.code == "item_cardinality" })
+    }
+
+    @Test
     fun parameterSchemaRejectsMissingAndOutOfRangeValues() {
         val speed = node("speed").copy(
             parameterSpecs = mapOf(

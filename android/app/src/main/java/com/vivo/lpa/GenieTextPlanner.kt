@@ -256,12 +256,7 @@ class GenieTextPlanner(private val context: Context, private val sessionId: Stri
         query: String,
         state: AgentRuntimeState
     ): SemanticRoute? {
-        val countDatabase = LibraryDatabase(context)
-        val explicitCount = try {
-            countDatabase.requestedCount(query, 0).takeIf { it > 0 }
-        } finally {
-            countDatabase.close()
-        }
+        val explicitCount = RequestFactExtractor.explicitCount(query)
         val explicitMedia = explicitMediaRequirement(query)
         val routePattern = Regex(
             "(?im)^\\s*(ROUTE|RETRY|RETRIEVE|COMPOSE|STYLE|TEMPORAL|LAYOUT|REPLACE|ANALYZE|PUBLISH)" +

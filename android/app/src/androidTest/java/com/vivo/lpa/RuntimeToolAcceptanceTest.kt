@@ -10,6 +10,7 @@ import java.util.concurrent.atomic.AtomicBoolean
 import org.json.JSONArray
 import org.json.JSONObject
 import org.junit.Assert.assertTrue
+import org.junit.Assume.assumeTrue
 import org.junit.Ignore
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -573,6 +574,71 @@ class RuntimeToolAcceptanceTest {
             .put("results", rows)
         File(context.filesDir, "route-reasoning-acceptance.json").writeText(report.toString(2))
         assertTrue("route reasoning failures:\n${failures.joinToString("\n")}", failures.isEmpty())
+    }
+
+    @Test
+    fun evaluateDagShadowCompilerProbe() {
+        assumeTrue(BuildConfig.AGENT_RUNTIME == "dag")
+        assumeTrue(BuildConfig.PLANNER_EVAL_ONLY)
+
+        val query = "找一段猫的视频并倒放后导出"
+        val graphs = mutableListOf<AgentDagCompilation>()
+        val results = mutableListOf<MobileToolResult>()
+        val traces = mutableListOf<Pair<String, BrainTrace>>()
+        var finalPlan: MobilePlan? = null
+        var error: String? = null
+        var finishMessage = ""
+        MobileAgentLoop(context).run(
+            query = query,
+            uris = emptyList(),
+            layoutContext = null,
+            cancelled = AtomicBoolean(false),
+            listener = object : MobileAgentRunner.Listener {
+                override fun onProgress(message: String) = Unit
+                override fun onRuntimeGraph(compilation: AgentDagCompilation) {
+                    graphs += compilation
+                }
+                override fun onRuntimeBrainTrace(stage: String, trace: BrainTrace) {
+                    traces += stage to trace
+                }
+                override fun onPlan(plan: MobilePlan) { finalPlan = plan }
+                override fun onResult(result: MobileToolResult) { results += result }
+                override fun onFinished(uri: Uri?, message: String) { finishMessage = message }
+                override fun onError(message: String) { error = message }
+            },
+            dagShadow = true
+        )
+
+        val last = graphs.lastOrNull()
+        val actions = last?.graph?.nodes?.values?.map { it.actionId }.orEmpty()
+        val report = JSONObject()
+            .put("query", query)
+            .put("graph_count", graphs.size)
+            .put("all_structurally_valid", graphs.all { it.validation.valid })
+            .put("last_complete", last?.complete)
+            .put("last_executable", last?.executable)
+            .put("actions", JSONArray(actions))
+            .put("tool_results", JSONArray(results.map { it.tool }))
+            .put("final_tools", JSONArray(finalPlan?.toolCalls?.map { it.tool }.orEmpty()))
+            .put("finish_message", finishMessage)
+            .put("error", error ?: JSONObject.NULL)
+            .put("traces", JSONArray(traces.map { (stage, trace) ->
+                JSONObject()
+                    .put("stage", stage)
+                    .put("parsed", trace.parsed)
+                    .put("elapsed_ms", trace.elapsedMs)
+                    .put("raw_output", trace.rawOutput)
+            }))
+            .put("last_compilation", last?.let(AgentDagJson::toJson) ?: JSONObject.NULL)
+        File(context.filesDir, "dag-shadow-acceptance.json").writeText(report.toString(2))
+
+        assertTrue("DAG shadow produced no graphs", graphs.isNotEmpty())
+        assertTrue("DAG validation errors: ${graphs.flatMap { it.validation.diagnostics }}", graphs.all {
+            it.validation.valid
+        })
+        assertTrue("search_assets missing from $actions", "search_assets" in actions)
+        assertTrue("video_reverse missing from $actions", "video_reverse" in actions)
+        assertTrue("unexpected loop error: $error", error == null)
     }
 
     @Test

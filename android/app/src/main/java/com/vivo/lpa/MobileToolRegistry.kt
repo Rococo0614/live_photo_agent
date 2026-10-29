@@ -37,8 +37,10 @@ object MobileToolRegistry {
         name: String,
         kinds: Set<AgentDataKind>,
         required: Boolean = true,
-        variadic: Boolean = false
-    ) = AgentPortSpec(name, kinds, required, variadic)
+        variadic: Boolean = false,
+        minItems: Int = if (required) 1 else 0,
+        maxItems: Int = Int.MAX_VALUE
+    ) = AgentPortSpec(name, kinds, required, variadic, minItems, maxItems)
 
     private fun resources(vararg kinds: AgentResourceKind): Set<AgentResourceClaim> =
         kinds.map { kind ->
@@ -76,9 +78,9 @@ object MobileToolRegistry {
         postconditionIds = postconditions
     )
 
-    private fun videoTransformContract() = contract(
+    private fun videoTransformContract(minItems: Int = 1, maxItems: Int = 1) = contract(
         phase = AgentActionPhase.TRANSFORM,
-        inputs = listOf(port("media", videoValues)),
+        inputs = listOf(port("media", videoValues, minItems = minItems, maxItems = maxItems)),
         outputs = listOf(port("artifact", setOf(AgentDataKind.VIDEO, AgentDataKind.ASSET_SET))),
         effects = setOf(AgentStateEffect.ADD_ARTIFACT, AgentStateEffect.REPLACE_ASSET),
         resources = resources(
@@ -97,7 +99,7 @@ object MobileToolRegistry {
 
     private fun imageTransformContract() = contract(
         phase = AgentActionPhase.TRANSFORM,
-        inputs = listOf(port("media", imageValues)),
+        inputs = listOf(port("media", imageValues, minItems = 1, maxItems = 1)),
         outputs = listOf(port("artifact", setOf(AgentDataKind.IMAGE))),
         effects = setOf(AgentStateEffect.ADD_ARTIFACT),
         resources = resources(AgentResourceKind.IMAGE_SDK, AgentResourceKind.STORAGE_IO),
@@ -110,7 +112,12 @@ object MobileToolRegistry {
 
     private fun livePhotoTransformContract() = contract(
         phase = AgentActionPhase.TRANSFORM,
-        inputs = listOf(port("media", setOf(AgentDataKind.ASSET_SET, AgentDataKind.LIVE_PHOTO))),
+        inputs = listOf(port(
+            "media",
+            setOf(AgentDataKind.ASSET_SET, AgentDataKind.LIVE_PHOTO),
+            minItems = 1,
+            maxItems = 1
+        )),
         outputs = listOf(port("artifact", setOf(AgentDataKind.LIVE_PHOTO, AgentDataKind.ASSET_SET))),
         effects = setOf(AgentStateEffect.ADD_ARTIFACT, AgentStateEffect.REPLACE_ASSET),
         resources = resources(
@@ -179,7 +186,9 @@ object MobileToolRegistry {
             "通用 2-6 格模板拼贴；用户说三拼、四拼、拼图时优先使用",
             contract = contract(
                 AgentActionPhase.TRANSFORM,
-                inputs = listOf(port("media", setOf(AgentDataKind.ASSET_SET))),
+                inputs = listOf(port(
+                    "media", setOf(AgentDataKind.ASSET_SET), minItems = 2, maxItems = 6
+                )),
                 outputs = listOf(
                     port("artifact", setOf(AgentDataKind.VIDEO)),
                     port("layout", setOf(AgentDataKind.LAYOUT))
@@ -207,12 +216,12 @@ object MobileToolRegistry {
         ),
         MobileToolSpec(
             "video_blur", ToolFamily.STYLE, "视频背景模糊",
-            contract = videoTransformContract(),
+            contract = videoTransformContract(1, 1),
             acceptedMedia = videoCapable, minAssets = 1, minVideoTracks = 1
         ),
         MobileToolSpec(
             "video_timeline_effect", ToolFamily.TEMPORAL, "时间线缩放效果",
-            contract = videoTransformContract(),
+            contract = videoTransformContract(1, 1),
             acceptedMedia = videoCapable, minAssets = 1, minVideoTracks = 1
         ),
         MobileToolSpec(
@@ -222,7 +231,7 @@ object MobileToolRegistry {
         ),
         MobileToolSpec(
             "video_transition", ToolFamily.COMPOSE, "两段视频转场",
-            contract = videoTransformContract(),
+            contract = videoTransformContract(2, 2),
             acceptedMedia = videoCapable, minAssets = 2, maxAssets = 2,
             minVideoTracks = 2, maxVideoTracks = 2
         ),
@@ -241,12 +250,12 @@ object MobileToolRegistry {
         MobileToolSpec(
             "video_vertical_stack", ToolFamily.COMPOSE,
             "仅在用户明确要求三段视频上下竖排或竖向堆叠时使用",
-            contract = videoTransformContract(),
+            contract = videoTransformContract(3, 3),
             acceptedMedia = videoCapable, minAssets = 3, minVideoTracks = 3, maxVideoTracks = 3
         ),
         MobileToolSpec(
             "video_dynamic_sticker", ToolFamily.STYLE, "动态贴纸叠加",
-            contract = videoTransformContract(),
+            contract = videoTransformContract(2, 2),
             acceptedMedia = videoCapable, minAssets = 2, maxAssets = 2,
             minVideoTracks = 2, maxVideoTracks = 2
         ),
@@ -342,7 +351,7 @@ object MobileToolRegistry {
             contract = contract(
                 AgentActionPhase.STATE_MUTATION,
                 inputs = listOf(
-                    port("media", setOf(AgentDataKind.ASSET_SET)),
+                    port("media", setOf(AgentDataKind.ASSET_SET), minItems = 2),
                     port("layout", setOf(AgentDataKind.LAYOUT))
                 ),
                 outputs = listOf(port("layout", setOf(AgentDataKind.LAYOUT))),

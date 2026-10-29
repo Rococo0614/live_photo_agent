@@ -208,7 +208,7 @@ DAG表达可并行依赖，不代表设备必须并行执行。每个节点声�
 首轮host验证结果：
 
 ```text
-unit tests = 27, failures = 0, errors = 0
+unit tests = 30, failures = 0, errors = 0
 agentRuntime=dag    test + lint + assemble = PASS
 agentRuntime=loop   test + lint + assemble = PASS
 agentRuntime=static test + lint + assemble = PASS
@@ -218,8 +218,34 @@ agentRuntime=static test + lint + assemble = PASS
 
 ```text
 /home/jiangrui/.cache/lpa-final/app-runtime-v3-dag-shadow-20261029.apk
-SHA-256 6f906873c6bc373febaea6bbc7194ee0e6a1743f7bcbc24369bf7d7f2b8e008e
+SHA-256 18812ca3594db41f7aef563cb813a730a1227476e992aa224bdf00222c728f39
 ```
+
+首次真机shadow使用旧Instruct已知弱例“给我的猫做个三拼”，在Runtime v2 route解析阶段失败，
+尚未产生任何图；该失败不能归因于DAG。随后改用已通过生产闭环的F002：
+
+```text
+query                 = 找一段猫的视频并倒放后导出
+graph snapshots       = 4
+structurally valid    = 4/4
+physical actions      = search_assets → video_reverse
+topological order     = retrieve → temporal
+media edit executed   = false（plannerEvalOnly）
+publish executed      = false
+```
+
+首轮F002 shadow同时暴露出现有数量事实缺口：“一段视频”未被旧正则识别，检索默认返回3个素材，
+倒放executor再隐式取第一个。现已抽出纯`RequestFactExtractor`，支持图片/视频单位，并在DAG端口
+加入ASSET_SET item cardinality；复跑后Goal IR的`requested_count=1`、倒放输入绑定恰好1个素材，
+图无诊断错误。证据：
+
+```text
+/home/jiangrui/.cache/lpa-final/runtime-v3-dag-shadow-phone-acceptance.json
+SHA-256 13d0c2740bea18081c6926147c614df9d93ca47be7ebd4f75c166506935ada2d
+```
+
+测试结束后已重新安装冻结的Runtime v2 loop APK；vivo输入法启用、ADBKeyboard禁用、stay-awake
+为0，数据库仍为114条素材/113条有效embedding。
 
 ## 9. 迁移阶段
 
