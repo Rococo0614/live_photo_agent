@@ -132,7 +132,9 @@ video decoder实测为**3.741 / 2.798 / 1.163ms**，三者均全NPU；这仍只�
 TFLite在host CPU与PyTorch达到120.13dB，远程S26 XNNPACK也正确，证明导出图无误。显式切换
 QAIRT 2.45后问题消失：decoder固定输入对XNNPACK为64.16dB，完整mask IoU为0.9678。重新编译的
 2.45 QNN DLC在真实S26上全NPU运行，float encoder / decoder为**8.925 / 2.725ms**。因此必须固定
-2.45；2.50/2.51禁用。当前单帧mask已过远程Gate，视频memory path与vivo本机仍待验证。
+2.45；2.50/2.51禁用。三个版本各重复3次后，版本内输出均逐字节一致，且2.50与2.51产生相同错误
+SHA；同一个2.45 DLC换到2.50/2.51 runtime也立即复现。当前单帧mask已过远程Gate，视频memory
+path与vivo本机仍待验证。
 
 用途（不要求用户点选）：
 

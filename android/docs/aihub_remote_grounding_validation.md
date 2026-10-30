@@ -183,6 +183,17 @@ decoder inference   = j56mvme6p
 | 2.50 | 默认路径 | 约8.02dB | 0.0 | FAIL，完全复制 |
 | 2.51 | `jpvmevorp` | 15.48dB | 0.0 | FAIL，回归仍存在 |
 
+Workbench当前只开放这三个QAIRT版本。随后对每个版本用完全相同的模型、输入和options各重复3次：
+
+| QAIRT | 3次结果 | PSNR vs XNNPACK | 二值mask IoU | 半幅MAE |
+|---|---|---:|---:|---:|
+| 2.45 | 3/3逐字节相同 | 64.16dB | 0.9996 | 11.50 |
+| 2.50 | 3/3逐字节相同 | 15.48dB | 0.3831 | 0.0 |
+| 2.51 | 3/3逐字节相同 | 15.48dB | 0.3831 | 0.0 |
+
+2.50与2.51不仅都失败，而且三个重复job产生完全相同的错误mask SHA-256；因此可排除偶发设备、
+队列、输入上传或非确定性误差。
+
 关闭`qnn_htp_use_conv_hmx`不能修复2.50，因此不是单一short-conv HMX开关。完整TFLite + QNN
 delegate在QAIRT 2.45上随后通过，二值mask对XNNPACK IoU为0.9678：
 
@@ -203,6 +214,10 @@ decoder profile = j56mr1zvp  2.725ms，全NPU
 QNN mask vs XNNPACK IoU       = 0.9678
 QNN mask vs TFLite-QNN-2.45   = 1.0
 ```
+
+又把**同一个由2.45编译的decoder DLC**分别交给2.45、2.50和2.51 runtime加载。2.45正常；2.50和
+2.51再次产生同一个半幅复制mask，二者对2.45正确结果均只有7.47dB、IoU 0.3853。该实验保持DLC
+字节、输入数据和设备型号不变，只切换runtime版本，进一步证明回归位于QAIRT执行层而非编译产物。
 
 可供下一阶段本机隔离probe的制品：
 
@@ -264,5 +279,11 @@ SHA-256 b830a52684bd03d078e45b4d2d81230f9d85de87315f7cb4091fba6bcbb95d87
 SHA-256 a19cc6bf95784b3bc2832b5f174cb886b8abcd5ec338a8af0a792ca7b44bedea
 
 /mnt/ssd/lpa-aihub-probe/artifacts/edgetam-decoder-regression-resolution.json
-SHA-256 d44683b41e08f1f3e6892461322d1418337207aabbd24c5785abe1a533ad0297
+SHA-256 85f453936201d3f8746b5de0ab82121c0d943080ce879dbc8140b54c1ee4bf30
+
+/mnt/ssd/lpa-aihub-probe/artifacts/edgetam-decoder-qairt-version-repeat-matrix.json
+SHA-256 1ea53e817681f7134f817f5b279e4bc6eab095c375779539ab5bda201ddf28b9
+
+/mnt/ssd/lpa-aihub-probe/artifacts/edgetam-qnn245-dlc-runtime-version-differential.json
+SHA-256 2be28a9957014c4135e74a074335e4bfb3cddacf6c215b59e82e126d657e922f
 ```
