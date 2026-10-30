@@ -1,8 +1,9 @@
 # AI Hub远程语言Grounding验证
 
-> 日期：2026-10-29；decoder回归归因更新：2026-10-30
+> 日期：2026-10-29；decoder回归与有界时序链更新：2026-10-30
 >
-> 状态：OWLv2语言消歧通过；EdgeTAM QAIRT 2.45两帧memory传播通过，2.50/2.51确认存在runtime回归
+> 状态：OWLv2语言消歧通过；EdgeTAM QAIRT 2.45固定有界attention与8帧全NPU遮挡恢复通过；
+> 2.50/2.51确认存在runtime回归
 >
 > 生产边界：Runtime v2 loop不变；远程作业不得修改或发布媒体
 
@@ -263,14 +264,80 @@ profile job   = jgl8o03ep  9.220ms，全NPU
 这说明远程QAIRT 2.45的encoder → decoder → memory encoder → 下一帧decoder数值闭环成立，且目标
 没有漂到上下两段的其他猫。Host连续10帧基线的coverage保持0.0368–0.0390，跨拼图泄漏也始终为0。
 
-但当前远程闭环仍是**混合执行**：三个模型组件在S26 NPU，`sam2.memory_attention`由host PyTorch
-CPU执行。公开AI Hub recipe没有导出这个约2.96M参数的attention模块。因此两帧通过不等于Android
-端完整视频pipeline已经可部署；下一架构门禁是把固定有界memory attention导出为设备组件，或实现
-等价的本机执行层。
+该轮两帧闭环当时仍是**混合执行**：三个公开模型组件在S26 NPU，`sam2.memory_attention`由host
+PyTorch CPU执行。公开AI Hub recipe没有导出这个约2.96M参数的attention模块，因此这份早期证据
+本身不等于Android端完整视频pipeline已经可部署。下一小节记录后续补齐该缺口后的全NPU结果。
+
+### 5.3 固定有界memory attention与8帧全NPU闭环
+
+没有把动态Python状态机直接搬进模型，也没有为每个帧数复制一份权重。新增
+`android/tools/export_edgetam_memory_attention.py`，把当前EdgeTAM checkpoint改写成一个固定上限图：
+
+```text
+current_embeddings       [1, 256, 64, 64]
+maskmem_features         [1, 7, 512, 64]
+object_pointers          [1, 16, 256]
+spatial_memory_valid     [1, 7]
+object_pointer_valid     [1, 16]
+→ pix_feat               [1, 256, 64, 64]
+```
+
+7个空间槽对应时间位置编码`[6, 5, 4, 3, 2, 1, 0]`：条件帧固定在首槽，可用的最近帧填充尾部；
+16个pointer槽按“条件帧、最近非条件帧到更早帧”排列。无效槽由显式attention bias排除，不能用零值
+padding冒充有效memory。导出同时把上游complex RoPE逐元素等价改写为实数cos/sin运算，避开ONNX
+对complex `expand`的限制。
+
+导出前后分别验证启动、增长和满载状态：
+
+| 空间memory / pointer | 对原动态PyTorch最大绝对误差 | 远程QNN对host PSNR | cosine |
+|---:|---:|---:|---:|
+| 1 / 1 | 9.54e-7 | 73.86dB | 0.9999991 |
+| 2 / 2 | 8.34e-7 | 74.89dB | 0.9999992 |
+| 7 / 16 | 0 | 80.51dB | 0.9999998 |
+
+固定上限图成功编译为QAIRT 2.45 QNN DLC：
+
+```text
+compile job = jp8r6keqg  model = mqy3321w9
+profile job = jp37xr3zg  19.000ms，全NPU
+profile peak memory = 262,537,216B
+DLC size = 37,558,572B
+DLC SHA-256 = 8da1a72248b4be97d322feeed5a7f05722a9786bbdf4783b8c74e7d017a091b5
+```
+
+随后从6秒真实猫视频抽取`[0, 30, 60, 90, 120, 150, 165, 180]`帧；第90和120帧用草地patch
+完全遮住语言选中的中段橘猫，构成确定性遮挡fixture。Host动态实现先验证该fixture：第一帧重现时
+对无干扰基线IoU为0.9970。远程链的encoder、bounded memory attention、decoder和memory encoder
+全部在S26 NPU执行；host只编排固定槽、执行确定性object-score门控、验证和记录journal：
+
+| 门禁 | 结果 |
+|---|---:|
+| 遮挡首帧 | `object_score_logit=-1.5537`，正确判定object absent并输出空mask |
+| 首次重现帧对host IoU | 0.9864 |
+| 遮挡后最低对host IoU | 0.9731 |
+| 遮挡后最大质心误差 | 4.16px |
+| 跨上/下拼图区泄漏 | 0 |
+| 实际执行的最大空间memory数 | 7 / 7 |
+| 实际执行的最大pointer数 | 7 / 16 |
+
+因此`sam2.memory_attention`不再需要host PyTorch模型执行，长序列也不需要1到16份重复DLC。16个
+pointer的满载数值路径已用随机张量通过，但真实序列只走到7个pointer；遮挡是合成fixture，不替代
+自然遮挡、镜头运动和vivo本机验证。该结果只解除远程模型图缺口，不授权Android executor、内容修改
+或发布。
+
+关键证据：
+
+```text
+/mnt/ssd/lpa-aihub-probe/artifacts/edgetam-memory-attention-bounded-export.json
+/mnt/ssd/lpa-aihub-probe/artifacts/edgetam-memory-attention-bounded-qnn245-differential.json
+/mnt/ssd/lpa-aihub-probe/artifacts/edgetam-memory-attention-bounded-profile.json
+/mnt/ssd/lpa-aihub-probe/artifacts/edgetam-video-probe/eight-frame-bounded-occlusion-qnn245/
+  all-npu-eight-frame-bounded-occlusion-evidence.json
+```
 
 ## 6. 只读闭环工具
 
-已增加两个host探针：
+已增加三个host工具：
 
 - `android/tools/aihub_owlv2_grounding_probe.py`
   - 用户目标仍是语言；
@@ -286,26 +353,32 @@ CPU执行。公开AI Hub recipe没有导出这个约2.96M参数的attention模�
   - 默认固定`QAIRT 2.45 + NPU`；禁止同时传`compute_unit`与`tflite_delegates`；
   - 禁止上游自动重试，因为其重试会遗漏inference options并静默改变delegate；
   - 输出单帧mask/overlay后仍返回`NeedObservation`，等待视频传播与`ScopeCertificate`。
+- `android/tools/export_edgetam_memory_attention.py`
+  - `--num-memories N`导出固定计数差分图；
+  - `--bounded`导出7个空间memory、16个pointer的首选固定上限图；
+  - 在保存图前自动对照原complex RoPE，任一状态不等价即失败；
+  - 只生成模型图，不提交远程作业、不修改媒体。
 
-第二个探针首选float EdgeTAM验证语义，随后才比较W8A8；这样可以把prompt/后处理错误与量化误差
-分开定位。
+EdgeTAM grounding探针首选float模型验证语义，随后才比较W8A8；这样可以把prompt/后处理错误与
+量化误差分开定位。
 
 ## 7. 当前门禁
 
 - OWLv2公开、Apache-2.0；S26 float编译、数值对照、宽泛语言`NeedUser`和澄清后唯一候选均通过。
-- EdgeTAM float QAIRT 2.45 QNN/TFLite单帧mask、memory encoder数值及两帧传播均已通过；
-  QAIRT 2.50/2.51明确禁用。
+- EdgeTAM float QAIRT 2.45 QNN/TFLite单帧mask、memory encoder、固定有界memory attention和8帧
+  全NPU遮挡恢复均已通过；QAIRT 2.50/2.51明确禁用。
 - SAM3不是当前优先路径；OWLv2 box + EdgeTAM 2.45 mask已形成首个通过远程Gate的单帧backend。
-- 2.45三组件DLC与mask positional encoding已下载，但memory attention尚无Android制品；在补齐并
-  完成vivo本机隔离验证前不接Android executor。
-- 两帧无显著遮挡，不构成完整`ScopeCertificate`；任何内容移除/填充/发布节点仍不可ready。
+- 2.45 encoder、memory encoder、bounded memory attention、decoder、object-absent pointer常量与
+  manifest均已下载；仍须在vivo独立进程验证加载、内存、温度和完整时序链后才能接Android executor。
+- 8帧抽样与合成遮挡仍不构成完整`ScopeCertificate`；自然遮挡、逐帧覆盖和更多运动类型尚未通过，
+  任何内容移除、填充或发布节点仍不可ready。
 
 ## 8. 后续Gate
 
-1. 将固定上限的memory attention导出为设备组件，或实现等价本机执行层。
-2. 扩大到更多连续帧、快速运动和遮挡恢复，不只验证两帧。
-3. 在vivo上以独立、只读进程运行完整2.45时序链，不修改或发布媒体。
-4. 通过本机范围门禁后，才比较W8A8和完整时序覆盖。
+1. 在vivo上以独立、只读进程加载五个2.45制品并运行完整时序overlay，不修改或发布媒体。
+2. 增加自然遮挡、快速镜头、出画再入画和更长逐帧序列；真实序列覆盖超过7个pointer。
+3. 为语言locator准备并验证QAIRT 2.45制品，闭合本地语言→box→mask track路径。
+4. 通过本机范围、内存与温度门禁后，才比较W8A8和完整时序覆盖。
 5. QAIRT 2.50/2.51保持禁用；vivo闭环通过后才建设Android DAG node bridge。
 
 本轮汇总证据：
@@ -331,4 +404,10 @@ SHA-256 e9eb56cd006d690e7256bd13d40576414b6d4769bce5257621dc03a2623d8ef8
 
 /mnt/ssd/lpa-aihub-probe/artifacts/edgetam-qairt245-temporal-validation-summary.json
 SHA-256 68b79eacf1eda03a42e13aa13aa854cdf5c3b7ed43c556f35766739442800d68
+
+/mnt/ssd/lpa-aihub-probe/artifacts/edgetam-qairt245-bounded-temporal-validation-summary.json
+SHA-256 f4d72e82dd9ede8bddd44f3d6958dd444b597cc38c290736ee57668a3073f28d
+
+/mnt/ssd/lpa-aihub-probe/artifacts/edgetam-qnn245/manifest.json
+SHA-256 ef130c42d241d65944fe13bc14946d1ca9c86957a2a6661c2e18239a35102458
 ```

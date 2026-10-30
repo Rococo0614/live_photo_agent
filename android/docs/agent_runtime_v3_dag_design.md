@@ -246,6 +246,12 @@ host validator / Content Graph / next DAG decision
 生命周期已经通过。Workbench支持显式`--qairt_version`；需要与生产2.45共存的模型应优先重编译
 为2.45，或继续使用独立2.50进程，禁止直接混载两套QAIRT库。
 
+截至2026-10-30，EdgeTAM已在该远程backend补齐公开recipe遗漏的固定有界memory attention：
+7份空间memory和16个object pointer由有效位显式屏蔽，encoder、memory attention、decoder与memory
+encoder完成8帧QAIRT 2.45全NPU遮挡恢复。该结果只把`MASK_TRACK`模型节点从“缺少设备图”推进为
+“可进入vivo只读probe”；它不自动生成`ScopeCertificate`，也不授权`TRANSFORM`、`STATE_MUTATION`
+或`COMMIT`。自然遮挡、逐帧覆盖、vivo内存/温度和本地语言locator仍是前置门禁。
+
 ## 8. 当前shadow实现
 
 已加入：

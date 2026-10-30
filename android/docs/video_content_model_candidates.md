@@ -1,12 +1,13 @@
 # 视频内容生成、修改与填充模型调研
 
-> 日期：2026-10-29
+> 日期：2026-10-29；EdgeTAM有界时序更新：2026-10-30
 >
 > 目标设备：vivo PD2547 / SM8850 / 16GB RAM
 >
 > 当前生产：Runtime v2 loop；Runtime v3 DAG仅shadow，不执行新增模型
 >
-> 验证状态：OWLv2语言消歧通过；EdgeTAM QAIRT 2.45两帧memory传播通过，2.50/2.51回归已隔离
+> 验证状态：OWLv2语言消歧通过；EdgeTAM QAIRT 2.45固定有界attention与8帧全NPU遮挡恢复通过；
+> 2.50/2.51回归已隔离
 
 ## 1. 结论摘要
 
@@ -118,8 +119,8 @@ SAM3擅长短概念词组，不保证理解“顶层书架从右数倒数第二�
 |---|---|
 | 任务 | 交互式视频任意目标分割与跟踪 |
 | 许可 | Apache-2.0 |
-| 结构 | encoder 8.3M / memory encoder 1.2M / video decoder 6.22M |
-| 模型大小 | 33MB / 4.6MB / 23.7MB（float） |
+| 结构 | encoder 8.3M / memory encoder 1.2M / memory attention约2.96M / video decoder 6.22M |
+| 本项目2.45 DLC大小 | 19.0MB / 7.4MB / 35.8MB固定上限图 / 21.5MB |
 | 输入 | encoder 1024×1024 |
 | Galaxy S26 W8A8 QNN组件延迟 | 3.763ms / 2.797ms / 1.169ms |
 | 最新公开资产 | Universal QNN DLC / ONNX / TFLite，QAIRT 2.50 |
@@ -135,8 +136,14 @@ QAIRT 2.45后问题消失：decoder固定输入对XNNPACK为64.16dB，完整mask
 2.45；2.50/2.51禁用。三个版本各重复3次后，版本内输出均逐字节一致，且2.50与2.51产生相同错误
 SHA；同一个2.45 DLC换到2.50/2.51 runtime也立即复现。当前单帧mask已过远程Gate，视频memory
 encoder也达到55.22dB/cosine 0.999972。真实视频第30帧不再提供提示、只依赖首帧memory时，对host
-mask IoU仍为0.9760且无跨拼图泄漏。当前限制是公开recipe仍把约2.96M参数的memory attention留在
-host PyTorch CPU；该模块尚无Android制品，更多帧/遮挡与vivo本机仍待验证。
+mask IoU仍为0.9760且无跨拼图泄漏。
+
+公开recipe遗漏的约2.96M参数memory attention现已补成单一固定上限图：7份空间memory、16个object
+pointer，通过有效位屏蔽padding，并把complex RoPE等价展开为实数运算。该图编译为QAIRT 2.45
+model `mqy3321w9`，满载S26 profile为**19.0ms、全NPU、峰值262.5MB**。1/1、2/2、7/16三种
+状态对host分别达到73.86/74.89/80.51dB。8帧真实运动加两帧合成遮挡的完整NPU链中，首次重现
+对host IoU为0.9864，后续最低0.9731，最大质心误差4.16px，跨拼图区泄漏为0。真实链已走满7份
+空间memory，但只走到7个pointer；16个pointer目前仅完成数值差分。自然遮挡与vivo本机仍待验证。
 
 用途（不要求用户点选）：
 
@@ -340,7 +347,8 @@ TrackedComposite
 
 1. AI Hub真实S26上的OWLv2语言box与EdgeTAM float QAIRT 2.45单帧mask均已通过；
 2. 宽泛/充分两组语言已分别通过`NeedUser`与唯一候选分支，不接受点/框输入；
-3. memory encoder与两帧传播已通过；下一步导出memory attention并扩大到更多帧/遮挡；
+3. memory encoder、固定有界memory attention与8帧全NPU合成遮挡恢复已通过；下一步转入vivo只读
+   overlay，并补自然遮挡、逐帧长序列和超过7个pointer的真实覆盖；
 4. QAIRT 2.50/2.51保持禁用并保留最小复现；SAM3只作为后续可选直接文本mask对照；
 5. 计算候选唯一性、时间覆盖、连续性和排除重叠，只输出mask overlay，不修改媒体；
 6. 模糊时只生成语言澄清问题；
@@ -355,7 +363,7 @@ TrackedComposite
 ### P2：短视频移除MVP
 
 1. 2秒、≤49帧、ROI或512内部处理；
-2. 通过远程与本机语义Gate的跟踪mask + 每帧LaMa（当前只通过2.45两帧，完整时序待验）；
+2. 通过远程与本机语义Gate的跟踪mask + 每帧LaMa（远程2.45有界时序已过，本机与完整逐帧覆盖待验）；
 3. 增加flicker/temporal warping/边界残留检查；
 4. 与主机ProPainter或VACE结果做盲评，但非商用模型不进入产品包。
 
