@@ -6,7 +6,7 @@
 >
 > 当前生产：Runtime v2 loop；Runtime v3 DAG仅shadow，不执行新增模型
 >
-> 验证状态：OWLv2语言消歧通过；EdgeTAM QAIRT 2.45单帧mask通过，2.50/2.51 runtime回归已隔离
+> 验证状态：OWLv2语言消歧通过；EdgeTAM QAIRT 2.45两帧memory传播通过，2.50/2.51回归已隔离
 
 ## 1. 结论摘要
 
@@ -134,7 +134,9 @@ QAIRT 2.45后问题消失：decoder固定输入对XNNPACK为64.16dB，完整mask
 2.45 QNN DLC在真实S26上全NPU运行，float encoder / decoder为**8.925 / 2.725ms**。因此必须固定
 2.45；2.50/2.51禁用。三个版本各重复3次后，版本内输出均逐字节一致，且2.50与2.51产生相同错误
 SHA；同一个2.45 DLC换到2.50/2.51 runtime也立即复现。当前单帧mask已过远程Gate，视频memory
-path与vivo本机仍待验证。
+encoder也达到55.22dB/cosine 0.999972。真实视频第30帧不再提供提示、只依赖首帧memory时，对host
+mask IoU仍为0.9760且无跨拼图泄漏。当前限制是公开recipe仍把约2.96M参数的memory attention留在
+host PyTorch CPU；该模块尚无Android制品，更多帧/遮挡与vivo本机仍待验证。
 
 用途（不要求用户点选）：
 
@@ -338,7 +340,7 @@ TrackedComposite
 
 1. AI Hub真实S26上的OWLv2语言box与EdgeTAM float QAIRT 2.45单帧mask均已通过；
 2. 宽泛/充分两组语言已分别通过`NeedUser`与唯一候选分支，不接受点/框输入；
-3. 先补QAIRT 2.45 memory encoder与短视频时序验证；通过后才比较W8A8；
+3. memory encoder与两帧传播已通过；下一步导出memory attention并扩大到更多帧/遮挡；
 4. QAIRT 2.50/2.51保持禁用并保留最小复现；SAM3只作为后续可选直接文本mask对照；
 5. 计算候选唯一性、时间覆盖、连续性和排除重叠，只输出mask overlay，不修改媒体；
 6. 模糊时只生成语言澄清问题；
@@ -353,7 +355,7 @@ TrackedComposite
 ### P2：短视频移除MVP
 
 1. 2秒、≤49帧、ROI或512内部处理；
-2. 通过远程与本机语义Gate的跟踪mask + 每帧LaMa（当前只通过EdgeTAM 2.45单帧，时序待验）；
+2. 通过远程与本机语义Gate的跟踪mask + 每帧LaMa（当前只通过2.45两帧，完整时序待验）；
 3. 增加flicker/temporal warping/边界残留检查；
 4. 与主机ProPainter或VACE结果做盲评，但非商用模型不进入产品包。
 

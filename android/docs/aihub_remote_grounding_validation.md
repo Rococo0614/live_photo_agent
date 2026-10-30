@@ -2,7 +2,7 @@
 
 > 日期：2026-10-29；decoder回归归因更新：2026-10-30
 >
-> 状态：OWLv2语言消歧通过；EdgeTAM QAIRT 2.45单帧mask通过，2.50/2.51确认存在runtime回归
+> 状态：OWLv2语言消歧通过；EdgeTAM QAIRT 2.45两帧memory传播通过，2.50/2.51确认存在runtime回归
 >
 > 生产边界：Runtime v2 loop不变；远程作业不得修改或发布媒体
 
@@ -227,11 +227,46 @@ SHA-256 6ad2c1dd547f59633cf4cb51e6fac9128830d7c18fdad60ee4f0451a31e4c225
 
 /mnt/ssd/lpa-aihub-probe/artifacts/edgetam-qnn245/video_decoder.dlc
 SHA-256 b830a52684bd03d078e45b4d2d81230f9d85de87315f7cb4091fba6bcbb95d87
+
+/mnt/ssd/lpa-aihub-probe/artifacts/edgetam-qnn245/memory_encoder.dlc
+SHA-256 7985600ba858ff475a9c4b4d9a70fab66a48c949df31a6b8c9b04a159aa98a23
+
+/mnt/ssd/lpa-aihub-probe/artifacts/edgetam-qnn245/maskmem_pos_enc.npy
+SHA-256 16ae91334554dace33db3259641ffa5248e1f58a3f378d0aa80f1212921d3752
 ```
 
 因此最终结论是：**EdgeTAM recipe与导出图正确；QAIRT 2.50引入且2.51仍存在NPU decoder回归；
 项目当前固定的QAIRT 2.45反而是已验证正确路径。** 2.50/2.51制品继续禁用，2.45 float DLC只获准
 进入本机隔离、只读probe，尚未获准接Android executor或修改媒体。
+
+### 5.2 memory encoder与两帧时序闭环
+
+memory encoder显式编译到QAIRT 2.45：
+
+```text
+compile job   = jgzy8xj4p  model = mqv409yvl
+inference job = jg92k3yqp
+profile job   = jgl8o03ep  9.220ms，全NPU
+```
+
+使用2.45 encoder/decoder产生的真实feature与mask，remote memory输出对host为55.22dB，cosine
+0.999972，mean absolute error 0.00411，单组件数值通过。
+
+随后从真实6秒猫视频选择第0帧与第30帧。只有第0帧接收由语言box生成的两个内部正点；第30帧
+不再提供目标提示，只通过首帧memory传播：
+
+| 帧 | remote vs host mask IoU | 质心误差 | 跨拼图泄漏 |
+|---:|---:|---:|---:|
+| 0 | 0.9741 | 0.31px | 0 |
+| 30（约1秒） | 0.9760 | 2.90px | 0 |
+
+这说明远程QAIRT 2.45的encoder → decoder → memory encoder → 下一帧decoder数值闭环成立，且目标
+没有漂到上下两段的其他猫。Host连续10帧基线的coverage保持0.0368–0.0390，跨拼图泄漏也始终为0。
+
+但当前远程闭环仍是**混合执行**：三个模型组件在S26 NPU，`sam2.memory_attention`由host PyTorch
+CPU执行。公开AI Hub recipe没有导出这个约2.96M参数的attention模块。因此两帧通过不等于Android
+端完整视频pipeline已经可部署；下一架构门禁是把固定有界memory attention导出为设备组件，或实现
+等价的本机执行层。
 
 ## 6. 只读闭环工具
 
@@ -258,19 +293,20 @@ SHA-256 b830a52684bd03d078e45b4d2d81230f9d85de87315f7cb4091fba6bcbb95d87
 ## 7. 当前门禁
 
 - OWLv2公开、Apache-2.0；S26 float编译、数值对照、宽泛语言`NeedUser`和澄清后唯一候选均通过。
-- EdgeTAM float QAIRT 2.45 QNN/TFLite单帧mask已通过真实输入、XNNPACK差分和范围门禁；
+- EdgeTAM float QAIRT 2.45 QNN/TFLite单帧mask、memory encoder数值及两帧传播均已通过；
   QAIRT 2.50/2.51明确禁用。
 - SAM3不是当前优先路径；OWLv2 box + EdgeTAM 2.45 mask已形成首个通过远程Gate的单帧backend。
-- 2.45 encoder/decoder DLC已下载，但仍需vivo本机隔离只读验证；在那之前不接Android executor。
-- 单关键帧mask不构成`ScopeCertificate`，任何内容移除/填充/发布节点仍不可ready。
+- 2.45三组件DLC与mask positional encoding已下载，但memory attention尚无Android制品；在补齐并
+  完成vivo本机隔离验证前不接Android executor。
+- 两帧无显著遮挡，不构成完整`ScopeCertificate`；任何内容移除/填充/发布节点仍不可ready。
 
 ## 8. 后续Gate
 
-1. 编译并验证QAIRT 2.45 memory encoder，完成短视频memory path数值闭环。
-2. 在vivo上以独立、只读进程运行2.45 encoder/decoder，不修改或发布媒体。
-3. 通过本机单帧与短视频范围门禁后，才比较W8A8和时序覆盖。
-4. QAIRT 2.50/2.51保持禁用，并保留最小复现供Qualcomm runtime回归核对。
-5. vivo独立进程闭环通过后，才建设Android DAG node bridge。
+1. 将固定上限的memory attention导出为设备组件，或实现等价本机执行层。
+2. 扩大到更多连续帧、快速运动和遮挡恢复，不只验证两帧。
+3. 在vivo上以独立、只读进程运行完整2.45时序链，不修改或发布媒体。
+4. 通过本机范围门禁后，才比较W8A8和完整时序覆盖。
+5. QAIRT 2.50/2.51保持禁用；vivo闭环通过后才建设Android DAG node bridge。
 
 本轮汇总证据：
 
@@ -286,4 +322,13 @@ SHA-256 1ea53e817681f7134f817f5b279e4bc6eab095c375779539ab5bda201ddf28b9
 
 /mnt/ssd/lpa-aihub-probe/artifacts/edgetam-qnn245-dlc-runtime-version-differential.json
 SHA-256 2be28a9957014c4135e74a074335e4bfb3cddacf6c215b59e82e126d657e922f
+
+/mnt/ssd/lpa-aihub-probe/artifacts/edgetam-memory-qnn245-differential.json
+SHA-256 1ba8582eb8d2be40338bcc9534be2332591bdf63e9daf6d64a4b732fe66ae2a4
+
+/mnt/ssd/lpa-aihub-probe/artifacts/edgetam-video-probe/two-frame-qnn245/two-frame-temporal-evidence.json
+SHA-256 e9eb56cd006d690e7256bd13d40576414b6d4769bce5257621dc03a2623d8ef8
+
+/mnt/ssd/lpa-aihub-probe/artifacts/edgetam-qairt245-temporal-validation-summary.json
+SHA-256 68b79eacf1eda03a42e13aa13aa854cdf5c3b7ed43c556f35766739442800d68
 ```
