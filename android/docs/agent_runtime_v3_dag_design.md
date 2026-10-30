@@ -246,11 +246,18 @@ host validator / Content Graph / next DAG decision
 生命周期已经通过。Workbench支持显式`--qairt_version`；需要与生产2.45共存的模型应优先重编译
 为2.45，或继续使用独立2.50进程，禁止直接混载两套QAIRT库。
 
-截至2026-10-30，EdgeTAM已在该远程backend补齐公开recipe遗漏的固定有界memory attention：
-7份空间memory和16个object pointer由有效位显式屏蔽，encoder、memory attention、decoder与memory
-encoder完成8帧QAIRT 2.45全NPU遮挡恢复。该结果只把`MASK_TRACK`模型节点从“缺少设备图”推进为
-“可进入vivo只读probe”；它不自动生成`ScopeCertificate`，也不授权`TRANSFORM`、`STATE_MUTATION`
-或`COMMIT`。自然遮挡、逐帧覆盖、vivo内存/温度和本地语言locator仍是前置门禁。
+截至2026-10-30，EdgeTAM已补齐公开recipe遗漏的memory attention并完成vivo只读probe。远程S26上
+通过的7-memory/16-pointer动态validity图，在vivo SM8850的3/3真实状态只达到28.05dB；等价固定
+3/3图恢复到75.48dB。因此bounded图只保留为回归fixture，部署候选改为精确固定计数图银行：
+`1/1...7/7`和`7/8`已通过，后续补`7/9...7/16`。图选择只依赖已验证state cardinality，是host
+可替换backend选择，不交给Qwen，也不暴露给Goal IR。
+
+固定图银行已在vivo完成合成遮挡、自然遮挡、快速镜头、出画重入和第8个真实pointer；attention
+accelerator为14.65–19.24ms。一个候选时序覆盖validator会把面积突然低于上一个可信mask 10%的
+观测标为`UNCERTAIN_TEMPORAL_COVERAGE`并fail-closed。它尚未写入Android或生产阈值。上述结果只把
+`MASK_TRACK`模型backend推进为“可设计Android只读bridge”；它不自动生成`ScopeCertificate`，也不
+授权`TRANSFORM`、`STATE_MUTATION`或`COMMIT`。本地QAIRT 2.45语言locator、逐帧覆盖、pointer
+9–16、内存/温度soak、取消和生命周期恢复仍是前置门禁。
 
 ## 8. 当前shadow实现
 

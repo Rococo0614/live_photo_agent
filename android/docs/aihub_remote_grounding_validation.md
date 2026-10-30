@@ -1,8 +1,9 @@
 # AI Hub远程语言Grounding验证
 
-> 日期：2026-10-29；decoder回归与有界时序链更新：2026-10-30
+> 日期：2026-10-29；decoder回归、远程时序链与vivo固定图银行更新：2026-10-30
 >
-> 状态：OWLv2语言消歧通过；EdgeTAM QAIRT 2.45固定有界attention与8帧全NPU遮挡恢复通过；
+> 状态：OWLv2语言消歧通过；EdgeTAM QAIRT 2.45固定计数attention图银行已在vivo通过合成遮挡、
+> 自然遮挡、快速镜头、出画重入和第8个真实pointer；bounded validity图在vivo多槽状态失败；
 > 2.50/2.51确认存在runtime回归
 >
 > 生产边界：Runtime v2 loop不变；远程作业不得修改或发布媒体
@@ -268,7 +269,7 @@ profile job   = jgl8o03ep  9.220ms，全NPU
 PyTorch CPU执行。公开AI Hub recipe没有导出这个约2.96M参数的attention模块，因此这份早期证据
 本身不等于Android端完整视频pipeline已经可部署。下一小节记录后续补齐该缺口后的全NPU结果。
 
-### 5.3 固定有界memory attention与8帧全NPU闭环
+### 5.3 远程固定有界memory attention与8帧全NPU闭环
 
 没有把动态Python状态机直接搬进模型，也没有为每个帧数复制一份权重。新增
 `android/tools/export_edgetam_memory_attention.py`，把当前EdgeTAM checkpoint改写成一个固定上限图：
@@ -320,10 +321,10 @@ DLC SHA-256 = 8da1a72248b4be97d322feeed5a7f05722a9786bbdf4783b8c74e7d017a091b5
 | 实际执行的最大空间memory数 | 7 / 7 |
 | 实际执行的最大pointer数 | 7 / 16 |
 
-因此`sam2.memory_attention`不再需要host PyTorch模型执行，长序列也不需要1到16份重复DLC。16个
-pointer的满载数值路径已用随机张量通过，但真实序列只走到7个pointer；遮挡是合成fixture，不替代
-自然遮挡、镜头运动和vivo本机验证。该结果只解除远程模型图缺口，不授权Android executor、内容修改
-或发布。
+该轮证明`sam2.memory_attention`可以从host PyTorch移到NPU，并在AI Hub S26上支持单一bounded图。
+但它仍只是远程结果：16个pointer的满载路径只用随机张量通过，真实序列只走到7个pointer；遮挡是
+合成fixture。后续vivo验证发现动态validity mask存在输入相关分叉，因此本节的bounded图不再是部署
+首选，只保留为远程基线和最小回归样本。该结果不授权Android executor、内容修改或发布。
 
 关键证据：
 
@@ -333,6 +334,58 @@ pointer的满载数值路径已用随机张量通过，但真实序列只走到7
 /mnt/ssd/lpa-aihub-probe/artifacts/edgetam-memory-attention-bounded-profile.json
 /mnt/ssd/lpa-aihub-probe/artifacts/edgetam-video-probe/eight-frame-bounded-occlusion-qnn245/
   all-npu-eight-frame-bounded-occlusion-evidence.json
+```
+
+### 5.4 vivo QAIRT 2.45固定计数图银行
+
+在vivo V2547A / SM8850上使用官方QAIRT `2.45.0.260326154327`的`qnn-net-run`与
+`qnn-context-binary-generator`，全部放在`/data/local/tmp/lpa-edgetam-qnn245-probe-c94fd89`独立
+目录。没有替换APK、接Runtime executor、修改或发布媒体。
+
+首先复现bounded图的真实多槽输入。完全相同的3-memory/3-pointer状态在AI Hub对PyTorch为
+75.85dB，但vivo只剩**28.05dB / MAE 0.10747**。换成无动态validity mask的等价固定3/3图后，
+vivo恢复为**75.48dB对PyTorch、87.54dB对AI Hub**。因此失败不在权重、slot packing或通用
+attention，而在vivo执行动态validity attention bias的路径。
+
+部署候选改为由确定性host按已验证状态基数选择精确图。Qwen仍只决定语义target，不接触物理图：
+
+```text
+(1 memory, 1 pointer) ... (7 memories, 7 pointers)
+(7 memories, 8 pointers) ... 后续待补到 (7, 16)
+```
+
+当前已验证1/1到7/7以及7/8：
+
+| 拓扑 | vivo对PyTorch最低/代表PSNR | vivo accelerator | 结果 |
+|---|---:|---:|---|
+| 1/1 ... 7/7 | 最低73.86dB | 14.65–19.24ms | PASS |
+| 7/8真实状态 | 75.45dB | 18.39ms | PASS，超过7个真实pointer |
+
+所有图使用`O=3 + VTCM 8MB + soc_id 87 + v81`在vivo生成context。context输出与在线prepare输出
+逐字节相同。加载context时仍必须传HTP backend extension；只传`--perf_profile burst`不会施加所需
+power vote，实测会从约15–19ms退到约80–112ms。这是runtime契约，不是可忽略的benchmark参数。
+
+完整只读时序门禁：
+
+| fixture | 结果 |
+|---|---|
+| 8帧两帧合成遮挡 | 遮挡帧fail-closed；恢复后最低IoU 0.9729；最大质心误差0.17px；零泄漏 |
+| 9帧加密猫序列 | 最低host IoU 0.9572；7个空间memory + 8个真实pointer；全部可见状态通过 |
+| `12_hideandseek.mp4`自然遮挡 | 完全遮挡判空；部分重现IoU 0.9019；完整恢复0.9789；出画末帧fail-closed |
+| `19_cyclist.mp4`快速镜头 | 两帧出画均判空；重入IoU 0.9333；可比帧最低0.8858；第8个pointer通过 |
+
+合成遮挡还暴露了接近阈值的小伪mask会在等价数值路径间前后移动。候选validator因此在model
+object score之外增加确定性时序覆盖检查：raw mask面积若突然低于上一个可信可见mask的10%，标记
+`UNCERTAIN_TEMPORAL_COVERAGE`，用空mask和`no_obj_ptr`写memory。该策略在上述三类fixture通过，
+但仍是**候选验证策略**，尚未进入production或`ScopeCertificate`。
+
+关键证据：
+
+```text
+/mnt/ssd/lpa-aihub-probe/artifacts/edgetam-bounded-vivo-multislot-failure.json
+/mnt/ssd/lpa-aihub-probe/artifacts/vivo-qnn245-fixed-bank/fixed-count-1-to-7-vivo-o3-summary.json
+/mnt/ssd/lpa-aihub-probe/artifacts/vivo-qnn245-fixed7-pointer8-frame180/fixture-manifest.json
+/mnt/ssd/lpa-aihub-probe/artifacts/edgetam-vivo-qnn245-fixed-bank-validation-summary.json
 ```
 
 ## 6. 只读闭环工具
@@ -354,8 +407,9 @@ pointer的满载数值路径已用随机张量通过，但真实序列只走到7
   - 禁止上游自动重试，因为其重试会遗漏inference options并静默改变delegate；
   - 输出单帧mask/overlay后仍返回`NeedObservation`，等待视频传播与`ScopeCertificate`。
 - `android/tools/export_edgetam_memory_attention.py`
-  - `--num-memories N`导出固定计数差分图；
-  - `--bounded`导出7个空间memory、16个pointer的首选固定上限图；
+  - `--num-memories N --num-object-pointers M`导出固定计数部署候选图；
+  - 固定图银行按状态基数覆盖`1/1...7/7`，长序列继续覆盖`7/8...7/16`；
+  - `--bounded`只导出动态validity回归图，不得用于vivo多槽部署；
   - 在保存图前自动对照原complex RoPE，任一状态不等价即失败；
   - 只生成模型图，不提交远程作业、不修改媒体。
 
@@ -365,21 +419,21 @@ EdgeTAM grounding探针首选float模型验证语义，随后才比较W8A8；这
 ## 7. 当前门禁
 
 - OWLv2公开、Apache-2.0；S26 float编译、数值对照、宽泛语言`NeedUser`和澄清后唯一候选均通过。
-- EdgeTAM float QAIRT 2.45 QNN/TFLite单帧mask、memory encoder、固定有界memory attention和8帧
-  全NPU遮挡恢复均已通过；QAIRT 2.50/2.51明确禁用。
+- EdgeTAM float QAIRT 2.45 QNN/TFLite单帧mask和memory encoder通过；vivo固定计数attention图银行
+  已覆盖1/1到7/8，合成/自然遮挡、快速镜头与出画重入通过；QAIRT 2.50/2.51明确禁用。
 - SAM3不是当前优先路径；OWLv2 box + EdgeTAM 2.45 mask已形成首个通过远程Gate的单帧backend。
-- 2.45 encoder、memory encoder、bounded memory attention、decoder、object-absent pointer常量与
-  manifest均已下载；仍须在vivo独立进程验证加载、内存、温度和完整时序链后才能接Android executor。
-- 8帧抽样与合成遮挡仍不构成完整`ScopeCertificate`；自然遮挡、逐帧覆盖和更多运动类型尚未通过，
-  任何内容移除、填充或发布节点仍不可ready。
+- 2.45 encoder、memory encoder、固定计数attention图银行、decoder、object-absent pointer常量与
+  manifest均已下载；bounded图只保留失败回归样本。
+- 当前仍是抽样只读overlay，不构成完整`ScopeCertificate`；本地QAIRT 2.45语言locator、逐帧覆盖、
+  pointer 9–16、内存/温度soak、取消与生命周期恢复尚未通过，任何修改、填充或发布节点仍不可ready。
 
 ## 8. 后续Gate
 
-1. 在vivo上以独立、只读进程加载五个2.45制品并运行完整时序overlay，不修改或发布媒体。
-2. 增加自然遮挡、快速镜头、出画再入画和更长逐帧序列；真实序列覆盖超过7个pointer。
-3. 为语言locator准备并验证QAIRT 2.45制品，闭合本地语言→box→mask track路径。
-4. 通过本机范围、内存与温度门禁后，才比较W8A8和完整时序覆盖。
-5. QAIRT 2.50/2.51保持禁用；vivo闭环通过后才建设Android DAG node bridge。
+1. 编译并验证`7 memories / 9...16 pointers`固定图，随后运行真实逐帧长序列。
+2. 为语言locator准备并验证QAIRT 2.45制品，闭合本地语言→box→mask track路径。
+3. 增加内存/温度soak、取消、进程终止、Activity重建和context重载测试。
+4. 把10%时序覆盖阈值扩展到更多尺度变化fixture；不充分时返回`NeedObservation`，不能静默接受。
+5. 上述门禁通过后才建设Android DAG node bridge与`ScopeCertificate`；2.50/2.51继续禁用。
 
 本轮汇总证据：
 
@@ -408,6 +462,9 @@ SHA-256 68b79eacf1eda03a42e13aa13aa854cdf5c3b7ed43c556f35766739442800d68
 /mnt/ssd/lpa-aihub-probe/artifacts/edgetam-qairt245-bounded-temporal-validation-summary.json
 SHA-256 f4d72e82dd9ede8bddd44f3d6958dd444b597cc38c290736ee57668a3073f28d
 
+/mnt/ssd/lpa-aihub-probe/artifacts/edgetam-vivo-qnn245-fixed-bank-validation-summary.json
+SHA-256 850f617c7aa33b17024d90480e3bd8474871e246de85e220ffdafac5b68018c8
+
 /mnt/ssd/lpa-aihub-probe/artifacts/edgetam-qnn245/manifest.json
-SHA-256 ef130c42d241d65944fe13bc14946d1ca9c86957a2a6661c2e18239a35102458
+SHA-256 7451fb596010948051493924d73e74ebef77f02c19b3c15cfdb905c0e94e58dc
 ```

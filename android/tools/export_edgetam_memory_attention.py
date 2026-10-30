@@ -2,11 +2,14 @@
 """Export fixed-count or fixed-bounded EdgeTAM memory-attention graphs.
 
 The upstream EdgeTAM app leaves memory attention in host PyTorch. Android needs
-bounded, static graphs instead. ``--num-memories`` exports a differential
-variant with exact input counts. ``--bounded`` exports the preferred single
-graph with seven spatial memories, sixteen object pointers, and explicit valid
-bits. Complex RoPE operations are rewritten as equivalent real-valued cos/sin
-operations for ONNX/QNN export.
+static graphs instead. ``--num-memories`` exports a graph with exact spatial
+memory and object-pointer counts. A deterministic host selector can form a bank
+from (1, 1) through (7, 7), then (7, 8) through (7, 16). ``--bounded`` retains
+the single seven-memory/sixteen-pointer validity-mask graph as a differential
+and runtime-regression fixture. It is not a vivo deployment candidate: QAIRT
+2.45 multi-slot execution diverged from PyTorch on SM8850 while the equivalent
+fixed-count graph passed. Complex RoPE operations are rewritten as equivalent
+real-valued cos/sin operations for ONNX/QNN export.
 
 Spatial memories are ordered as: conditioning frame, then old-to-new recent
 frames. Object pointers follow EdgeTAM's selected order; their temporal
@@ -269,7 +272,7 @@ class FixedMemoryAttention(nn.Module):
 
 
 class BoundedMemoryAttention(nn.Module):
-    """One static graph covering all EdgeTAM memory and pointer counts.
+    """Diagnostic graph covering all EdgeTAM memory and pointer counts.
 
     Spatial slots map to temporal-position indices [6, 5, ..., 0]. The
     conditioning memory occupies slot 0; available non-conditioning memories
@@ -578,6 +581,7 @@ def _export_bounded(args: argparse.Namespace) -> dict[str, object]:
     return {
         "schema_version": 1,
         "mode": "bounded",
+        "deployment_status": "diagnostic_only_vivo_multi_slot_failed",
         "max_spatial_memories": MAX_SPATIAL_MEMORIES,
         "max_object_pointers": MAX_OBJECT_POINTERS,
         "validation": validation,
@@ -631,6 +635,7 @@ def _export_fixed(args: argparse.Namespace) -> dict[str, object]:
     return {
         "schema_version": 1,
         "mode": "fixed",
+        "deployment_status": "fixed_bank_candidate_requires_device_validation",
         "num_memories": args.num_memories,
         "num_object_pointers": args.num_object_pointers,
         "real_rope_max_abs_vs_original": float(difference.max()),

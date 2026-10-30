@@ -1,13 +1,13 @@
 # 视频内容生成、修改与填充模型调研
 
-> 日期：2026-10-29；EdgeTAM有界时序更新：2026-10-30
+> 日期：2026-10-29；EdgeTAM vivo固定图银行更新：2026-10-30
 >
 > 目标设备：vivo PD2547 / SM8850 / 16GB RAM
 >
 > 当前生产：Runtime v2 loop；Runtime v3 DAG仅shadow，不执行新增模型
 >
-> 验证状态：OWLv2语言消歧通过；EdgeTAM QAIRT 2.45固定有界attention与8帧全NPU遮挡恢复通过；
-> 2.50/2.51回归已隔离
+> 验证状态：OWLv2语言消歧通过；EdgeTAM QAIRT 2.45固定计数attention图银行在vivo通过合成/自然
+> 遮挡、快速镜头、出画重入和第8个真实pointer；bounded validity图在vivo禁用；2.50/2.51回归已隔离
 
 ## 1. 结论摘要
 
@@ -120,7 +120,7 @@ SAM3擅长短概念词组，不保证理解“顶层书架从右数倒数第二�
 | 任务 | 交互式视频任意目标分割与跟踪 |
 | 许可 | Apache-2.0 |
 | 结构 | encoder 8.3M / memory encoder 1.2M / memory attention约2.96M / video decoder 6.22M |
-| 本项目2.45 DLC大小 | 19.0MB / 7.4MB / 35.8MB固定上限图 / 21.5MB |
+| 本项目2.45 DLC大小 | 19.0MB / 7.4MB / 33.6–37.5MB固定计数attention / 21.5MB |
 | 输入 | encoder 1024×1024 |
 | Galaxy S26 W8A8 QNN组件延迟 | 3.763ms / 2.797ms / 1.169ms |
 | 最新公开资产 | Universal QNN DLC / ONNX / TFLite，QAIRT 2.50 |
@@ -138,12 +138,17 @@ SHA；同一个2.45 DLC换到2.50/2.51 runtime也立即复现。当前单帧mask
 encoder也达到55.22dB/cosine 0.999972。真实视频第30帧不再提供提示、只依赖首帧memory时，对host
 mask IoU仍为0.9760且无跨拼图泄漏。
 
-公开recipe遗漏的约2.96M参数memory attention现已补成单一固定上限图：7份空间memory、16个object
-pointer，通过有效位屏蔽padding，并把complex RoPE等价展开为实数运算。该图编译为QAIRT 2.45
-model `mqy3321w9`，满载S26 profile为**19.0ms、全NPU、峰值262.5MB**。1/1、2/2、7/16三种
-状态对host分别达到73.86/74.89/80.51dB。8帧真实运动加两帧合成遮挡的完整NPU链中，首次重现
-对host IoU为0.9864，后续最低0.9731，最大质心误差4.16px，跨拼图区泄漏为0。真实链已走满7份
-空间memory，但只走到7个pointer；16个pointer目前仅完成数值差分。自然遮挡与vivo本机仍待验证。
+公开recipe遗漏的约2.96M参数memory attention已补齐。最初的单一7-memory/16-pointer validity图在
+远程S26通过，但vivo SM8850多槽真实输入只有28.05dB；同一状态的固定3/3图为75.48dB。因此该
+bounded图只保留为回归fixture，部署候选改为host按状态基数选择的固定图银行。当前`1/1...7/7`
+和`7/8`已在vivo通过，对PyTorch最低73.86dB，accelerator为**14.65–19.24ms**；7/8真实状态为
+75.45dB、18.39ms。context retrieval必须同时加载HTP backend extension，否则burst power vote
+不会生效。
+
+完整NPU只读链已通过：两帧合成遮挡恢复后最低IoU 0.9729；自然`hideandseek`完全遮挡判空、完整
+恢复0.9789、出画fail-closed；快速镜头`cyclist`两帧出画判空、重入0.9333，并走到第8个真实
+pointer。10%突然面积下降门禁目前只是候选validator；逐帧覆盖、pointer 9–16和Android
+`ScopeCertificate`仍待完成。
 
 用途（不要求用户点选）：
 
@@ -347,8 +352,8 @@ TrackedComposite
 
 1. AI Hub真实S26上的OWLv2语言box与EdgeTAM float QAIRT 2.45单帧mask均已通过；
 2. 宽泛/充分两组语言已分别通过`NeedUser`与唯一候选分支，不接受点/框输入；
-3. memory encoder、固定有界memory attention与8帧全NPU合成遮挡恢复已通过；下一步转入vivo只读
-   overlay，并补自然遮挡、逐帧长序列和超过7个pointer的真实覆盖；
+3. memory encoder与vivo固定计数attention图银行已通过；合成/自然遮挡、快速镜头、出画重入和
+   第8个真实pointer均有只读证据；下一步补pointer 9–16与逐帧长序列；
 4. QAIRT 2.50/2.51保持禁用并保留最小复现；SAM3只作为后续可选直接文本mask对照；
 5. 计算候选唯一性、时间覆盖、连续性和排除重叠，只输出mask overlay，不修改媒体；
 6. 模糊时只生成语言澄清问题；
@@ -363,7 +368,7 @@ TrackedComposite
 ### P2：短视频移除MVP
 
 1. 2秒、≤49帧、ROI或512内部处理；
-2. 通过远程与本机语义Gate的跟踪mask + 每帧LaMa（远程2.45有界时序已过，本机与完整逐帧覆盖待验）；
+2. 通过远程与vivo抽样语义Gate的跟踪mask + 每帧LaMa（完整逐帧覆盖、语言locator与Android bridge仍待验）；
 3. 增加flicker/temporal warping/边界残留检查；
 4. 与主机ProPainter或VACE结果做盲评，但非商用模型不进入产品包。
 
