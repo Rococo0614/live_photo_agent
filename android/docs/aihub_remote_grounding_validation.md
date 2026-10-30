@@ -1,8 +1,8 @@
 # AI Hub远程语言Grounding验证
 
-> 日期：2026-10-29
+> 日期：2026-10-29；decoder回归归因更新：2026-10-30
 >
-> 状态：OWLv2语言消歧通过；EdgeTAM QNN/TFLite因真实输入数值回归停在远程Gate
+> 状态：OWLv2语言消歧通过；EdgeTAM QAIRT 2.45单帧mask通过，2.50/2.51确认存在runtime回归
 >
 > 生产边界：Runtime v2 loop不变；远程作业不得修改或发布媒体
 
@@ -146,7 +146,7 @@ decoder inference   = j5wzxzw65
 /mnt/ssd/lpa-aihub-probe/local-edgetam/build/edgetam_segmentation_output.png
 ```
 
-为判断是否仅QNN DLC有问题，又编译并运行了float TFLite：
+为判断是否仅QNN DLC有问题，又编译并运行了float TFLite（当时使用Workbench默认QAIRT 2.50）：
 
 ```text
 encoder compile job = jgl8784jp  model = mqkklpw1k
@@ -155,17 +155,68 @@ encoder inference   = jg9282jwp
 decoder inference   = j56mvme6p
 ```
 
-TFLite结果与QNN错误形态一致：coverage 0.049027、扩展框外泄漏0.501423，并出现完全相同的半幅
-复制；仅score从0.8125变为0.809082。证据：
+默认2.50 TFLite结果与QNN错误形态一致：coverage 0.049027、扩展框外泄漏0.501423，并出现完全
+相同的半幅复制；仅score从0.8125变为0.809082。证据：
 
 ```text
 /mnt/ssd/lpa-aihub-probe/artifacts/cat-precise-mask-tflite-float/mask-evidence.json
 ```
 
-结论不是“EdgeTAM原模型不可用”，而是**当前AI Hub EdgeTAM QNN和TFLite部署导出均不可作为语义
-正确的Grounding backend**。性能profile只证明图能执行，不证明输出正确。按远程优先Gate，停止
-这些制品的本地部署，不继续测试W8A8语义链。下一优先级是SAM3直接文本mask；ONNX只有在能证明
-不复用同一错误转换路径时才值得测试。
+### 5.1 decoder回归归因与2.45修复
+
+下载同一TFLite并在host CPU/XNNPACK执行后，转换图与PyTorch几乎逐数值一致：
+
+| 对照 | PSNR / score |
+|---|---:|
+| TFLite encoder `pix_feat` vs PyTorch | 116.11dB |
+| TFLite E2E mask vs PyTorch | 120.13dB |
+| PyTorch / local TFLite score | 0.940316 / 0.940317 |
+
+远程S26显式使用XNNPACK也产生正确单猫mask，coverage 0.037906、扩框外泄漏0.049379、score
+0.940122。由此排除模型、导出图和host后处理，回归只存在于NPU runtime/delegate。
+
+固定正确的XNNPACK encoder输出，只切换decoder QAIRT版本：
+
+| QAIRT | Decoder Job | mask PSNR vs XNNPACK | 上下半幅MAE | 结论 |
+|---|---|---:|---:|---|
+| 2.45 | `jgowo30kp` | 64.16dB | 11.50 | PASS |
+| 2.50 | 默认路径 | 约8.02dB | 0.0 | FAIL，完全复制 |
+| 2.51 | `jpvmevorp` | 15.48dB | 0.0 | FAIL，回归仍存在 |
+
+关闭`qnn_htp_use_conv_hmx`不能修复2.50，因此不是单一short-conv HMX开关。完整TFLite + QNN
+delegate在QAIRT 2.45上随后通过，二值mask对XNNPACK IoU为0.9678：
+
+```text
+encoder inference = jg92kw18p
+decoder inference = jg92kwe8p
+encoder profile   = j5q1z26eg  8.953ms，全NPU
+decoder profile   = jgl8okv2p  2.737ms，全NPU
+```
+
+最后从相同source model显式重编译QAIRT 2.45 QNN DLC，也得到相同正确mask：
+
+```text
+encoder compile = jp44mwn2p  model = mq24jp5xd
+decoder compile = jpxr3198p  model = mmr6dj0ex
+encoder profile = jgl8ok2ep  8.925ms，全NPU
+decoder profile = j56mr1zvp  2.725ms，全NPU
+QNN mask vs XNNPACK IoU       = 0.9678
+QNN mask vs TFLite-QNN-2.45   = 1.0
+```
+
+可供下一阶段本机隔离probe的制品：
+
+```text
+/mnt/ssd/lpa-aihub-probe/artifacts/edgetam-qnn245/encoder.dlc
+SHA-256 6ad2c1dd547f59633cf4cb51e6fac9128830d7c18fdad60ee4f0451a31e4c225
+
+/mnt/ssd/lpa-aihub-probe/artifacts/edgetam-qnn245/video_decoder.dlc
+SHA-256 b830a52684bd03d078e45b4d2d81230f9d85de87315f7cb4091fba6bcbb95d87
+```
+
+因此最终结论是：**EdgeTAM recipe与导出图正确；QAIRT 2.50引入且2.51仍存在NPU decoder回归；
+项目当前固定的QAIRT 2.45反而是已验证正确路径。** 2.50/2.51制品继续禁用，2.45 float DLC只获准
+进入本机隔离、只读probe，尚未获准接Android executor或修改媒体。
 
 ## 6. 只读闭环工具
 
@@ -182,6 +233,8 @@ TFLite结果与QNN错误形态一致：coverage 0.049027、扩展框外泄漏0.5
   - 多候选时在提交远程作业前fail-closed；
   - OWLv2 box转两个内部正点只是backend plumbing，不是用户点选；
   - 检查mask总覆盖率及扩框外泄漏，超限时返回`MaskRejected`而不裁剪伪装成功；
+  - 默认固定`QAIRT 2.45 + NPU`；禁止同时传`compute_unit`与`tflite_delegates`；
+  - 禁止上游自动重试，因为其重试会遗漏inference options并静默改变delegate；
   - 输出单帧mask/overlay后仍返回`NeedObservation`，等待视频传播与`ScopeCertificate`。
 
 第二个探针首选float EdgeTAM验证语义，随后才比较W8A8；这样可以把prompt/后处理错误与量化误差
@@ -190,25 +243,26 @@ TFLite结果与QNN错误形态一致：coverage 0.049027、扩展框外泄漏0.5
 ## 7. 当前门禁
 
 - OWLv2公开、Apache-2.0；S26 float编译、数值对照、宽泛语言`NeedUser`和澄清后唯一候选均通过。
-- EdgeTAM W8A8组件profile通过，但float QNN和TFLite官方recipe在真实输入上都出现半幅复制；
-  当前AI Hub部署backend不得进入本机。
-- SAM3权重`facebook/sam3`为manual gated；本机尚无Hugging Face token。OWLv2 box与DAG消歧协议
-  已验证，但当前没有通过远程语义Gate的mask backend。
-- AI Hub成功后仍需下载同一制品，在vivo上以独立runtime只读运行；在那之前不接Android executor。
+- EdgeTAM float QAIRT 2.45 QNN/TFLite单帧mask已通过真实输入、XNNPACK差分和范围门禁；
+  QAIRT 2.50/2.51明确禁用。
+- SAM3不是当前优先路径；OWLv2 box + EdgeTAM 2.45 mask已形成首个通过远程Gate的单帧backend。
+- 2.45 encoder/decoder DLC已下载，但仍需vivo本机隔离只读验证；在那之前不接Android executor。
 - 单关键帧mask不构成`ScopeCertificate`，任何内容移除/填充/发布节点仍不可ready。
 
 ## 8. 后续Gate
 
-1. 固化最小复现并向Qualcomm/recipe维护方核对decoder导出回归。
-2. SAM3 gated权重授权后，优先验证其直接文本mask，减少OWLv2→point桥接误差。
-3. ONNX只有在确认采用不同转换路径时才测试；不重复消耗相同失败路径。
-4. 只有float语义正确后才比较W8A8、视频memory path和时序覆盖。
-5. 只有远程语义通过的backend才允许生成QAIRT 2.45或隔离2.50本机制品。
-6. vivo独立进程只读probe通过后，才建设Android DAG node bridge。
+1. 编译并验证QAIRT 2.45 memory encoder，完成短视频memory path数值闭环。
+2. 在vivo上以独立、只读进程运行2.45 encoder/decoder，不修改或发布媒体。
+3. 通过本机单帧与短视频范围门禁后，才比较W8A8和时序覆盖。
+4. QAIRT 2.50/2.51保持禁用，并保留最小复现供Qualcomm runtime回归核对。
+5. vivo独立进程闭环通过后，才建设Android DAG node bridge。
 
 本轮汇总证据：
 
 ```text
 /mnt/ssd/lpa-aihub-probe/artifacts/aihub-remote-grounding-acceptance.json
 SHA-256 a19cc6bf95784b3bc2832b5f174cb886b8abcd5ec338a8af0a792ca7b44bedea
+
+/mnt/ssd/lpa-aihub-probe/artifacts/edgetam-decoder-regression-resolution.json
+SHA-256 d44683b41e08f1f3e6892461322d1418337207aabbd24c5785abe1a533ad0297
 ```

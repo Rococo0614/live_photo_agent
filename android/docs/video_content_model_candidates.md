@@ -6,7 +6,7 @@
 >
 > 当前生产：Runtime v2 loop；Runtime v3 DAG仅shadow，不执行新增模型
 >
-> 验证状态：OWLv2语言消歧通过；EdgeTAM组件profile通过但QNN/TFLite语义失败，mask闭环未通过
+> 验证状态：OWLv2语言消歧通过；EdgeTAM QAIRT 2.45单帧mask通过，2.50/2.51 runtime回归已隔离
 
 ## 1. 结论摘要
 
@@ -128,12 +128,11 @@ SAM3擅长短概念词组，不保证理解“顶层书架从右数倒数第二�
 video decoder实测为**3.741 / 2.798 / 1.163ms**，三者均全NPU；这仍只是随机输入组件烟测，
 不等于mask语义验证。详见`aihub_remote_grounding_validation.md`。
 
-首次OWLv2唯一box → EdgeTAM float QNN链式测试未通过范围门禁：目标主体可见，但50.14%的mask
-落在扩展语言框外并重复到另一拼图区域。用官方recipe重编译、producer metadata自动适配后仍复现。
-逐组件差分显示`pix_feat`仅23.73dB，远程decoder mask仅8.02dB且上下半幅完全复制；host PyTorch
-同输入mask正常。随后float TFLite也产生相同复制与50.14%框外泄漏。因此当前结论是“EdgeTAM原
-模型可用、AI Hub QNN/TFLite部署导出语义不正确”，不能部署；下一步优先SAM3直接文本mask，
-ONNX只有在确认不复用同一错误转换路径时才测试。
+首次默认QAIRT 2.50链式测试出现半幅mask复制；2.51仍复现，关闭short-conv HMX也无效。但下载的
+TFLite在host CPU与PyTorch达到120.13dB，远程S26 XNNPACK也正确，证明导出图无误。显式切换
+QAIRT 2.45后问题消失：decoder固定输入对XNNPACK为64.16dB，完整mask IoU为0.9678。重新编译的
+2.45 QNN DLC在真实S26上全NPU运行，float encoder / decoder为**8.925 / 2.725ms**。因此必须固定
+2.45；2.50/2.51禁用。当前单帧mask已过远程Gate，视频memory path与vivo本机仍待验证。
 
 用途（不要求用户点选）：
 
@@ -335,13 +334,13 @@ TrackedComposite
 
 ### P0：只读Grounding probe
 
-1. AI Hub真实S26上的OWLv2语言box已通过；EdgeTAM float QNN/TFLite语义差分失败，禁止部署；
+1. AI Hub真实S26上的OWLv2语言box与EdgeTAM float QAIRT 2.45单帧mask均已通过；
 2. 宽泛/充分两组语言已分别通过`NeedUser`与唯一候选分支，不接受点/框输入；
-3. SAM3 gated权重授权后，优先验证直接文本mask；float正确后才允许比较W8A8和短视频；
-4. 若EdgeTAM导出回归修复，再用同一最小复现重新验收，不以性能profile代替语义正确性；
+3. 先补QAIRT 2.45 memory encoder与短视频时序验证；通过后才比较W8A8；
+4. QAIRT 2.50/2.51保持禁用并保留最小复现；SAM3只作为后续可选直接文本mask对照；
 5. 计算候选唯一性、时间覆盖、连续性和排除重叠，只输出mask overlay，不修改媒体；
 6. 模糊时只生成语言澄清问题；
-7. 远程通过后把量化ONNX重编译到QAIRT 2.45，或与当前2.45生产进程隔离。
+7. 所有候选只允许生成并验证QAIRT 2.45制品；2.50/2.51在回归修复前不得进入本机。
 
 ### P1：单帧LaMa probe
 
@@ -352,7 +351,7 @@ TrackedComposite
 ### P2：短视频移除MVP
 
 1. 2秒、≤49帧、ROI或512内部处理；
-2. 通过远程与本机语义Gate的跟踪mask + 每帧LaMa（当前EdgeTAM部署backend尚未通过）；
+2. 通过远程与本机语义Gate的跟踪mask + 每帧LaMa（当前只通过EdgeTAM 2.45单帧，时序待验）；
 3. 增加flicker/temporal warping/边界残留检查；
 4. 与主机ProPainter或VACE结果做盲评，但非商用模型不进入产品包。
 

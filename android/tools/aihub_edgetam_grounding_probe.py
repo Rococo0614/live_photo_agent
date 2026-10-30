@@ -39,11 +39,27 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--image", required=True, type=Path)
     parser.add_argument("--device", default="Samsung Galaxy S26")
     parser.add_argument("--device-os", default="16")
+    parser.add_argument(
+        "--inference-options",
+        default="--qairt_version 2.45 --compute_unit npu",
+        help=(
+            "AI Hub inference options applied to both EdgeTAM components. "
+            "Defaults to the numerically validated QAIRT 2.45 NPU path."
+        ),
+    )
     parser.add_argument("--output-dir", required=True, type=Path)
     args = parser.parse_args()
     for path in (args.grounding_evidence, args.image):
         if not path.is_file():
             parser.error(f"file does not exist: {path}")
+    if (
+        "--compute_unit" in args.inference_options
+        and "--tflite_delegates" in args.inference_options
+    ):
+        parser.error(
+            "--inference-options cannot combine --compute_unit and "
+            "--tflite_delegates"
+        )
     return args
 
 
@@ -204,6 +220,7 @@ def main() -> None:
             encoder_model,
             ["image", "unnorm_coords", "labels"],
             device,
+            args.inference_options,
             output_names=[
                 "image_embeddings",
                 "high_res_features1",
@@ -214,6 +231,9 @@ def main() -> None:
         )
         source_image = np.transpose(image_input, (0, 3, 1, 2))
         encoder_result = encoder(source_image, prompt_coords, labels)
+        # The upstream retry path omits inference options. Fail closed instead of
+        # silently changing delegates/compute units after an option error.
+        encoder_result.num_retries = 0
         encoder_values = encoder_result.wait()
         if not isinstance(encoder_values, tuple) or len(encoder_values) != 5:
             raise RuntimeError("compiled EdgeTAM encoder returned unexpected outputs")
@@ -229,6 +249,7 @@ def main() -> None:
                 "sparse_embedding",
             ],
             device,
+            args.inference_options,
             output_names=["masks", "scores", "obj_ptr", "object_score_logits"],
         )
         decoder_result = decoder(
@@ -237,6 +258,7 @@ def main() -> None:
             high_res_2,
             sparse_embedding,
         )
+        decoder_result.num_retries = 0
         decoder_values = decoder_result.wait()
         if not isinstance(decoder_values, tuple) or len(decoder_values) != 4:
             raise RuntimeError("compiled EdgeTAM decoder returned unexpected outputs")
@@ -257,6 +279,7 @@ def main() -> None:
             },
             name="lpa-edgetam-language-mask-encoder",
             profile=False,
+            options=args.inference_options,
         )
         if not isinstance(encoder_job, hub.InferenceJob):
             raise RuntimeError("AI Hub returned multiple encoder jobs")
@@ -279,6 +302,7 @@ def main() -> None:
             },
             name="lpa-edgetam-language-mask-decoder",
             profile=False,
+            options=args.inference_options,
         )
         if not isinstance(decoder_job, hub.InferenceJob):
             raise RuntimeError("AI Hub returned multiple decoder jobs")
@@ -340,6 +364,7 @@ def main() -> None:
             "encoder_model_id": args.encoder_model_id,
             "decoder_model_id": args.decoder_model_id,
             "adapter": remote_adapter,
+            "inference_options": args.inference_options,
             "jobs": [
                 {
                     "component": "encoder",
