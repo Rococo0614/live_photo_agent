@@ -2,6 +2,7 @@ package com.vivo.lpa
 
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -79,9 +80,11 @@ class AgentTrackValidationTest {
         )
 
         assertTrue(candidate.temporalCoverageComplete)
+        assertTrue(candidate.readyForPreview("state-current"))
         assertFalse(candidate.readyForMutation("state-current"))
         assertTrue(approved.readyForMutation("state-current"))
         assertFalse(approved.readyForMutation("state-stale"))
+        assertNotEquals(candidate.evidenceFingerprint, candidate.copy(uniqueTarget = false).evidenceFingerprint)
         assertFalse(
             certificate(
                 observations.dropLast(1),

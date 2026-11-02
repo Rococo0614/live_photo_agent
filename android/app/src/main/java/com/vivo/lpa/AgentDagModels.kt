@@ -52,6 +52,21 @@ sealed interface AgentDagExternalValue {
     ) : AgentDagExternalValue {
         override val stableId = "$contentGraphId:$contentGraphVersion:$contentNodeId"
     }
+
+    data class ScopeCertificate(
+        val certificateId: String,
+        val stateFingerprint: String,
+        val certificateFingerprint: String
+    ) : AgentDagExternalValue {
+        init {
+            require(certificateId.isNotBlank())
+            require(stateFingerprint.isNotBlank())
+            require(certificateFingerprint.isNotBlank())
+        }
+
+        override val kind = AgentDataKind.SCOPE_CERTIFICATE
+        override val stableId = "scope:$certificateId:$stateFingerprint:$certificateFingerprint"
+    }
 }
 
 data class AgentDagExternalBinding(
@@ -311,6 +326,16 @@ object AgentDagValidator {
                     diagnostics += error(
                         "stale_scope",
                         "${node.nodeId}.${binding.inputPort} was bound against a different state snapshot",
+                        nodeId = node.nodeId,
+                        port = binding.inputPort
+                    )
+                }
+                if (binding.value is AgentDagExternalValue.ScopeCertificate &&
+                    binding.value.stateFingerprint != graph.stateFingerprint
+                ) {
+                    diagnostics += error(
+                        "stale_scope_certificate",
+                        "${node.nodeId}.${binding.inputPort} certificate was issued for a different state snapshot",
                         nodeId = node.nodeId,
                         port = binding.inputPort
                     )

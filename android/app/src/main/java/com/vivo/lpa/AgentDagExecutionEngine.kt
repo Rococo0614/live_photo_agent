@@ -29,6 +29,14 @@ sealed interface AgentDagRuntimeValue {
         override val kind: AgentDataKind
     ) : AgentDagRuntimeValue
 
+    data class ScopeCertificate(
+        val certificateId: String,
+        val stateFingerprint: String,
+        val certificateFingerprint: String
+    ) : AgentDagRuntimeValue {
+        override val kind = AgentDataKind.SCOPE_CERTIFICATE
+    }
+
     data class Json(val value: String) : AgentDagRuntimeValue {
         override val kind = AgentDataKind.JSON
     }
@@ -224,6 +232,11 @@ object AgentDagExecutionEngine {
             contentGraphVersion,
             contentNodeId,
             kind
+        )
+        is AgentDagExternalValue.ScopeCertificate -> AgentDagRuntimeValue.ScopeCertificate(
+            certificateId,
+            stateFingerprint,
+            certificateFingerprint
         )
     }
 }

@@ -265,6 +265,29 @@ Android生命周期恢复仍是前置门禁。
 QAIRT 2.45对两个独立DLC的weight-sharing compose在序列化阶段返回`0x138f`。Android bridge必须
 保持backend可替换，并在单一多图导出、其他共享权重路径或显式包体预算完成前继续shadow-only。
 
+### 7.2 首个交互MVP：局部确定性修改预览
+
+首版产品方向固定为局部确定性修改，而不是inpaint或生成。新增shadow-only action：
+
+```text
+source media ───────────────┐
+MASK_TRACK ─────────────────┼→ local_mask_change_preview_shadow → MEDIA_ARTIFACT(preview)
+SCOPE_CERTIFICATE ──────────┘
+```
+
+当前只接受两类可逆效果：`color_tint`与`blur`。扁平照片/视频中的“对象透明度”会暴露未知背景，实际
+需要独立图层或inpaint，因此不在首版伪装成确定性能力。preview节点只有`ADD_ARTIFACT` effect，固定
+`preview_only=true / writeback=false`，不含`CHANGE_CONTENT`、`REPLACE_ASSET`、`PUBLISH`或
+`COMMIT`。
+
+候选10%时序coverage policy可以授权临时preview，但`approvedForMutation=false`，所以不能授权
+写回。Goal compiler在grounded object后按`MASK_TRACK → SCOPE_CERTIFICATE`继续门禁；只有证书新鲜、
+目标唯一、保护检查通过、时间覆盖完整且Qwen给出合法typed effect参数时，才生成单节点preview DAG。
+证书的全部观测事实会生成SHA-256 fingerprint并进入DAG external binding，避免只复用certificate ID
+掩盖内容变化。纯Kotlin `LocalMaskChangeReferenceRenderer`定义ARGB调色、软mask混合和mask内box blur
+的CPU oracle，mask外像素必须逐位不变。未来vivo GPU/SDK renderer必须对该oracle做差分。目前只有
+fake backend与CPU oracle，没有注册Android renderer或生产executor。
+
 ## 8. 当前shadow实现
 
 已加入：
@@ -282,6 +305,8 @@ QAIRT 2.45对两个独立DLC的weight-sharing compose在序列化阶段返回`0x
 - EdgeTAM固定图拓扑选择器：只接受已验证的`1/1...7/16`基数组合，未知组合不回退；
 - typed track observation、候选时序覆盖policy与`AgentScopeCertificate`；候选policy、旧state、
   非唯一目标、保护重叠或覆盖缺口都不能授权mutation；
+- 局部调色/模糊的preview-only typed contract与单节点shadow compiler；源媒体、mask和证书都是
+  必需端口，输出只能是临时`MEDIA_ARTIFACT`；
 - Runtime v2动作顺序、节点状态与DAG拓扑的逐快照差分；
 - `agentRuntime=dag`实验构建；
 - 每次Runtime v2计划快照同步生成`PLAN_GRAPH`与`CONTENT_GRAPH`审计；
@@ -360,13 +385,15 @@ remove_content但无target       → NeedUser + continuation token
 remove_content语义target       → NeedObservation(OBJECT_TRACK)
 grounded OBJECT_TRACK无mask     → NeedObservation(MASK_TRACK)
 grounded OBJECT_TRACK + mask    → NeedObservation(SCOPE_CERTIFICATE)
+fresh certificate + typed effect → Ready(local preview-only DAG)
 publish但无validated artifact  → NeedObservation(MEDIA_ARTIFACT)
 旧state fingerprint            → Unsupported(stale state)
 当前已支持语义操作             → NeedBinding(状态过滤候选<=10)
 ```
 
-固定图拓扑选择、track observation与`AgentScopeCertificate`加入后，debug/release单测均为
-57/57，`lintDebug`通过；这些类型仍只参与shadow preflight，没有注册内容修改executor。
+固定图拓扑选择、track observation、`AgentScopeCertificate`和局部preview compiler加入后，
+debug/release单测均为66/66，`lintDebug`通过；这些类型仍只参与shadow preflight和fake backend，
+没有注册内容修改executor。
 
 真机F002最后一个shadow快照返回：
 

@@ -10,7 +10,8 @@ object AgentGoalCompiler {
     fun preflight(
         goal: AgentGoalIr,
         state: AgentRuntimeState,
-        content: AgentContentGraphSnapshot? = null
+        content: AgentContentGraphSnapshot? = null,
+        observations: AgentCompilerObservationContext = AgentCompilerObservationContext()
     ): AgentCompileResult {
         val currentFingerprint = AgentStateFingerprint.of(state)
         if (goal.stateFingerprint != currentFingerprint) {
@@ -85,7 +86,8 @@ object AgentGoalCompiler {
                         ))
                     )
                 }
-                if (requiresMask && findMaskTrack(graph, target.nodeId) == null) {
+                val maskTrack = findMaskTrack(graph, target.nodeId)
+                if (requiresMask && maskTrack == null) {
                     return AgentCompileResult.NeedObservation(
                         goal,
                         listOf(AgentObservationRequirement(
@@ -96,14 +98,67 @@ object AgentGoalCompiler {
                         ))
                     )
                 }
-                return AgentCompileResult.NeedObservation(
+                val certificate = observations.scopeCertificates[first.operationId]
+                val certificateMatches = certificate != null &&
+                    certificate.contentGraphId == target.contentGraphId &&
+                    certificate.contentGraphVersion == target.contentGraphVersion &&
+                    certificate.objectTrackNodeId == target.nodeId &&
+                    (!requiresMask || certificate.maskTrackNodeId == maskTrack?.nodeId) &&
+                    certificate.readyForPreview(currentFingerprint)
+                if (!certificateMatches) {
+                    return AgentCompileResult.NeedObservation(
+                        goal,
+                        listOf(AgentObservationRequirement(
+                            "validate-${first.operationId}-scope",
+                            first.operationId,
+                            AgentDataKind.SCOPE_CERTIFICATE,
+                            "Preview requires a fresh ScopeCertificate with uniqueness, temporal coverage and protection checks"
+                        ))
+                    )
+                }
+                if (first.kind == AgentGoalOperationKind.CHANGE_CONTENT) {
+                    val change = LocalDeterministicChange.fromOperation(first)
+                        ?: return AgentCompileResult.NeedUser(
+                            goal,
+                            AgentQuestionSpec(
+                                questionId = "question-${first.operationId}-local-effect",
+                                operationId = first.operationId,
+                                missingSlot = "local_effect",
+                                prompt = "请确认局部修改方式和强度",
+                                alternatives = listOf("局部调色", "局部模糊"),
+                                continuationToken = continuationToken(goal, "local-effect"),
+                                graphVersion = state.plan?.version ?: 0
+                            )
+                        )
+                    val sourceAssetId = observations.sourceAssetIds[first.operationId]
+                    val sourceExists = sourceAssetId != null && (
+                        state.sourceAssets.any { it.assetId == sourceAssetId } ||
+                            graph?.sourceAssetIds?.contains(sourceAssetId) == true
+                        )
+                    if (!sourceExists) {
+                        return AgentCompileResult.NeedObservation(
+                            goal,
+                            listOf(AgentObservationRequirement(
+                                "observe-${first.operationId}-source",
+                                first.operationId,
+                                AgentDataKind.ASSET_SET,
+                                "Local preview requires exactly one current source asset"
+                            ))
+                        )
+                    }
+                    return AgentCompileResult.Ready(
+                        LocalDeterministicChangeShadowCompiler.compilePreview(
+                            goal,
+                            first.operationId,
+                            requireNotNull(sourceAssetId),
+                            requireNotNull(certificate),
+                            change
+                        )
+                    )
+                }
+                return AgentCompileResult.Unsupported(
                     goal,
-                    listOf(AgentObservationRequirement(
-                        "validate-${first.operationId}-scope",
-                        first.operationId,
-                        AgentDataKind.SCOPE_CERTIFICATE,
-                        "Mutation requires a fresh ScopeCertificate with uniqueness, temporal coverage and protection checks"
-                    ))
+                    "No registered preview method for ${first.kind}; content mutation remains disabled"
                 )
             }
             return AgentCompileResult.Unsupported(

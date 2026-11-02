@@ -1,5 +1,8 @@
 package com.vivo.lpa
 
+import java.nio.charset.StandardCharsets
+import java.security.MessageDigest
+
 /**
  * Internal EdgeTAM attention topology selected from deterministic runtime facts.
  *
@@ -110,6 +113,12 @@ object TrackObservationValidator {
     }
 }
 
+/** Host observations available to Goal compilation; never model-authored physical bindings. */
+data class AgentCompilerObservationContext(
+    val scopeCertificates: Map<String, AgentScopeCertificate> = emptyMap(),
+    val sourceAssetIds: Map<String, String> = emptyMap()
+)
+
 /**
  * Host-issued proof that a grounded target is safe to hand to a mutation node.
  *
@@ -144,10 +153,44 @@ data class AgentScopeCertificate(
     val temporalCoverageComplete: Boolean
         get() = observations.size == expectedFrameCount && observations.all { it.temporallyCovered }
 
-    fun readyForMutation(currentStateFingerprint: String): Boolean =
+    val evidenceFingerprint: String
+        get() {
+            val observationFacts = observations.sortedBy { it.frameIndex }.joinToString(";") {
+                listOf(
+                    it.frameIndex,
+                    it.timestampMs,
+                    it.status.name,
+                    it.rawMaskPixels,
+                    it.visibleAreaRatio ?: "null"
+                ).joinToString(":")
+            }
+            val canonical = listOf(
+                certificateId,
+                contentGraphId,
+                contentGraphVersion,
+                objectTrackNodeId,
+                maskTrackNodeId,
+                stateFingerprint,
+                expectedFrameCount,
+                uniqueTarget,
+                protectionChecksPassed,
+                validationPolicy.policyId,
+                validationPolicy.minimumVisibleAreaRatio,
+                validationPolicy.approvedForMutation,
+                observationFacts
+            ).joinToString("|")
+            return MessageDigest.getInstance("SHA-256")
+                .digest(canonical.toByteArray(StandardCharsets.UTF_8))
+                .joinToString("") { "%02x".format(it.toInt() and 0xff) }
+        }
+
+    fun readyForPreview(currentStateFingerprint: String): Boolean =
         stateFingerprint == currentStateFingerprint &&
             uniqueTarget &&
             protectionChecksPassed &&
-            validationPolicy.approvedForMutation &&
             temporalCoverageComplete
+
+    fun readyForMutation(currentStateFingerprint: String): Boolean =
+        readyForPreview(currentStateFingerprint) &&
+            validationPolicy.approvedForMutation
 }

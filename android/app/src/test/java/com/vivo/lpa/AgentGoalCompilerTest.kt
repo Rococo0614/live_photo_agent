@@ -161,6 +161,73 @@ class AgentGoalCompilerTest {
         )
     }
 
+    @Test
+    fun groundedLocalChangeWithCertificateCompilesPreviewOnlyDag() {
+        val query = "把右后方的人调成绿色"
+        val state = AgentRuntimeState(null, "turn-local-preview", query)
+        val graph = AgentContentGraph(
+            graphId = "content-grounded",
+            version = 5,
+            sourceAssetIds = listOf("asset-1"),
+            nodes = mapOf(
+                "object-1" to ContentNode("object-1", ContentNodeKind.OBJECT_TRACK),
+                "mask-1" to ContentNode("mask-1", ContentNodeKind.MASK_TRACK)
+            ),
+            edges = mapOf(
+                "masks-1" to ContentEdge(
+                    "masks-1", "mask-1", "object-1", ContentEdgeKind.MASKS
+                )
+            )
+        )
+        val content = AgentContentGraphSnapshot(
+            graph,
+            AgentContentGraphValidator.validate(graph),
+            AgentStateFingerprint.of(state)
+        )
+        val semantic = parse(query, JSONObject().put("operations", JSONArray().put(JSONObject()
+            .put("op", "change_content")
+            .put("target", "右后方的人")
+            .put("parameters", JSONObject()
+                .put("effect_kind", "color_tint")
+                .put("color_hex", "#22aa66")
+                .put("intensity", 0.65)))), state)
+        val operation = semantic.operations.single()
+        val goal = semantic.copy(operations = listOf(operation.copy(
+            target = AgentGoalTarget.GroundedContentNode(graph.graphId, graph.version, "object-1")
+        )))
+        val certificate = AgentScopeCertificate(
+            certificateId = "scope-change",
+            contentGraphId = graph.graphId,
+            contentGraphVersion = graph.version,
+            objectTrackNodeId = "object-1",
+            maskTrackNodeId = "mask-1",
+            stateFingerprint = AgentStateFingerprint.of(state),
+            expectedFrameCount = 1,
+            observations = listOf(ValidatedTrackObservation(
+                0, 0, TrackObservationStatus.VISIBLE_VALIDATED, 10_000, null
+            )),
+            uniqueTarget = true,
+            protectionChecksPassed = true,
+            validationPolicy = TrackValidationPolicy("candidate-v1", 0.10)
+        )
+
+        val result = AgentGoalCompiler.preflight(
+            goal,
+            state,
+            content,
+            AgentCompilerObservationContext(
+                scopeCertificates = mapOf(operation.operationId to certificate),
+                sourceAssetIds = mapOf(operation.operationId to "asset-1")
+            )
+        )
+
+        assertTrue(result is AgentCompileResult.Ready)
+        val node = (result as AgentCompileResult.Ready).compilation.graph.nodes.values.single()
+        assertEquals(LocalDeterministicChangePreviewAction.ACTION_ID, node.actionId)
+        assertEquals(setOf(AgentStateEffect.ADD_ARTIFACT), node.effects)
+        assertTrue(!node.destructive)
+    }
+
     private fun groundedRemoveGoal(
         query: String,
         state: AgentRuntimeState,

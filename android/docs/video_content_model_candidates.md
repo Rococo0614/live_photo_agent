@@ -345,7 +345,7 @@ TrackedComposite
 优先级：
 
 1. 可由现有SDK完成的全局颜色/滤镜/速度变化；
-2. EdgeTAM mask限定的局部确定性变化（颜色、模糊、透明度）；
+2. EdgeTAM mask限定的局部确定性变化（首版颜色、模糊；透明度只用于已有独立图层）；
 3. SD/ControlNet关键帧实验，并要求时序验证；
 4. MoViE公开权重后再评估完整指令式V2V；
 5. VACE作为主机质量oracle。
@@ -362,6 +362,14 @@ TrackedComposite
 5. 计算候选唯一性、时间覆盖、连续性和排除重叠，只输出mask overlay，不修改媒体；
 6. 模糊时只生成语言澄清问题；
 7. 所有候选只允许生成并验证QAIRT 2.45制品；2.50/2.51在回归修复前不得进入本机。
+
+### P0.5：局部确定性修改预览（当前首选）
+
+1. 语言target经`OBJECT_TRACK → MASK_TRACK → SCOPE_CERTIFICATE`后，只生成临时preview；
+2. 首版effect限定为局部调色与局部模糊，参数有界且由Qwen在Goal IR中选择；
+3. 候选coverage policy可预览但不可写回；preview contract强制`writeback=false`；
+4. 纯Kotlin CPU oracle已固定调色、软mask与mask内模糊语义，mask外像素逐位不变；
+5. 用户确认、撤销、逐帧preservation和Android GPU/SDK renderer差分通过后，才单独评审mutation权限。
 
 ### P1：单帧LaMa probe
 
