@@ -102,6 +102,8 @@ class MobileAgentRunner(private val context: Context) {
         fun onRuntimeContentGraph(snapshot: AgentContentGraphSnapshot) {}
         /** Goal IR preflight: bind, observe, ask, ready or unsupported. */
         fun onRuntimeGoal(goal: AgentGoalIr, result: AgentCompileResult) {}
+        /** In-memory local preview ready for explicit confirm/cancel/undo review. */
+        fun onLocalPreview(interaction: AndroidLocalPreviewInteraction) {}
         /** State change after one tool result has been reduced. */
         fun onStateDelta(stepId: String, delta: StateDelta, state: AgentRuntimeState) {}
         /** Runtime-v2 terminal decision after deterministic completion gates. */

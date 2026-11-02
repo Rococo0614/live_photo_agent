@@ -106,6 +106,8 @@ class SdkProbeService : Service() {
             android.os.Handler(android.os.Looper.getMainLooper()).post {
                 runCatching { probeH(cover, externalMask) }
                     .onFailure { log("H 抛异常: ${it::class.java.simpleName}: ${it.message}") }
+                runCatching { probeI(cover, externalMask) }
+                    .onFailure { log("I 抛异常: ${it::class.java.simpleName}: ${it.message}") }
                 latch.countDown()
             }
             latch.await(60, java.util.concurrent.TimeUnit.SECONDS)
@@ -138,6 +140,8 @@ class SdkProbeService : Service() {
                 .onFailure { log("F/G 抛异常: ${it::class.java.simpleName}: ${it.message}") }
             runCatching { probeH(cover, externalMask ?: mask) }
                 .onFailure { log("H 抛异常: ${it::class.java.simpleName}: ${it.message}") }
+            runCatching { probeI(cover, externalMask ?: mask) }
+                .onFailure { log("I 抛异常: ${it::class.java.simpleName}: ${it.message}") }
             fgLatch.countDown()
         }
         fgLatch.await(60, java.util.concurrent.TimeUnit.SECONDS)
@@ -578,6 +582,180 @@ class SdkProbeService : Service() {
 
     private fun pixels(bitmap: Bitmap): IntArray = IntArray(bitmap.width * bitmap.height).also {
         bitmap.getPixels(it, 0, bitmap.width, 0, 0, bitmap.width, bitmap.height)
+    }
+
+    /** I: typed observation materialization, DAG execution and review lifecycle, still no writeback. */
+    private fun probeI(cover: Bitmap, suppliedMask: Bitmap?) {
+        log("")
+        log("[I] Android shadow observation bridge + temporary preview lifecycle")
+        val sourceAssetId = "shadow-source-1"
+        val targetText = "画面中的猫"
+        val state = AgentRuntimeState(null, "turn-local-shadow-probe", "把画面中的猫调成绿色")
+        val fingerprint = AgentStateFingerprint.of(state)
+        val graph = AgentContentGraphFactory.fromDescriptors(
+            graphId = "content-local-shadow-probe",
+            version = 0,
+            descriptors = listOf(ContentAssetDescriptor(
+                sourceAssetId,
+                "image",
+                hasImageTrack = true,
+                hasVideoTrack = false
+            ))
+        )
+        val snapshot = AgentContentGraphSnapshot(
+            graph,
+            AgentContentGraphValidator.validate(graph),
+            fingerprint
+        )
+        val operation = AgentGoalOperation(
+            operationId = "change-cat-color",
+            kind = AgentGoalOperationKind.CHANGE_CONTENT,
+            scope = AgentGoalScope.CurrentAssets,
+            target = AgentGoalTarget.Semantic(targetText),
+            parameters = mapOf(
+                "effect_kind" to AgentGoalArgument(
+                    AgentGoalValue.Text("color_tint"), AgentValueProvenance.MODEL_INFERRED
+                ),
+                "color_hex" to AgentGoalArgument(
+                    AgentGoalValue.Text("#22AA66"), AgentValueProvenance.MODEL_INFERRED
+                ),
+                "intensity" to AgentGoalArgument(
+                    AgentGoalValue.Number(0.65), AgentValueProvenance.MODEL_INFERRED
+                )
+            )
+        )
+        val semanticGoal = AgentGoalIr(
+            goalId = "goal-local-shadow-probe",
+            userGoal = state.originalQuery,
+            stateFingerprint = fingerprint,
+            operations = listOf(operation)
+        )
+        val objectTrack = when (val result = AgentShadowObservationBridge.materializeObjectTrack(
+            snapshot,
+            ShadowTargetGroundingObservation(
+                operation.operationId,
+                targetText,
+                sourceAssetId,
+                candidateCount = 1,
+                observedAtMs = 0
+            )
+        )) {
+            is ShadowObjectTrackResult.Materialized -> result.track
+            else -> error("unique target did not materialize: $result")
+        }
+        val normalizedMask = normalizeMask(cover, suppliedMask)
+        val maskPixels = pixels(normalizedMask)
+        val maskValues = ByteArray(maskPixels.size) { index ->
+            (maskPixels[index] ushr 16 and 0xff).toByte()
+        }
+        val maskTrack = AgentShadowObservationBridge.materializeMaskTrack(
+            objectTrack,
+            expectedFrameCount = 1,
+            frames = listOf(ShadowMaskFrame.create(
+                frameIndex = 0,
+                timestampMs = 0,
+                width = cover.width,
+                height = cover.height,
+                maskValues = maskValues
+            )),
+            validationPolicy = TrackValidationPolicy("candidate-v1", 0.10)
+        )
+        val materialized = AgentShadowObservationBridge.finalizeForCompiler(
+            semanticGoal,
+            maskTrack
+        )
+        val compileResult = AgentGoalCompiler.preflight(
+            materialized.goal,
+            state,
+            materialized.snapshot,
+            materialized.compilerContext
+        ) as? AgentCompileResult.Ready ?: error("materialized preview did not compile")
+
+        var logicalClock = 1_000L
+        val store = AndroidTemporaryLocalPreviewStore { logicalClock++ }
+        lateinit var interaction: AndroidLocalPreviewInteraction
+        val sourceBefore = bitmapPixelSha256(cover)
+        val execution = AgentDagExecutionEngine.runToTerminal(
+            compileResult.compilation,
+            AndroidLocalPreviewShadowExecutor(
+                materialization = materialized,
+                sourceFrames = AndroidShadowSourceFrameProvider { assetId, frameIndex, timestampMs ->
+                    AndroidShadowSourceFrame(assetId, frameIndex, timestampMs, cover)
+                },
+                previewStore = store,
+                currentStateFingerprint = { fingerprint },
+                onPreviewReady = { interaction = it }
+            )
+        )
+        check(execution.runState.status == AgentDagRunStatus.FINISHED)
+        val outputArtifactId = (execution.values.values.flatten().single() as
+            AgentDagRuntimeValue.Artifact).artifactId
+        check(outputArtifactId == interaction.artifactId)
+        val pending = interaction.snapshot()
+        check(pending.rendererBackendId == AndroidLocalMaskPreviewRenderer.BACKEND_GLES_COLOR_TINT)
+        File(outDir(), "i_shadow_bridge_preview.png").outputStream().use {
+            pending.previewBitmap.compress(Bitmap.CompressFormat.PNG, 100, it)
+        }
+        val accepted = interaction.confirm()
+        val undone = interaction.undo()
+        check(!accepted.lifecycle.writebackAuthorized && !undone.lifecycle.writebackAuthorized)
+        interaction.release()
+        check(store.activeArtifactIds().isEmpty())
+        val sourceAfter = bitmapPixelSha256(cover)
+        check(sourceBefore == sourceAfter)
+
+        val forbiddenAttributes = materialized.snapshot.graph.nodes.values
+            .flatMap { it.attributes.keys }
+            .map(String::lowercase)
+            .filter { it.contains("path") || it.contains("box") || it.contains("point") }
+        check(forbiddenAttributes.isEmpty())
+        val evidence = JSONObject()
+            .put("schema_version", 1)
+            .put("status", "PASS_READ_ONLY_SHADOW_BRIDGE")
+            .put("user_target_input", "language_only")
+            .put("object_track_materialized", true)
+            .put("mask_track_materialized", true)
+            .put("content_graph_version", materialized.snapshot.graph.version)
+            .put("certificate_ready_for_preview", materialized.certificate.readyForPreview(fingerprint))
+            .put("certificate_ready_for_mutation", materialized.certificate.readyForMutation(fingerprint))
+            .put("certificate_fingerprint", materialized.certificate.evidenceFingerprint)
+            .put("track_observation_statuses", JSONArray(
+                materialized.certificate.observations.map { it.status.name }
+            ))
+            .put("dag_status", execution.runState.status.name)
+            .put("executed_node_ids", JSONArray(execution.executedNodeIds))
+            .put("artifact_id", outputArtifactId)
+            .put("renderer_backend", pending.rendererBackendId)
+            .put("review_lifecycle", JSONArray(listOf(
+                pending.lifecycle.state.name,
+                accepted.lifecycle.state.name,
+                undone.lifecycle.state.name
+            )))
+            .put("writeback_authorized", false)
+            .put("source_pixel_sha256_before", sourceBefore)
+            .put("source_pixel_sha256_after", sourceAfter)
+            .put("source_media_modified", false)
+            .put("published", false)
+            .put("production_executor_registered", false)
+            .put("temporary_store_empty_after_undo", store.activeArtifactIds().isEmpty())
+            .put("content_graph", AgentContentGraphJson.toJson(materialized.snapshot))
+            .put("compiled_dag", AgentDagJson.toJson(compileResult.compilation))
+        val evidenceFile = File(outDir(), "i_shadow_bridge_evidence.json")
+        evidenceFile.writeText(evidence.toString(2) + "\n")
+        log(
+            "    I status=${evidence.getString("status")} graph_version=${materialized.snapshot.graph.version} " +
+                "backend=${pending.rendererBackendId} lifecycle=" +
+                "${pending.lifecycle.state}->${accepted.lifecycle.state}->${undone.lifecycle.state}"
+        )
+        log("    I source_unchanged=${sourceBefore == sourceAfter} evidence=${evidenceFile.length()} bytes")
+    }
+
+    private fun bitmapPixelSha256(bitmap: Bitmap): String {
+        val buffer = ByteBuffer.allocate(bitmap.width * bitmap.height * 4)
+        pixels(bitmap).forEach(buffer::putInt)
+        return java.security.MessageDigest.getInstance("SHA-256")
+            .digest(buffer.array())
+            .joinToString("") { "%02x".format(it.toInt() and 0xff) }
     }
 
     private fun buffer(values: FloatArray): java.nio.FloatBuffer =

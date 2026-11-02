@@ -93,6 +93,32 @@ class AgentTrackValidationTest {
         )
     }
 
+    @Test
+    fun certificateFingerprintUsesUnambiguousLengthPrefixedFacts() {
+        val observations = listOf(
+            ValidatedTrackObservation(0, 0, TrackObservationStatus.VISIBLE_VALIDATED, 1, null),
+            ValidatedTrackObservation(1, 1, TrackObservationStatus.ABSENT_MODEL, 0, 0.0)
+        )
+        val base = certificate(observations, candidatePolicy)
+        val left = base.copy(certificateId = "scope|content", contentGraphId = "graph")
+        val right = base.copy(certificateId = "scope", contentGraphId = "content|graph")
+
+        assertNotEquals(left.evidenceFingerprint, right.evidenceFingerprint)
+    }
+
+    @Test
+    fun completeAbsenceIsCoveredButCannotProduceAVisualPreview() {
+        val absent = listOf(
+            ValidatedTrackObservation(0, 0, TrackObservationStatus.ABSENT_MODEL, 0, null),
+            ValidatedTrackObservation(1, 1, TrackObservationStatus.ABSENT_MODEL, 0, null)
+        )
+        val certificate = certificate(absent, candidatePolicy)
+
+        assertTrue(certificate.temporalCoverageComplete)
+        assertFalse(certificate.hasVisibleFrame)
+        assertFalse(certificate.readyForPreview("state-current"))
+    }
+
     private fun certificate(
         observations: List<ValidatedTrackObservation>,
         policy: TrackValidationPolicy

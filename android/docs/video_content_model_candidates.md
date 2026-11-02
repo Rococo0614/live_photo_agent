@@ -370,8 +370,9 @@ TrackedComposite
 3. 候选coverage policy可预览但不可写回；preview contract强制`writeback=false`；
 4. 纯Kotlin CPU oracle已固定调色、软mask与mask内模糊语义，mask外像素逐位不变；
 5. vivo单帧GLES调色/box blur已在真实mask与非对称软mask上通过CPU差分（最大RGB差≤1、mask外0）；
-6. 仍需track/certificate bridge、用户确认/取消/undo、逐帧preservation与生命周期Gate，全部通过后才
-   单独评审mutation权限。
+6. supplied observations到track/certificate、临时artifact及确认/取消/undo状态机已通过单帧真机probe；
+7. 仍需真实QAIRT 2.45语言locator接入、逐帧preservation、触屏/Activity生命周期和完整soak，全部通过
+   后才单独评审mutation权限。
 
 ### P1：单帧LaMa probe
 

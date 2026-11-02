@@ -70,8 +70,8 @@ data class AgentDagExecutionState(
 )
 
 /**
- * Backend-independent execution core. Tests use a fake executor; the future Android bridge will
- * adapt one node at a time to MobileToolExecutor only after differential gates pass.
+ * Backend-independent execution core. Most tests use a fake executor; the isolated local-preview
+ * shadow bridge adapts only its one validated node. No production MobileToolExecutor is registered.
  */
 object AgentDagExecutionEngine {
     fun initialize(

@@ -448,8 +448,9 @@ EdgeTAM grounding探针首选float模型验证语义，随后才比较W8A8；这
 - 当前仍是抽样只读overlay，不构成可授权修改的`ScopeCertificate`；本地QAIRT 2.45语言locator、
   逐帧覆盖、多分钟完整pipeline soak、总host/DSP峰值内存和固定图银行包体方案仍未通过，任何修改、
   填充或发布节点仍不可ready。
-- 下游Android单帧GLES调色/box blur renderer已独立通过CPU oracle差分，但尚未接收本节的真实逐帧
-  `MASK_TRACK`或certificate；它不改变上述Grounding与mutation门禁。
+- 下游Android单帧GLES renderer及supplied observations → track/certificate → temporary artifact →
+  confirm/undo shadow链已通过；但尚未接收本节缺失的本地语言locator与真实逐帧`MASK_TRACK`，不改变
+  上述Grounding与mutation门禁。
 
 ## 8. 后续Gate
 
@@ -458,8 +459,8 @@ EdgeTAM grounding探针首选float模型验证语义，随后才比较W8A8；这
 3. 增加进程终止、Activity重建和Android bridge级context重载；底层TERM取消/重载已通过。
 4. 把10%时序覆盖阈值扩展到更多尺度变化fixture；不充分时返回`NeedObservation`，不能静默接受。
 5. 解决或显式评审234MiB context银行包体；当前单独DLC compose的weight sharing不可用。
-6. 完成shadow-only node bridge、`ScopeCertificate` materialization、逐帧renderer preservation和
-   确认/undo生命周期后才考虑执行；2.50/2.51继续禁用。
+6. supplied-observation shadow bridge已通过；继续完成真实locator接入、逐帧renderer preservation、
+   触屏/Activity确认-undo生命周期后才考虑执行；2.50/2.51继续禁用。
 
 本轮汇总证据：
 
@@ -496,4 +497,7 @@ SHA-256 a8118e3bdb58d85426845d19d33da9f2877334387e1aec71101b2cc2fae7c6e1
 
 /mnt/ssd/lpa-aihub-probe/artifacts/local-deterministic-preview-vivo-gles/summary.json
 SHA-256 73da947f37d8cdb3b59b5e774de342d955e20eb107f94fc25fe22d0ce762da71
+
+/mnt/ssd/lpa-aihub-probe/artifacts/local-preview-shadow-bridge-vivo/summary.json
+SHA-256 d9175e615831e122e9e9c5860fc31fe5cc477e4cfed89557ca63f33d6c517eef
 ```

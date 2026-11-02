@@ -153,42 +153,49 @@ data class AgentScopeCertificate(
     val temporalCoverageComplete: Boolean
         get() = observations.size == expectedFrameCount && observations.all { it.temporallyCovered }
 
+    val hasVisibleFrame: Boolean
+        get() = observations.any { it.status == TrackObservationStatus.VISIBLE_VALIDATED }
+
     val evidenceFingerprint: String
         get() {
-            val observationFacts = observations.sortedBy { it.frameIndex }.joinToString(";") {
-                listOf(
-                    it.frameIndex,
-                    it.timestampMs,
-                    it.status.name,
-                    it.rawMaskPixels,
-                    it.visibleAreaRatio ?: "null"
-                ).joinToString(":")
-            }
-            val canonical = listOf(
+            val facts = mutableListOf(
                 certificateId,
                 contentGraphId,
-                contentGraphVersion,
+                contentGraphVersion.toString(),
                 objectTrackNodeId,
                 maskTrackNodeId,
                 stateFingerprint,
-                expectedFrameCount,
-                uniqueTarget,
-                protectionChecksPassed,
+                expectedFrameCount.toString(),
+                uniqueTarget.toString(),
+                protectionChecksPassed.toString(),
                 validationPolicy.policyId,
-                validationPolicy.minimumVisibleAreaRatio,
-                validationPolicy.approvedForMutation,
-                observationFacts
-            ).joinToString("|")
+                validationPolicy.minimumVisibleAreaRatio.toString(),
+                validationPolicy.approvedForMutation.toString()
+            )
+            observations.sortedBy { it.frameIndex }.forEach { observation ->
+                facts += listOf(
+                    observation.frameIndex.toString(),
+                    observation.timestampMs.toString(),
+                    observation.status.name,
+                    observation.rawMaskPixels.toString(),
+                    observation.visibleAreaRatio?.toString() ?: "null"
+                )
+            }
+            val canonical = facts.joinToString(separator = "") { fact ->
+                val bytes = fact.toByteArray(StandardCharsets.UTF_8)
+                "${bytes.size}:$fact;"
+            }
             return MessageDigest.getInstance("SHA-256")
                 .digest(canonical.toByteArray(StandardCharsets.UTF_8))
                 .joinToString("") { "%02x".format(it.toInt() and 0xff) }
         }
 
     fun readyForPreview(currentStateFingerprint: String): Boolean =
-        stateFingerprint == currentStateFingerprint &&
+            stateFingerprint == currentStateFingerprint &&
             uniqueTarget &&
             protectionChecksPassed &&
-            temporalCoverageComplete
+            temporalCoverageComplete &&
+            hasVisibleFrame
 
     fun readyForMutation(currentStateFingerprint: String): Boolean =
         readyForPreview(currentStateFingerprint) &&

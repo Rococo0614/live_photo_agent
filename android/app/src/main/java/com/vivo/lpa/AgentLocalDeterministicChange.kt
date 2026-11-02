@@ -124,7 +124,7 @@ object LocalDeterministicChangePreviewAction {
     )
 }
 
-/** Deterministic lowering used by tests and future shadow bridge; no executor is registered. */
+/** Deterministic lowering used by tests and the isolated shadow bridge; no production executor. */
 object LocalDeterministicChangeShadowCompiler {
     fun compilePreview(
         goal: AgentGoalIr,

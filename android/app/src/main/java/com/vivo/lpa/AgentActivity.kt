@@ -49,6 +49,7 @@ class AgentActivity : Activity() {
     private lateinit var progressView: ProgressBar
     private lateinit var chatLog: LinearLayout
     private lateinit var chatScroll: ScrollView
+    private lateinit var localPreviewPanel: LinearLayout
     private lateinit var mediaSummary: TextView
     private lateinit var assetStrip: LinearLayout
     private lateinit var libraryButton: Button
@@ -86,6 +87,7 @@ class AgentActivity : Activity() {
     private var lastPlan: JSONObject? = null
     private val lastToolResults = mutableListOf<JSONObject>()
     private var taskStatus: String = "idle"
+    private var activeLocalPreview: AndroidLocalPreviewInteraction? = null
 
     /**
      * Transient "thinking" bubble: a spinner plus a fixed-height box that is rewritten in place
@@ -179,6 +181,17 @@ class AgentActivity : Activity() {
         chatScroll.addView(chatLog)
         root.addView(chatScroll, LinearLayout.LayoutParams(-1, 0, 1f))
 
+        localPreviewPanel = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(10), dp(10), dp(10), dp(10))
+            background = roundedBackground(Color.WHITE, Color.rgb(183, 220, 198), dp(18))
+            visibility = View.GONE
+        }
+        root.addView(localPreviewPanel, LinearLayout.LayoutParams(-1, -2).apply {
+            topMargin = dp(6)
+            bottomMargin = dp(6)
+        })
+
         mediaSummary = TextView(this).apply {
             textSize = 13f
             setTextColor(Color.rgb(26, 61, 52))
@@ -250,6 +263,10 @@ val composer = LinearLayout(this).apply { gravity = Gravity.CENTER_VERTICAL }
 
     private fun pickMedia() {
         if (worker != null) return
+        if (activeLocalPreview != null) {
+            append("请先取消或撤销当前临时预览，再更换素材")
+            return
+        }
         val intent = if (Build.VERSION.SDK_INT >= 33) {
             Intent(MediaStore.ACTION_PICK_IMAGES).apply {
                 putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true)
@@ -637,6 +654,10 @@ preparedAssets = prepared
 
     private fun submitQuery() {
         if (worker != null) return
+        if (activeLocalPreview != null) {
+            append("请先完成当前临时预览：未确认时可取消，确认后可撤销；预览不会写回源媒体")
+            return
+        }
         val query = input.text.toString().trim()
         if (query.isEmpty()) {
             append("请输入处理要求")
@@ -785,6 +806,19 @@ preparedAssets = prepared
                         .put("query", query)
                         .put("goal_id", goal.goalId)
                     uiFor(generation) { logAudit("GOAL_IR", payload) }
+                }
+                override fun onLocalPreview(interaction: AndroidLocalPreviewInteraction) {
+                    if (generation != sessionGeneration) {
+                        releaseLocalPreviewInteraction(interaction)
+                        return
+                    }
+                    ui {
+                        if (generation == sessionGeneration && !isFinishing && !isDestroyed) {
+                            showLocalPreview(interaction)
+                        } else {
+                            releaseLocalPreviewInteraction(interaction)
+                        }
+                    }
                 }
                 override fun onStateDelta(
                     stepId: String,
@@ -949,6 +983,147 @@ preparedAssets = prepared
         append("正在请求中止当前任务")
         state.text = "正在中止"
         worker?.interrupt()
+    }
+
+    private fun showLocalPreview(interaction: AndroidLocalPreviewInteraction) {
+        clearActiveLocalPreview()
+        val artifact = runCatching { interaction.snapshot() }.getOrElse { error ->
+            append("临时预览不可用：${error.message}")
+            return
+        }
+        activeLocalPreview = interaction
+        localPreviewPanel.removeAllViews()
+        localPreviewPanel.visibility = View.VISIBLE
+        val status = TextView(this).apply {
+            text = "局部${if (artifact.effectKind == "blur") "模糊" else "调色"} · " +
+                "仅临时预览，尚未写回"
+            textSize = 13f
+            setTypeface(typeface, android.graphics.Typeface.BOLD)
+            setTextColor(Color.rgb(26, 61, 52))
+        }
+        localPreviewPanel.addView(status)
+        val preview = ImageView(this).apply {
+            scaleType = ImageView.ScaleType.FIT_CENTER
+            adjustViewBounds = true
+            setBackgroundColor(Color.rgb(239, 242, 238))
+            setImageBitmap(artifact.previewBitmap)
+        }
+        localPreviewPanel.addView(preview, LinearLayout.LayoutParams(-1, dp(230)).apply {
+            topMargin = dp(6)
+        })
+        val controls = LinearLayout(this).apply {
+            gravity = Gravity.CENTER_VERTICAL
+            orientation = LinearLayout.HORIZONTAL
+        }
+        var showingPreview = true
+        val toggle = button("查看原图") {}
+        toggle.setOnClickListener {
+            showingPreview = !showingPreview
+            preview.setImageBitmap(if (showingPreview) artifact.previewBitmap else artifact.sourceBitmap)
+            toggle.text = if (showingPreview) "查看原图" else "查看预览"
+        }
+        val confirm = button("确认预览") {}
+        val cancelPreview = button("取消") {}
+        val undo = button("撤销预览") {}
+        undo.visibility = View.GONE
+        controls.addView(toggle, LinearLayout.LayoutParams(0, dp(42), 1f))
+        controls.addView(confirm, LinearLayout.LayoutParams(0, dp(42), 1f).apply {
+            leftMargin = dp(5)
+        })
+        controls.addView(cancelPreview, LinearLayout.LayoutParams(0, dp(42), 1f).apply {
+            leftMargin = dp(5)
+        })
+        controls.addView(undo, LinearLayout.LayoutParams(0, dp(42), 1f).apply {
+            leftMargin = dp(5)
+        })
+        localPreviewPanel.addView(controls, LinearLayout.LayoutParams(-1, -2).apply {
+            topMargin = dp(6)
+        })
+
+        confirm.setOnClickListener {
+            runCatching { interaction.confirm() }.onSuccess { accepted ->
+                status.text = "已确认临时预览 · 写回仍未授权，可随时撤销"
+                confirm.visibility = View.GONE
+                cancelPreview.visibility = View.GONE
+                undo.visibility = View.VISIBLE
+                logLocalPreviewReview(accepted)
+            }.onFailure { append("确认预览失败：${it.message}") }
+        }
+        cancelPreview.setOnClickListener {
+            preview.setImageBitmap(artifact.sourceBitmap)
+            runCatching {
+                val cancelledPreview = interaction.cancel()
+                logLocalPreviewReview(cancelledPreview)
+                interaction.release()
+            }.onFailure {
+                releaseLocalPreviewInteraction(interaction)
+                append("取消预览失败：${it.message}")
+            }
+            activeLocalPreview = null
+            status.text = "已取消临时预览 · 源媒体未改变"
+            toggle.visibility = View.GONE
+            confirm.visibility = View.GONE
+            cancelPreview.visibility = View.GONE
+        }
+        undo.setOnClickListener {
+            preview.setImageBitmap(artifact.sourceBitmap)
+            runCatching {
+                val undone = interaction.undo()
+                logLocalPreviewReview(undone)
+                interaction.release()
+            }.onFailure {
+                releaseLocalPreviewInteraction(interaction)
+                append("撤销预览失败：${it.message}")
+            }
+            activeLocalPreview = null
+            status.text = "已撤销临时预览 · 源媒体未改变"
+            toggle.visibility = View.GONE
+            undo.visibility = View.GONE
+        }
+        logAudit("LOCAL_PREVIEW_READY", JSONObject()
+            .put("artifact_id", artifact.artifactId)
+            .put("effect_kind", artifact.effectKind)
+            .put("renderer_backend", artifact.rendererBackendId)
+            .put("frame_index", artifact.frameIndex)
+            .put("review_state", artifact.lifecycle.state.name)
+            .put("writeback", false))
+    }
+
+    private fun logLocalPreviewReview(artifact: AndroidTemporaryLocalPreviewArtifact) {
+        logAudit("LOCAL_PREVIEW_REVIEW", JSONObject()
+            .put("artifact_id", artifact.artifactId)
+            .put("review_state", artifact.lifecycle.state.name)
+            .put("revision", artifact.lifecycle.revision)
+            .put("writeback_authorized", artifact.lifecycle.writebackAuthorized)
+            .put("source_media_modified", false))
+    }
+
+    private fun clearActiveLocalPreview() {
+        val interaction = activeLocalPreview ?: run {
+            if (::localPreviewPanel.isInitialized) {
+                localPreviewPanel.removeAllViews()
+                localPreviewPanel.visibility = View.GONE
+            }
+            return
+        }
+        releaseLocalPreviewInteraction(interaction)
+        activeLocalPreview = null
+        if (::localPreviewPanel.isInitialized) {
+            localPreviewPanel.removeAllViews()
+            localPreviewPanel.visibility = View.GONE
+        }
+    }
+
+    private fun releaseLocalPreviewInteraction(interaction: AndroidLocalPreviewInteraction) {
+        runCatching {
+            when (interaction.snapshot().lifecycle.state) {
+                LocalPreviewReviewState.PENDING_REVIEW -> interaction.cancel()
+                LocalPreviewReviewState.ACCEPTED_FOR_REVIEW -> interaction.undo()
+                LocalPreviewReviewState.CANCELLED,
+                LocalPreviewReviewState.UNDONE -> Unit
+            }
+            interaction.release()
+        }
     }
 
     private fun finishWorker() {
@@ -1362,6 +1537,7 @@ preparedAssets = prepared
     }
 
     private fun resetSessionUi() {
+        clearActiveLocalPreview()
         selectedUris.clear()
         preparedAssets = emptyList()
         selectedAssetIds.clear()
@@ -1687,6 +1863,7 @@ preparedAssets = prepared
     }
 
     override fun onDestroy() {
+        clearActiveLocalPreview()
         if (worker != null) {
             cancelled.set(true)
             worker?.interrupt()

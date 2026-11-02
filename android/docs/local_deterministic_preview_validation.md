@@ -2,7 +2,7 @@
 
 > 验证日期：2026-11-02  
 > 设备：vivo V2547A / PD2547，SM8850，Android 16（SDK 36）  
-> 状态：**单帧、内存内、preview-only GLES renderer 通过；不授权写回或发布**
+> 状态：**单帧GLES renderer与Android shadow bridge通过；不授权写回或发布**
 
 ## 1. 边界
 
@@ -18,9 +18,10 @@ source Bitmap + mask Bitmap + LocalDeterministicChange
     → LocalMaskPreviewFrame(bitmap, backendId)
 ```
 
-该类没有注册到`AgentDagExecutionEngine`，不接收路径或MediaStore URI，也不写文件、替换素材、提交或
-发布。`SdkProbeService`中的H探针只把结果保存到应用私有诊断目录以便拉取验证。Runtime v2 loop和
-生产APK均未改变。
+renderer本身不接收路径或MediaStore URI，也不写文件、替换素材、提交或发布。隔离的
+`AndroidLocalPreviewShadowExecutor`只在显式shadow probe中实例化，未加入生产tool/executor registry。
+`SdkProbeService`的H/I探针只把结果保存到应用私有诊断目录以便拉取验证。Runtime v2 loop和生产APK
+均未改变。
 
 ## 2. 等价语义
 
@@ -72,7 +73,46 @@ test APK
 SHA-256 22d58087ab6cfaf30ad9287d0488eacb517ed8e3051a0221af958a43c51010ca
 ```
 
-## 4. 复现入口
+## 4. Shadow bridge与交互生命周期
+
+`AgentShadowObservationBridge`现已把host观测按三阶段物化：
+
+```text
+language target + deterministic candidate count
+  → unique OBJECT_TRACK（0个继续观察，>1个NeedUser，不选择box/point）
+  → internal grayscale frames → MASK_TRACK + typed observations
+  → fresh AgentScopeCertificate → preview-only DAG
+  → AndroidLocalPreviewShadowExecutor → process-local MEDIA_ARTIFACT
+```
+
+mask字节只保存在`ShadowMaskFrame`内部，Content Graph与DAG不含mask、box、point、媒体路径或URI。
+bridge拒绝`approvedForMutation=true`的policy；executor再次核对source state fingerprint、graph版本、
+mask node、certificate ID及完整evidence fingerprint，并强制`preview_only=true / writeback=false`。
+
+临时artifact只有四个review状态：`PENDING_REVIEW → ACCEPTED_FOR_REVIEW → UNDONE`，或
+`PENDING_REVIEW → CANCELLED`；不存在`COMMITTED`状态，所有状态的`writebackAuthorized=false`。
+`AgentActivity`已加入原图/预览切换、确认、取消和撤销panel；切换会话或Activity销毁时自动取消/撤销
+并释放preview bitmap，不持久化临时artifact。
+
+vivo H/I真机probe完成一条1080×1440链：语言target → graph v2 → fresh certificate → 单节点DAG
+`FINISHED` → GLES preview → 确认 → undo → 临时store清空。源帧像素SHA在执行前后相同，host复算
+mask外变化0、mask内变化57,643像素，序列化Content Graph/DAG不含路径、box或point。
+
+```text
+/mnt/ssd/lpa-aihub-probe/artifacts/local-preview-shadow-bridge-vivo/summary.json
+SHA-256 d9175e615831e122e9e9c5860fc31fe5cc477e4cfed89557ca63f33d6c517eef
+
+/mnt/ssd/lpa-aihub-probe/artifacts/local-preview-shadow-bridge-vivo/i_shadow_bridge_evidence.json
+SHA-256 42ef8404be8fbbbe14069a34f1c034a7615ab50905ecebba0469d43d6f972933
+
+test APK
+SHA-256 ff77b06b0735a5f36d829dd27448d8c16f5daa03c93bc6e16322f29322394559
+```
+
+debug/release单测均为77/77，`lintDebug`、debug/release assemble通过。headless probe验证了与UI相同的
+interaction/store状态机，但尚未做触屏自动化或Activity重建测试。
+
+## 5. 复现入口
 
 ```bash
 adb shell am start-foreground-service \
@@ -83,18 +123,19 @@ adb shell am start-foreground-service \
 adb logcat -d -s LPA_PROBE2:I '*:S'
 ```
 
-探针会生成六个case、CPU/GLES成对PNG与`h_local_preview_evidence.json`；任一case使用fallback、mask外
-变化、alpha变化或RGB误差大于1都会返回FAIL。
+探针会生成六个renderer case、CPU/GLES成对PNG、`h_local_preview_evidence.json`，并继续生成完整
+shadow链的`i_shadow_bridge_evidence.json`与临时preview。任一renderer case使用fallback、mask外变化、
+alpha变化或RGB误差大于1都会返回FAIL。
 
-## 5. 尚未通过的Gate
+## 6. 尚未通过的Gate
 
-本结果只关闭“单帧renderer数值等价”Gate，以下仍阻止mutation：
+本结果关闭“单帧renderer数值等价”和“supplied observation到临时artifact”Gate；以下仍阻止mutation：
 
-1. Android shadow bridge尚未把真实`OBJECT_TRACK`、逐帧`MASK_TRACK`和certificate materialize到预览；
+1. QAIRT 2.45本地语言locator尚未接入bridge，当前真机target/mask是已验证fixture，不是完整用户请求；
 2. 每帧视频/Live Photo解码、持久EGL context、时间戳保持与完整逐帧preservation尚未验证；
-3. 临时预览、确认、取消和undo UI尚未闭环；
-4. Activity/进程重建、多分钟pipeline soak、总host/GPU/DSP内存与温升尚未通过；
-5. QAIRT 2.45本地语言locator和固定context银行包体仍未解决。
+3. UI已实现但尚未做触屏自动化、Activity/进程重建、会话恢复与旋转Gate；
+4. 多分钟完整pipeline soak、总host/GPU/DSP内存与温升尚未通过；
+5. 固定context银行包体仍未解决；任何确认仍只接受临时预览，不能写回。
 
 测试后已恢复冻结的Runtime v2 loop APK，并确认设备安装包SHA一致：
 

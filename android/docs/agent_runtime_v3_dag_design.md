@@ -289,6 +289,13 @@ SCOPE_CERTIFICATE ──────────┘
 和整数域两遍box blur，并在vivo真机对CPU oracle完成单帧差分；GL不可用时才回退CPU。它尚未注册为
 DAG或生产executor，也不接收媒体路径或执行写回。
 
+随后加入`AgentShadowObservationBridge`：语言target只有唯一候选时才物化`OBJECT_TRACK`，内部灰度
+帧物化为`MASK_TRACK`，同批typed observations签发fresh certificate；多候选返回`NeedUser`，不把
+box/point交给用户。`AndroidLocalPreviewShadowExecutor`仅接受完整evidence fingerprint及
+`preview_only=true / writeback=false`的单节点DAG，产物进入process-local store。UI review状态只有
+待确认、已确认预览、取消和撤销，不存在commit。该executor只在显式shadow probe实例化，仍未进入
+生产registry。
+
 ## 8. 当前shadow实现
 
 已加入：
@@ -309,6 +316,8 @@ DAG或生产executor，也不接收媒体路径或执行写回。
 - 局部调色/模糊的preview-only typed contract与单节点shadow compiler；源媒体、mask和证书都是
   必需端口，输出只能是临时`MEDIA_ARTIFACT`；
 - 隔离的Android单帧preview renderer：GLES调色与box blur、CPU oracle fallback、显式backend ID；
+- staged Android shadow observation bridge、证书绑定preview executor、process-local artifact store与
+  confirm/cancel/undo UI lifecycle；所有review状态固定`writebackAuthorized=false`；
 - Runtime v2动作顺序、节点状态与DAG拓扑的逐快照差分；
 - `agentRuntime=dag`实验构建；
 - 每次Runtime v2计划快照同步生成`PLAN_GRAPH`与`CONTENT_GRAPH`审计；
@@ -393,11 +402,11 @@ publish但无validated artifact  → NeedObservation(MEDIA_ARTIFACT)
 当前已支持语义操作             → NeedBinding(状态过滤候选<=10)
 ```
 
-固定图拓扑选择、track observation、`AgentScopeCertificate`和局部preview compiler加入后，
-debug/release单测均为66/66，`lintDebug`通过。随后Android renderer在1080×1440真实mask及非对称
-软mask、半径1/6/64上共6组通过：mask外变化0、alpha差0、RGB最大差≤1；真实r=6 blur与CPU oracle
-逐字节一致。证据见`local_deterministic_preview_validation.md`。renderer仍是隔离诊断入口，执行引擎
-仍只使用fake backend，没有注册内容修改executor。
+固定图拓扑选择、track observation、`AgentScopeCertificate`和局部preview compiler加入后，首轮
+debug/release单测为66/66。renderer在1080×1440真实mask及非对称软mask、半径1/6/64上共6组通过：
+mask外变化0、alpha差0、RGB最大差≤1；真实r=6 blur与CPU oracle逐字节一致。加入shadow bridge与
+review lifecycle后单测为77/77，真机完整链达到`FINISHED`，确认后undo且源帧SHA不变。证据见
+`local_deterministic_preview_validation.md`。真实生产DAG SDK执行仍关闭，未注册内容修改executor。
 
 真机F002最后一个shadow快照返回：
 
