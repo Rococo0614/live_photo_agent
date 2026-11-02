@@ -2,6 +2,7 @@ package com.vivo.lpa
 
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertThrows
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -17,7 +18,8 @@ class AgentShadowObservationBridgeTest {
                 semanticTarget = "右后方的猫",
                 sourceAssetId = "asset-1",
                 candidateCount = 1,
-                observedAtMs = 100
+                observedAtMs = 100,
+                locatorEvidenceFingerprint = locatorFingerprint
             )
         )
         assertTrue(objectResult is ShadowObjectTrackResult.Materialized)
@@ -52,6 +54,11 @@ class AgentShadowObservationBridgeTest {
             objectTrack.groundingEvidenceFingerprint,
             materialized.snapshot.graph.nodes[objectTrack.objectTrackNodeId]
                 ?.attributes?.get("grounding_evidence_fingerprint")
+        )
+        assertEquals(
+            locatorFingerprint,
+            materialized.snapshot.graph.nodes[objectTrack.objectTrackNodeId]
+                ?.attributes?.get("locator_evidence_fingerprint")
         )
         assertEquals(ContentNodeKind.MASK_TRACK,
             materialized.snapshot.graph.nodes[maskTrack.maskTrackNodeId]?.kind)
@@ -104,7 +111,8 @@ class AgentShadowObservationBridgeTest {
         val result = AgentShadowObservationBridge.materializeObjectTrack(
             fixture.snapshot,
             ShadowTargetGroundingObservation(
-                "change-1", "猫", "asset-1", candidateCount = 3, observedAtMs = 100
+                "change-1", "猫", "asset-1", candidateCount = 3, observedAtMs = 100,
+                locatorEvidenceFingerprint = locatorFingerprint
             )
         )
 
@@ -124,11 +132,30 @@ class AgentShadowObservationBridgeTest {
         val result = AgentShadowObservationBridge.materializeObjectTrack(
             fixture.snapshot,
             ShadowTargetGroundingObservation(
-                "change-1", "右后方的猫", "asset-1", candidateCount = 0, observedAtMs = 100
+                "change-1", "右后方的猫", "asset-1", candidateCount = 0,
+                observedAtMs = 100, locatorEvidenceFingerprint = locatorFingerprint
             )
         )
 
         assertTrue(result is ShadowObjectTrackResult.NeedObservation)
+    }
+
+    @Test
+    fun changedLocatorEvidenceInvalidatesPhysicalObjectBinding() {
+        val fixture = fixture()
+        val first = uniqueObject(fixture)
+        val changed = (AgentShadowObservationBridge.materializeObjectTrack(
+            fixture.snapshot,
+            ShadowTargetGroundingObservation(
+                "change-1", "右后方的猫", "asset-1", 1, 100, "22".repeat(32)
+            )
+        ) as ShadowObjectTrackResult.Materialized).track
+
+        assertNotEquals(first.objectTrackNodeId, changed.objectTrackNodeId)
+        assertNotEquals(
+            first.groundingEvidenceFingerprint,
+            changed.groundingEvidenceFingerprint
+        )
     }
 
     @Test
@@ -298,7 +325,9 @@ class AgentShadowObservationBridgeTest {
         (AgentShadowObservationBridge.materializeObjectTrack(
             fixture.snapshot,
             ShadowTargetGroundingObservation(
-                "change-1", "右后方的猫", "asset-1", 1, 100
+                "change-1", "右后方的猫", "asset-1", 1, 100, locatorFingerprint
             )
         ) as ShadowObjectTrackResult.Materialized).track
+
+    private val locatorFingerprint = "11".repeat(32)
 }

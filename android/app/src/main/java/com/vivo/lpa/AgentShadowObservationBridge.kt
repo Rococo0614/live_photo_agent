@@ -9,7 +9,8 @@ data class ShadowTargetGroundingObservation(
     val semanticTarget: String,
     val sourceAssetId: String,
     val candidateCount: Int,
-    val observedAtMs: Long
+    val observedAtMs: Long,
+    val locatorEvidenceFingerprint: String
 ) {
     init {
         require(operationId.isNotBlank())
@@ -17,6 +18,9 @@ data class ShadowTargetGroundingObservation(
         require(sourceAssetId.isNotBlank())
         require(candidateCount >= 0)
         require(observedAtMs >= 0)
+        require(Regex("[0-9a-f]{64}").matches(locatorEvidenceFingerprint)) {
+            "locator evidence fingerprint must be lowercase SHA-256"
+        }
     }
 }
 
@@ -178,7 +182,8 @@ object AgentShadowObservationBridge {
             observation.semanticTarget,
             observation.sourceAssetId,
             observation.candidateCount.toString(),
-            observation.observedAtMs.toString()
+            observation.observedAtMs.toString(),
+            observation.locatorEvidenceFingerprint
         )
         val objectNodeId = stableId(
             "object-track",
@@ -187,6 +192,7 @@ object AgentShadowObservationBridge {
             observation.sourceAssetId,
             observation.semanticTarget,
             observation.observedAtMs.toString(),
+            observation.locatorEvidenceFingerprint,
             snapshot.stateFingerprint
         )
         val anchorEdgeId = stableId("object-anchor", objectNodeId, anchor.nodeId)
@@ -202,6 +208,7 @@ object AgentShadowObservationBridge {
                         "source_asset_id" to observation.sourceAssetId,
                         "candidate_count" to observation.candidateCount.toString(),
                         "observed_at_ms" to observation.observedAtMs.toString(),
+                        "locator_evidence_fingerprint" to observation.locatorEvidenceFingerprint,
                         "grounding_evidence_fingerprint" to groundingEvidenceFingerprint
                     ),
                     provenance = AUTHOR

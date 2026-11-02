@@ -630,15 +630,19 @@ class SdkProbeService : Service() {
             stateFingerprint = fingerprint,
             operations = listOf(operation)
         )
+        val locatorResult = OwlV2GroundingPostprocessor.process(
+            canonicalQuery = targetText,
+            sourceText = semanticGoal.userGoal,
+            stateFingerprint = fingerprint,
+            imageWidth = cover.width,
+            imageHeight = cover.height,
+            boxesXyxy = floatArrayOf(100f, 100f, 500f, 500f),
+            scores = floatArrayOf(0.9f),
+            labels = intArrayOf(0)
+        )
         val objectTrack = when (val result = AgentShadowObservationBridge.materializeObjectTrack(
             snapshot,
-            ShadowTargetGroundingObservation(
-                operation.operationId,
-                targetText,
-                sourceAssetId,
-                candidateCount = 1,
-                observedAtMs = 0
-            )
+            locatorResult.toShadowObservation(operation.operationId, sourceAssetId, 0)
         )) {
             is ShadowObjectTrackResult.Materialized -> result.track
             else -> error("unique target did not materialize: $result")
@@ -713,6 +717,8 @@ class SdkProbeService : Service() {
             .put("schema_version", 1)
             .put("status", "PASS_READ_ONLY_SHADOW_BRIDGE")
             .put("user_target_input", "language_only")
+            .put("locator_disposition", locatorResult.disposition.name)
+            .put("locator_evidence_fingerprint", locatorResult.evidenceFingerprint)
             .put("object_track_materialized", true)
             .put("mask_track_materialized", true)
             .put("content_graph_version", materialized.snapshot.graph.version)

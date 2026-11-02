@@ -258,8 +258,8 @@ accelerator为14.65–19.24ms。17帧真实链最低host IoU为0.9536。一个�
 观测标为`UNCERTAIN_TEMPORAL_COVERAGE`并fail-closed。它尚未写入Android或生产阈值。上述结果只把
 `MASK_TRACK`模型backend推进为“可设计Android只读bridge”；它不自动生成`ScopeCertificate`，也不
 授权`TRANSFORM`、`STATE_MUTATION`或`COMMIT`。底层TERM取消、10次context重载和3000次短时soak
-已通过；本地QAIRT 2.45语言locator、逐帧覆盖、多分钟完整pipeline soak、总host/DSP内存和
-Android生命周期恢复仍是前置门禁。
+已通过；OWLv2 QAIRT 2.45 contexts也已在vivo通过张量差分，但Android QNN/tokenizer接入、逐帧覆盖、
+多分钟完整pipeline soak、总host/DSP内存和Android生命周期恢复仍是前置门禁。
 
 固定图银行的单图性能不等于包体已通过：16个独立DLC约560MiB，vivo O3 contexts约234MiB；
 QAIRT 2.45对两个独立DLC的weight-sharing compose在序列化阶段返回`0x138f`。Android bridge必须
@@ -296,6 +296,10 @@ box/point交给用户。`AndroidLocalPreviewShadowExecutor`仅接受完整eviden
 待确认、已确认预览、取消和撤销，不存在commit。该executor只在显式shadow probe实例化，仍未进入
 生产registry。
 
+`OwlV2GroundingPostprocessor`进一步把locator边界固定为host事实代码：score threshold、per-label NMS、
+原图坐标映射和0/多/唯一候选分支均不交给Qwen；候选box只参与内部SHA，bridge只接收candidate count
+与`locatorEvidenceFingerprint`。任一物理候选变化都会使object grounding和certificate失效。
+
 ## 8. 当前shadow实现
 
 已加入：
@@ -318,6 +322,7 @@ box/point交给用户。`AndroidLocalPreviewShadowExecutor`仅接受完整eviden
 - 隔离的Android单帧preview renderer：GLES调色与box blur、CPU oracle fallback、显式backend ID；
 - staged Android shadow observation bridge、证书绑定preview executor、process-local artifact store与
   confirm/cancel/undo UI lifecycle；所有review状态固定`writebackAuthorized=false`；
+- OWLv2纯Kotlin后处理：deterministic NMS/cardinality、内部candidate evidence SHA、无box/point Goal输入；
 - Runtime v2动作顺序、节点状态与DAG拓扑的逐快照差分；
 - `agentRuntime=dag`实验构建；
 - 每次Runtime v2计划快照同步生成`PLAN_GRAPH`与`CONTENT_GRAPH`审计；
@@ -405,7 +410,8 @@ publish但无validated artifact  → NeedObservation(MEDIA_ARTIFACT)
 固定图拓扑选择、track observation、`AgentScopeCertificate`和局部preview compiler加入后，首轮
 debug/release单测为66/66。renderer在1080×1440真实mask及非对称软mask、半径1/6/64上共6组通过：
 mask外变化0、alpha差0、RGB最大差≤1；真实r=6 blur与CPU oracle逐字节一致。加入shadow bridge与
-review lifecycle后单测为77/77，真机完整链达到`FINISHED`，确认后undo且源帧SHA不变。证据见
+review lifecycle及locator evidence hash后单测为84/84，真机完整链达到`FINISHED`，确认后undo且
+源帧SHA不变。证据见
 `local_deterministic_preview_validation.md`。真实生产DAG SDK执行仍关闭，未注册内容修改executor。
 
 真机F002最后一个shadow快照返回：

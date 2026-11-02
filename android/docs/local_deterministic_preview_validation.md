@@ -85,7 +85,9 @@ language target + deterministic candidate count
   → AndroidLocalPreviewShadowExecutor → process-local MEDIA_ARTIFACT
 ```
 
-mask字节只保存在`ShadowMaskFrame`内部，Content Graph与DAG不含mask、box、point、媒体路径或URI。
+OWLv2 host NMS只把candidate count和候选集合SHA-256交给bridge，box不进入Goal IR；该SHA继续进入
+object grounding fingerprint与certificate。mask字节只保存在`ShadowMaskFrame`内部，Content Graph与
+DAG不含mask、box、point、媒体路径或URI。
 bridge拒绝`approvedForMutation=true`的policy；executor再次核对source state fingerprint、graph版本、
 mask node、certificate ID及完整evidence fingerprint，并强制`preview_only=true / writeback=false`。
 
@@ -100,16 +102,16 @@ mask外变化0、mask内变化57,643像素，序列化Content Graph/DAG不含路
 
 ```text
 /mnt/ssd/lpa-aihub-probe/artifacts/local-preview-shadow-bridge-vivo/summary.json
-SHA-256 d9175e615831e122e9e9c5860fc31fe5cc477e4cfed89557ca63f33d6c517eef
+SHA-256 610530abfd7d6a8bce42051e11a6021676ff242afa31f2e830449e5e5b5fad74
 
 /mnt/ssd/lpa-aihub-probe/artifacts/local-preview-shadow-bridge-vivo/i_shadow_bridge_evidence.json
-SHA-256 42ef8404be8fbbbe14069a34f1c034a7615ab50905ecebba0469d43d6f972933
+SHA-256 9bac1bd20e8f3994e35b42076ee15b2a1167f5f0eda0a409ab2f67c06a8e930e
 
 test APK
-SHA-256 ff77b06b0735a5f36d829dd27448d8c16f5daa03c93bc6e16322f29322394559
+SHA-256 e60c0846357a95e3c2af9bfb2ae33ae54dcade8af379173a69471b17c7ebc84a
 ```
 
-debug/release单测均为77/77，`lintDebug`、debug/release assemble通过。headless probe验证了与UI相同的
+debug/release单测均为84/84，`lintDebug`、debug/release assemble通过。headless probe验证了与UI相同的
 interaction/store状态机，但尚未做触屏自动化或Activity重建测试。
 
 ## 5. 复现入口
@@ -131,7 +133,8 @@ alpha变化或RGB误差大于1都会返回FAIL。
 
 本结果关闭“单帧renderer数值等价”和“supplied observation到临时artifact”Gate；以下仍阻止mutation：
 
-1. QAIRT 2.45本地语言locator尚未接入bridge，当前真机target/mask是已验证fixture，不是完整用户请求；
+1. OWLv2 QAIRT 2.45张量backend已在vivo通过，但Android QNN/tokenizer尚未接入bridge；当前真机
+   target/mask仍是已验证fixture，不是完整用户请求；
 2. 每帧视频/Live Photo解码、持久EGL context、时间戳保持与完整逐帧preservation尚未验证；
 3. UI已实现但尚未做触屏自动化、Activity/进程重建、会话恢复与旋转Gate；
 4. 多分钟完整pipeline soak、总host/GPU/DSP内存与温升尚未通过；

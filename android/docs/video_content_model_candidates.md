@@ -113,6 +113,11 @@ SAM3擅长短概念词组，不保证理解“顶层书架从右数倒数第二�
 均全NPU。真实猫拼图中，“移除橘猫”返回6个候选并正确触发`NeedUser`；语言澄清为“草地上行走
 的橘猫”后复用同一vision embedding，只重跑text并收敛到正确的唯一box。
 
+现已补齐显式QAIRT 2.45 contexts并在vivo运行：输出与远程2.45逐字节一致，vision/text accelerator
+分别约616.7/3.1ms；宽泛9候选与澄清后1候选分支保持正确。代价是vision/text contexts合计
+433.29MiB，且当前只由`qnn-net-run`消费预生成raw tensors；Android QNN JNI、CLIP tokenizer和图像
+预处理仍待接入，不能写成产品locator已完成。
+
 ### 3.2 EdgeTAM：语言mask的跨帧传播器
 
 | 项目 | 结果 |
@@ -148,7 +153,7 @@ burst power vote不会生效。
 完整NPU只读链已通过：两帧合成遮挡恢复后最低IoU 0.9729；自然`hideandseek`完全遮挡判空、完整
 恢复0.9789、出画fail-closed；快速镜头`cyclist`两帧出画判空、重入0.9333；17帧链走满16个真实
 pointer，最低host IoU 0.9536。TERM取消后10次重载和3000次短时soak通过。10%突然面积下降门禁
-目前只是候选validator；逐帧覆盖、本地语言locator和Android `ScopeCertificate`仍待完成。
+目前只是候选validator；逐帧覆盖、locator Android bridge和完整`ScopeCertificate`链仍待完成。
 
 全银行当前约560MiB DLC / 234MiB独立context。2.45把两个独立DLC合成weight-shared context时在
 序列化阶段返回`Weight sharing is unavailable`，所以包体仍是Android集成前置门禁，不能把单图
@@ -357,7 +362,8 @@ TrackedComposite
 1. AI Hub真实S26上的OWLv2语言box与EdgeTAM float QAIRT 2.45单帧mask均已通过；
 2. 宽泛/充分两组语言已分别通过`NeedUser`与唯一候选分支，不接受点/框输入；
 3. memory encoder与vivo固定计数attention图银行已通过；合成/自然遮挡、快速镜头、出画重入和
-   第16个真实pointer均有只读证据；下一步补逐帧长序列、语言locator与完整pipeline soak；
+   第16个真实pointer均有只读证据；OWLv2 2.45张量backend也已在vivo通过，下一步补Android接入、
+   逐帧长序列与完整pipeline soak；
 4. QAIRT 2.50/2.51保持禁用并保留最小复现；SAM3只作为后续可选直接文本mask对照；
 5. 计算候选唯一性、时间覆盖、连续性和排除重叠，只输出mask overlay，不修改媒体；
 6. 模糊时只生成语言澄清问题；
@@ -371,8 +377,8 @@ TrackedComposite
 4. 纯Kotlin CPU oracle已固定调色、软mask与mask内模糊语义，mask外像素逐位不变；
 5. vivo单帧GLES调色/box blur已在真实mask与非对称软mask上通过CPU差分（最大RGB差≤1、mask外0）；
 6. supplied observations到track/certificate、临时artifact及确认/取消/undo状态机已通过单帧真机probe；
-7. 仍需真实QAIRT 2.45语言locator接入、逐帧preservation、触屏/Activity生命周期和完整soak，全部通过
-   后才单独评审mutation权限。
+7. 仍需把已验证的QAIRT 2.45 locator接入Android tokenizer/QNN生命周期，并完成逐帧preservation、
+   触屏/Activity生命周期和完整soak；全部通过后才单独评审mutation权限。
 
 ### P1：单帧LaMa probe
 
@@ -383,7 +389,7 @@ TrackedComposite
 ### P2：短视频移除MVP
 
 1. 2秒、≤49帧、ROI或512内部处理；
-2. 通过远程与vivo抽样语义Gate的跟踪mask + 每帧LaMa（完整逐帧覆盖、语言locator与Android bridge仍待验）；
+2. 通过远程与vivo抽样语义Gate的跟踪mask + 每帧LaMa（完整逐帧覆盖及locator/EdgeTAM Android bridge仍待验）；
 3. 增加flicker/temporal warping/边界残留检查；
 4. 与主机ProPainter或VACE结果做盲评，但非商用模型不进入产品包。
 
