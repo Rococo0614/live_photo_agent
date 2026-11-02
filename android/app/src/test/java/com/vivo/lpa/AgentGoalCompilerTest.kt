@@ -102,4 +102,79 @@ class AgentGoalCompilerTest {
         assertTrue(result is AgentCompileResult.Unsupported)
         assertTrue((result as AgentCompileResult.Unsupported).reason.contains("stale state"))
     }
+
+    @Test
+    fun groundedObjectRequiresMaskTrackBeforeScopeCertificate() {
+        val query = "移除右后方的人"
+        val state = AgentRuntimeState(null, "turn-grounded-mask", query)
+        val graph = AgentContentGraph(
+            graphId = "content-grounded",
+            version = 3,
+            nodes = mapOf("object-1" to ContentNode("object-1", ContentNodeKind.OBJECT_TRACK))
+        )
+        val content = AgentContentGraphSnapshot(
+            graph,
+            AgentContentGraphValidator.validate(graph),
+            AgentStateFingerprint.of(state)
+        )
+        val goal = groundedRemoveGoal(query, state, graph)
+
+        val result = AgentGoalCompiler.preflight(goal, state, content)
+
+        assertTrue(result is AgentCompileResult.NeedObservation)
+        assertEquals(
+            AgentDataKind.MASK_TRACK,
+            (result as AgentCompileResult.NeedObservation).requirements.single().kind
+        )
+    }
+
+    @Test
+    fun groundedObjectAndMaskStillRequireScopeCertificate() {
+        val query = "移除右后方的人"
+        val state = AgentRuntimeState(null, "turn-grounded-scope", query)
+        val graph = AgentContentGraph(
+            graphId = "content-grounded",
+            version = 4,
+            nodes = mapOf(
+                "object-1" to ContentNode("object-1", ContentNodeKind.OBJECT_TRACK),
+                "mask-1" to ContentNode("mask-1", ContentNodeKind.MASK_TRACK)
+            ),
+            edges = mapOf(
+                "masks-1" to ContentEdge(
+                    "masks-1", "mask-1", "object-1", ContentEdgeKind.MASKS
+                )
+            )
+        )
+        val content = AgentContentGraphSnapshot(
+            graph,
+            AgentContentGraphValidator.validate(graph),
+            AgentStateFingerprint.of(state)
+        )
+        val goal = groundedRemoveGoal(query, state, graph)
+
+        val result = AgentGoalCompiler.preflight(goal, state, content)
+
+        assertTrue(result is AgentCompileResult.NeedObservation)
+        assertEquals(
+            AgentDataKind.SCOPE_CERTIFICATE,
+            (result as AgentCompileResult.NeedObservation).requirements.single().kind
+        )
+    }
+
+    private fun groundedRemoveGoal(
+        query: String,
+        state: AgentRuntimeState,
+        graph: AgentContentGraph
+    ): AgentGoalIr {
+        val semantic = parse(query, JSONObject().put("operations", JSONArray().put(JSONObject()
+            .put("op", "remove_content")
+            .put("target", "右后方的人"))), state)
+        return semantic.copy(operations = listOf(semantic.operations.single().copy(
+            target = AgentGoalTarget.GroundedContentNode(
+                graph.graphId,
+                graph.version,
+                "object-1"
+            )
+        )))
+    }
 }

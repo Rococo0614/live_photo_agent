@@ -1,9 +1,9 @@
 # AI Hub远程语言Grounding验证
 
-> 日期：2026-10-29；decoder回归、远程时序链与vivo固定图银行更新：2026-10-30
+> 日期：2026-10-29；decoder回归、远程时序链与vivo固定图银行更新：2026-11-02
 >
 > 状态：OWLv2语言消歧通过；EdgeTAM QAIRT 2.45固定计数attention图银行已在vivo通过合成遮挡、
-> 自然遮挡、快速镜头、出画重入和第8个真实pointer；bounded validity图在vivo多槽状态失败；
+> 自然遮挡、快速镜头、出画重入和第16个真实pointer；bounded validity图在vivo多槽状态失败；
 > 2.50/2.51确认存在runtime回归
 >
 > 生产边界：Runtime v2 loop不变；远程作业不得修改或发布媒体
@@ -351,15 +351,16 @@ attention，而在vivo执行动态validity attention bias的路径。
 
 ```text
 (1 memory, 1 pointer) ... (7 memories, 7 pointers)
-(7 memories, 8 pointers) ... 后续待补到 (7, 16)
+(7 memories, 8 pointers) ... (7 memories, 16 pointers)
 ```
 
-当前已验证1/1到7/7以及7/8：
+当前完整固定图银行均已验证：
 
 | 拓扑 | vivo对PyTorch最低/代表PSNR | vivo accelerator | 结果 |
 |---|---:|---:|---|
 | 1/1 ... 7/7 | 最低73.86dB | 14.65–19.24ms | PASS |
 | 7/8真实状态 | 75.45dB | 18.39ms | PASS，超过7个真实pointer |
+| 7/9 ... 7/16真实状态 | 最低75.03dB | 18.18–18.61ms | PASS，走满16个pointer |
 
 所有图使用`O=3 + VTCM 8MB + soc_id 87 + v81`在vivo生成context。context输出与在线prepare输出
 逐字节相同。加载context时仍必须传HTP backend extension；只传`--perf_profile burst`不会施加所需
@@ -373,6 +374,19 @@ power vote，实测会从约15–19ms退到约80–112ms。这是runtime契约�
 | 9帧加密猫序列 | 最低host IoU 0.9572；7个空间memory + 8个真实pointer；全部可见状态通过 |
 | `12_hideandseek.mp4`自然遮挡 | 完全遮挡判空；部分重现IoU 0.9019；完整恢复0.9789；出画末帧fail-closed |
 | `19_cyclist.mp4`快速镜头 | 两帧出画均判空；重入IoU 0.9333；可比帧最低0.8858；第8个pointer通过 |
+| 17帧加密猫序列 | 最低host IoU 0.9536；最大质心误差5.21px；真实状态走满7 memory / 16 pointers |
+
+17帧preservation初检曾因第15帧有1个像素落到拼图区边界外而拒绝；独立PyTorch参考在同一主连通域
+有5个边界像素。最终验证规则是不裁剪mask、且设备额外泄漏不得超过独立参考；最大新增泄漏为0。
+
+7/16 context还通过了生命周期和短时热门禁：执行中TERM取消后无残留进程，连续10次重载输出SHA
+全部一致；3000次连续推理耗时77.99秒，NPU传感器峰值86.5°C，系统thermal status和CDSP cooling
+保持0，输出哈希不变。该结果不替代多分钟完整pipeline soak，也不代表DSP总峰值内存已量准。
+
+完整图银行当前约560MiB DLC或234MiB独立context。尝试把7/8与7/16合成一个
+`weight_sharing_enabled` context时，两图都完成finalize，但2.45在序列化阶段明确返回
+`Weight sharing is unavailable / error 0x138f`。因此尚不能用共享权重宣称包体已解决；Android打包前
+必须找到单一多图source导出、其他2.45支持路径，或显式接受并评审context包体。
 
 合成遮挡还暴露了接近阈值的小伪mask会在等价数值路径间前后移动。候选validator因此在model
 object score之外增加确定性时序覆盖检查：raw mask面积若突然低于上一个可信可见mask的10%，标记
@@ -385,6 +399,12 @@ object score之外增加确定性时序覆盖检查：raw mask面积若突然低
 /mnt/ssd/lpa-aihub-probe/artifacts/edgetam-bounded-vivo-multislot-failure.json
 /mnt/ssd/lpa-aihub-probe/artifacts/vivo-qnn245-fixed-bank/fixed-count-1-to-7-vivo-o3-summary.json
 /mnt/ssd/lpa-aihub-probe/artifacts/vivo-qnn245-fixed7-pointer8-frame180/fixture-manifest.json
+/mnt/ssd/lpa-aihub-probe/artifacts/vivo-qnn245-real-pointer-counts/real-pointer-9-to-16-differential-summary.json
+/mnt/ssd/lpa-aihub-probe/artifacts/vivo-qnn245-dense-seventeen-frame/device-fixed-bank-run/
+  vivo-dense-seventeen-frame-fixed-bank-evidence.json
+/mnt/ssd/lpa-aihub-probe/artifacts/vivo-qnn245-fixed-bank/cancel-reload-lifecycle-summary.json
+/mnt/ssd/lpa-aihub-probe/artifacts/vivo-qnn245-fixed-bank/soak-7-memory-16-pointer-summary.json
+/mnt/ssd/lpa-aihub-probe/artifacts/vivo-qnn245-fixed-bank/weight-sharing-probe.json
 /mnt/ssd/lpa-aihub-probe/artifacts/edgetam-vivo-qnn245-fixed-bank-validation-summary.json
 ```
 
@@ -420,20 +440,23 @@ EdgeTAM grounding探针首选float模型验证语义，随后才比较W8A8；这
 
 - OWLv2公开、Apache-2.0；S26 float编译、数值对照、宽泛语言`NeedUser`和澄清后唯一候选均通过。
 - EdgeTAM float QAIRT 2.45 QNN/TFLite单帧mask和memory encoder通过；vivo固定计数attention图银行
-  已覆盖1/1到7/8，合成/自然遮挡、快速镜头与出画重入通过；QAIRT 2.50/2.51明确禁用。
+  已覆盖1/1到7/16，合成/自然遮挡、快速镜头、出画重入、取消恢复与短时soak通过；
+  QAIRT 2.50/2.51明确禁用。
 - SAM3不是当前优先路径；OWLv2 box + EdgeTAM 2.45 mask已形成首个通过远程Gate的单帧backend。
 - 2.45 encoder、memory encoder、固定计数attention图银行、decoder、object-absent pointer常量与
   manifest均已下载；bounded图只保留失败回归样本。
-- 当前仍是抽样只读overlay，不构成完整`ScopeCertificate`；本地QAIRT 2.45语言locator、逐帧覆盖、
-  pointer 9–16、内存/温度soak、取消与生命周期恢复尚未通过，任何修改、填充或发布节点仍不可ready。
+- 当前仍是抽样只读overlay，不构成可授权修改的`ScopeCertificate`；本地QAIRT 2.45语言locator、
+  逐帧覆盖、多分钟完整pipeline soak、总host/DSP峰值内存和固定图银行包体方案仍未通过，任何修改、
+  填充或发布节点仍不可ready。
 
 ## 8. 后续Gate
 
-1. 编译并验证`7 memories / 9...16 pointers`固定图，随后运行真实逐帧长序列。
-2. 为语言locator准备并验证QAIRT 2.45制品，闭合本地语言→box→mask track路径。
-3. 增加内存/温度soak、取消、进程终止、Activity重建和context重载测试。
+1. 为语言locator准备并验证QAIRT 2.45制品，闭合本地语言→box→mask track路径。
+2. 从抽样扩展到逐帧长序列，并增加多分钟完整pipeline soak和总host/DSP峰值内存观测。
+3. 增加进程终止、Activity重建和Android bridge级context重载；底层TERM取消/重载已通过。
 4. 把10%时序覆盖阈值扩展到更多尺度变化fixture；不充分时返回`NeedObservation`，不能静默接受。
-5. 上述门禁通过后才建设Android DAG node bridge与`ScopeCertificate`；2.50/2.51继续禁用。
+5. 解决或显式评审234MiB context银行包体；当前单独DLC compose的weight sharing不可用。
+6. 完成shadow-only node bridge与`ScopeCertificate`差分后才考虑执行；2.50/2.51继续禁用。
 
 本轮汇总证据：
 
@@ -463,8 +486,8 @@ SHA-256 68b79eacf1eda03a42e13aa13aa854cdf5c3b7ed43c556f35766739442800d68
 SHA-256 f4d72e82dd9ede8bddd44f3d6958dd444b597cc38c290736ee57668a3073f28d
 
 /mnt/ssd/lpa-aihub-probe/artifacts/edgetam-vivo-qnn245-fixed-bank-validation-summary.json
-SHA-256 850f617c7aa33b17024d90480e3bd8474871e246de85e220ffdafac5b68018c8
+SHA-256 7ce67e2128d0212609cb5ae1bd88612ebd0d48448463bcd6b055401c87ab6b16
 
 /mnt/ssd/lpa-aihub-probe/artifacts/edgetam-qnn245/manifest.json
-SHA-256 7451fb596010948051493924d73e74ebef77f02c19b3c15cfdb905c0e94e58dc
+SHA-256 a8118e3bdb58d85426845d19d33da9f2877334387e1aec71101b2cc2fae7c6e1
 ```

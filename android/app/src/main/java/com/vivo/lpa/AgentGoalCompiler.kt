@@ -69,6 +69,43 @@ object AgentGoalCompiler {
                     ))
                 )
             }
+            if (target is AgentGoalTarget.GroundedContentNode) {
+                val graph = content?.graph
+                val targetNode = graph?.nodes?.get(target.nodeId)
+                val requiresMask = first.kind == AgentGoalOperationKind.CHANGE_CONTENT ||
+                    first.kind == AgentGoalOperationKind.REMOVE_CONTENT
+                if (requiresMask && targetNode?.kind != ContentNodeKind.OBJECT_TRACK) {
+                    return AgentCompileResult.NeedObservation(
+                        goal,
+                        listOf(AgentObservationRequirement(
+                            "observe-${first.operationId}-object-track",
+                            first.operationId,
+                            AgentDataKind.OBJECT_TRACK,
+                            "Content target ${target.nodeId} is not a validated object track"
+                        ))
+                    )
+                }
+                if (requiresMask && findMaskTrack(graph, target.nodeId) == null) {
+                    return AgentCompileResult.NeedObservation(
+                        goal,
+                        listOf(AgentObservationRequirement(
+                            "observe-${first.operationId}-mask-track",
+                            first.operationId,
+                            AgentDataKind.MASK_TRACK,
+                            "A validated temporal mask track is required for ${target.nodeId}"
+                        ))
+                    )
+                }
+                return AgentCompileResult.NeedObservation(
+                    goal,
+                    listOf(AgentObservationRequirement(
+                        "validate-${first.operationId}-scope",
+                        first.operationId,
+                        AgentDataKind.SCOPE_CERTIFICATE,
+                        "Mutation requires a fresh ScopeCertificate with uniqueness, temporal coverage and protection checks"
+                    ))
+                )
+            }
             return AgentCompileResult.Unsupported(
                 goal,
                 "No registered HTN method for ${first.kind}; content mutation remains disabled"
@@ -153,6 +190,21 @@ object AgentGoalCompiler {
         snapshot.graph.graphId == graphId &&
         snapshot.graph.version == version &&
         nodeId in snapshot.graph.nodes
+
+    private fun findMaskTrack(graph: AgentContentGraph?, objectNodeId: String): ContentNode? {
+        if (graph == null) return null
+        val candidateIds = graph.edges.values.asSequence()
+            .filter { it.kind == ContentEdgeKind.MASKS }
+            .flatMap { edge ->
+                when (objectNodeId) {
+                    edge.fromNodeId -> sequenceOf(edge.toNodeId)
+                    edge.toNodeId -> sequenceOf(edge.fromNodeId)
+                    else -> emptySequence()
+                }
+            }
+        return candidateIds.mapNotNull { graph.nodes[it] }
+            .firstOrNull { it.kind == ContentNodeKind.MASK_TRACK }
+    }
 
     private fun missingGrounding(
         goal: AgentGoalIr,

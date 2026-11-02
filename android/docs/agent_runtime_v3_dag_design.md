@@ -246,18 +246,24 @@ host validator / Content Graph / next DAG decision
 生命周期已经通过。Workbench支持显式`--qairt_version`；需要与生产2.45共存的模型应优先重编译
 为2.45，或继续使用独立2.50进程，禁止直接混载两套QAIRT库。
 
-截至2026-10-30，EdgeTAM已补齐公开recipe遗漏的memory attention并完成vivo只读probe。远程S26上
+截至2026-11-02，EdgeTAM已补齐公开recipe遗漏的memory attention并完成vivo只读probe。远程S26上
 通过的7-memory/16-pointer动态validity图，在vivo SM8850的3/3真实状态只达到28.05dB；等价固定
 3/3图恢复到75.48dB。因此bounded图只保留为回归fixture，部署候选改为精确固定计数图银行：
-`1/1...7/7`和`7/8`已通过，后续补`7/9...7/16`。图选择只依赖已验证state cardinality，是host
+`1/1...7/7`和`7/8...7/16`均已通过。图选择只依赖已验证state cardinality，是host
 可替换backend选择，不交给Qwen，也不暴露给Goal IR。
 
-固定图银行已在vivo完成合成遮挡、自然遮挡、快速镜头、出画重入和第8个真实pointer；attention
-accelerator为14.65–19.24ms。一个候选时序覆盖validator会把面积突然低于上一个可信mask 10%的
+固定图银行已在vivo完成合成遮挡、自然遮挡、快速镜头、出画重入和第16个真实pointer；attention
+accelerator为14.65–19.24ms。17帧真实链最低host IoU为0.9536。一个候选时序覆盖validator会把
+面积突然低于上一个可信mask 10%的
 观测标为`UNCERTAIN_TEMPORAL_COVERAGE`并fail-closed。它尚未写入Android或生产阈值。上述结果只把
 `MASK_TRACK`模型backend推进为“可设计Android只读bridge”；它不自动生成`ScopeCertificate`，也不
-授权`TRANSFORM`、`STATE_MUTATION`或`COMMIT`。本地QAIRT 2.45语言locator、逐帧覆盖、pointer
-9–16、内存/温度soak、取消和生命周期恢复仍是前置门禁。
+授权`TRANSFORM`、`STATE_MUTATION`或`COMMIT`。底层TERM取消、10次context重载和3000次短时soak
+已通过；本地QAIRT 2.45语言locator、逐帧覆盖、多分钟完整pipeline soak、总host/DSP内存和
+Android生命周期恢复仍是前置门禁。
+
+固定图银行的单图性能不等于包体已通过：16个独立DLC约560MiB，vivo O3 contexts约234MiB；
+QAIRT 2.45对两个独立DLC的weight-sharing compose在序列化阶段返回`0x138f`。Android bridge必须
+保持backend可替换，并在单一多图导出、其他共享权重路径或显式包体预算完成前继续shadow-only。
 
 ## 8. 当前shadow实现
 
@@ -273,6 +279,9 @@ accelerator为14.65–19.24ms。一个候选时序覆盖validator会把面积突
 - 严格模型侧`plan_live_edit` Goal IR codec；工具ID、图连线、文件、URI和runtime ID全部拒绝；
 - `Ready / NeedBinding / NeedObservation / NeedUser / Unsupported` preflight；
 - backend-independent DAG value store/execution engine；输出端口类型错误或缺失时fail-closed；
+- EdgeTAM固定图拓扑选择器：只接受已验证的`1/1...7/16`基数组合，未知组合不回退；
+- typed track observation、候选时序覆盖policy与`AgentScopeCertificate`；候选policy、旧state、
+  非唯一目标、保护重叠或覆盖缺口都不能授权mutation；
 - Runtime v2动作顺序、节点状态与DAG拓扑的逐快照差分；
 - `agentRuntime=dag`实验构建；
 - 每次Runtime v2计划快照同步生成`PLAN_GRAPH`与`CONTENT_GRAPH`审计；
@@ -349,10 +358,15 @@ edge_id/asset_id/file/path/uri/sdk/backend`，codec直接拒绝。用户原话�
 ```text
 remove_content但无target       → NeedUser + continuation token
 remove_content语义target       → NeedObservation(OBJECT_TRACK)
+grounded OBJECT_TRACK无mask     → NeedObservation(MASK_TRACK)
+grounded OBJECT_TRACK + mask    → NeedObservation(SCOPE_CERTIFICATE)
 publish但无validated artifact  → NeedObservation(MEDIA_ARTIFACT)
 旧state fingerprint            → Unsupported(stale state)
 当前已支持语义操作             → NeedBinding(状态过滤候选<=10)
 ```
+
+固定图拓扑选择、track observation与`AgentScopeCertificate`加入后，debug/release单测均为
+57/57，`lintDebug`通过；这些类型仍只参与shadow preflight，没有注册内容修改executor。
 
 真机F002最后一个shadow快照返回：
 

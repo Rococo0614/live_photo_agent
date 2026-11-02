@@ -1,13 +1,13 @@
 # 视频内容生成、修改与填充模型调研
 
-> 日期：2026-10-29；EdgeTAM vivo固定图银行更新：2026-10-30
+> 日期：2026-10-29；EdgeTAM vivo固定图银行更新：2026-11-02
 >
 > 目标设备：vivo PD2547 / SM8850 / 16GB RAM
 >
 > 当前生产：Runtime v2 loop；Runtime v3 DAG仅shadow，不执行新增模型
 >
 > 验证状态：OWLv2语言消歧通过；EdgeTAM QAIRT 2.45固定计数attention图银行在vivo通过合成/自然
-> 遮挡、快速镜头、出画重入和第8个真实pointer；bounded validity图在vivo禁用；2.50/2.51回归已隔离
+> 遮挡、快速镜头、出画重入和第16个真实pointer；bounded validity图在vivo禁用；2.50/2.51回归已隔离
 
 ## 1. 结论摘要
 
@@ -141,14 +141,18 @@ mask IoU仍为0.9760且无跨拼图泄漏。
 公开recipe遗漏的约2.96M参数memory attention已补齐。最初的单一7-memory/16-pointer validity图在
 远程S26通过，但vivo SM8850多槽真实输入只有28.05dB；同一状态的固定3/3图为75.48dB。因此该
 bounded图只保留为回归fixture，部署候选改为host按状态基数选择的固定图银行。当前`1/1...7/7`
-和`7/8`已在vivo通过，对PyTorch最低73.86dB，accelerator为**14.65–19.24ms**；7/8真实状态为
-75.45dB、18.39ms。context retrieval必须同时加载HTP backend extension，否则burst power vote
-不会生效。
+和`7/8...7/16`已在vivo通过，对PyTorch最低73.86dB，accelerator为**14.65–19.24ms**；
+9–16 pointer真实状态最低75.03dB。context retrieval必须同时加载HTP backend extension，否则
+burst power vote不会生效。
 
 完整NPU只读链已通过：两帧合成遮挡恢复后最低IoU 0.9729；自然`hideandseek`完全遮挡判空、完整
-恢复0.9789、出画fail-closed；快速镜头`cyclist`两帧出画判空、重入0.9333，并走到第8个真实
-pointer。10%突然面积下降门禁目前只是候选validator；逐帧覆盖、pointer 9–16和Android
-`ScopeCertificate`仍待完成。
+恢复0.9789、出画fail-closed；快速镜头`cyclist`两帧出画判空、重入0.9333；17帧链走满16个真实
+pointer，最低host IoU 0.9536。TERM取消后10次重载和3000次短时soak通过。10%突然面积下降门禁
+目前只是候选validator；逐帧覆盖、本地语言locator和Android `ScopeCertificate`仍待完成。
+
+全银行当前约560MiB DLC / 234MiB独立context。2.45把两个独立DLC合成weight-shared context时在
+序列化阶段返回`Weight sharing is unavailable`，所以包体仍是Android集成前置门禁，不能把单图
+14–19ms性能等同于完整产品包已可接受。
 
 用途（不要求用户点选）：
 
@@ -353,7 +357,7 @@ TrackedComposite
 1. AI Hub真实S26上的OWLv2语言box与EdgeTAM float QAIRT 2.45单帧mask均已通过；
 2. 宽泛/充分两组语言已分别通过`NeedUser`与唯一候选分支，不接受点/框输入；
 3. memory encoder与vivo固定计数attention图银行已通过；合成/自然遮挡、快速镜头、出画重入和
-   第8个真实pointer均有只读证据；下一步补pointer 9–16与逐帧长序列；
+   第16个真实pointer均有只读证据；下一步补逐帧长序列、语言locator与完整pipeline soak；
 4. QAIRT 2.50/2.51保持禁用并保留最小复现；SAM3只作为后续可选直接文本mask对照；
 5. 计算候选唯一性、时间覆盖、连续性和排除重叠，只输出mask overlay，不修改媒体；
 6. 模糊时只生成语言澄清问题；

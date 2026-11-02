@@ -11,6 +11,7 @@ enum class AgentDataKind {
     LAYOUT,
     MASK_TRACK,
     OBJECT_TRACK,
+    SCOPE_CERTIFICATE,
     REGION,
     MEDIA_ARTIFACT,
     PUBLISHED_URI
