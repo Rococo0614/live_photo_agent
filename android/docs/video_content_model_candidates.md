@@ -115,8 +115,8 @@ SAM3擅长短概念词组，不保证理解“顶层书架从右数倒数第二�
 
 现已补齐显式QAIRT 2.45 contexts并在vivo运行：输出与远程2.45逐字节一致，vision/text accelerator
 分别约616.7/3.1ms；宽泛9候选与澄清后1候选分支保持正确。代价是vision/text contexts合计
-433.29MiB，且当前只由`qnn-net-run`消费预生成raw tensors；Android QNN JNI、CLIP tokenizer和图像
-预处理仍待接入，不能写成产品locator已完成。
+433.29MiB。Android CLIP tokenizer和960图像预处理已对Python达到token逐项一致与133.93dB，但context
+当前仍由`qnn-net-run`消费；Android QNN JNI尚未接入，不能写成产品locator已完成。
 
 ### 3.2 EdgeTAM：语言mask的跨帧传播器
 
@@ -377,7 +377,7 @@ TrackedComposite
 4. 纯Kotlin CPU oracle已固定调色、软mask与mask内模糊语义，mask外像素逐位不变；
 5. vivo单帧GLES调色/box blur已在真实mask与非对称软mask上通过CPU差分（最大RGB差≤1、mask外0）；
 6. supplied observations到track/certificate、临时artifact及确认/取消/undo状态机已通过单帧真机probe；
-7. 仍需把已验证的QAIRT 2.45 locator接入Android tokenizer/QNN生命周期，并完成逐帧preservation、
+7. 仍需把已验证的QAIRT 2.45 locator接入Android QNN生命周期，并完成逐帧preservation、
    触屏/Activity生命周期和完整soak；全部通过后才单独评审mutation权限。
 
 ### P1：单帧LaMa probe

@@ -47,6 +47,12 @@ class SdkProbeService : Service() {
         private const val TAG = "LPA_PROBE2"
     }
 
+    private data class OwlV2InputProbePaths(
+        val vocabulary: String,
+        val merges: String,
+        val pixelReference: String
+    )
+
     override fun onBind(intent: Intent?): IBinder? = null
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -55,8 +61,15 @@ class SdkProbeService : Service() {
         val personPath = intent?.getStringExtra("person_path")
         val maskPath = intent?.getStringExtra("mask_path")
         val localPreviewOnly = intent?.getBooleanExtra("local_preview_only", false) == true
+        val owlV2InputPaths = listOf(
+            intent?.getStringExtra("owlv2_vocab_path"),
+            intent?.getStringExtra("owlv2_merges_path"),
+            intent?.getStringExtra("owlv2_pixel_reference_path")
+        ).takeIf { values -> values.all { !it.isNullOrBlank() } }?.let { values ->
+            OwlV2InputProbePaths(values[0]!!, values[1]!!, values[2]!!)
+        }
         Thread(
-            { runProbes(coverPath, personPath, maskPath, localPreviewOnly) },
+            { runProbes(coverPath, personPath, maskPath, localPreviewOnly, owlV2InputPaths) },
             "lpa-probe2"
         ).start()
         return START_NOT_STICKY
@@ -80,7 +93,8 @@ class SdkProbeService : Service() {
         coverPath: String?,
         personPath: String?,
         maskPath: String?,
-        localPreviewOnly: Boolean
+        localPreviewOnly: Boolean,
+        owlV2InputPaths: OwlV2InputProbePaths?
     ) {
         log("=== SDK PROBE BEGIN ===")
         val coverFile = resolveCover(coverPath)
@@ -108,6 +122,10 @@ class SdkProbeService : Service() {
                     .onFailure { log("H 抛异常: ${it::class.java.simpleName}: ${it.message}") }
                 runCatching { probeI(cover, externalMask) }
                     .onFailure { log("I 抛异常: ${it::class.java.simpleName}: ${it.message}") }
+                owlV2InputPaths?.let { paths ->
+                    runCatching { probeJ(cover, paths) }
+                        .onFailure { log("J 抛异常: ${it::class.java.simpleName}: ${it.message}") }
+                }
                 latch.countDown()
             }
             latch.await(60, java.util.concurrent.TimeUnit.SECONDS)
@@ -142,6 +160,10 @@ class SdkProbeService : Service() {
                 .onFailure { log("H 抛异常: ${it::class.java.simpleName}: ${it.message}") }
             runCatching { probeI(cover, externalMask ?: mask) }
                 .onFailure { log("I 抛异常: ${it::class.java.simpleName}: ${it.message}") }
+            owlV2InputPaths?.let { paths ->
+                runCatching { probeJ(cover, paths) }
+                    .onFailure { log("J 抛异常: ${it::class.java.simpleName}: ${it.message}") }
+            }
             fgLatch.countDown()
         }
         fgLatch.await(60, java.util.concurrent.TimeUnit.SECONDS)
@@ -762,6 +784,91 @@ class SdkProbeService : Service() {
         return java.security.MessageDigest.getInstance("SHA-256")
             .digest(buffer.array())
             .joinToString("") { "%02x".format(it.toInt() and 0xff) }
+    }
+
+    /** J: Android CLIP BPE and OWLv2 image input differential against fixed Python tensors. */
+    private fun probeJ(cover: Bitmap, paths: OwlV2InputProbePaths) {
+        log("")
+        log("[J] OWLv2 Android tokenizer + 960 image preprocessing differential")
+        val vocabulary = File(paths.vocabulary)
+        val merges = File(paths.merges)
+        val pixelReference = File(paths.pixelReference)
+        require(vocabulary.isFile && merges.isFile && pixelReference.isFile)
+        val started = android.os.SystemClock.elapsedRealtimeNanos()
+        val tokenizer = OwlV2ClipTokenizer.fromFiles(vocabulary, merges)
+        val broad = tokenizer.encode("a cat")
+        val precise = tokenizer.encode("an orange cat walking on green grass")
+        val expectedBroad = intArrayOf(49406, 320, 2368, 49407) + IntArray(12)
+        val expectedPrecise = intArrayOf(
+            49406, 550, 4287, 2368, 3941, 525, 1901, 5922, 49407
+        ) + IntArray(7)
+        check(broad.inputIds.contentEquals(expectedBroad))
+        check(precise.inputIds.contentEquals(expectedPrecise))
+
+        val sourceBefore = bitmapPixelSha256(cover)
+        val actual = OwlV2ImagePreprocessor.preprocess(cover)
+        val reference = readFloatRaw(pixelReference, actual.size)
+        var maximumAbsoluteError = 0.0
+        var totalAbsoluteError = 0.0
+        var squaredError = 0.0
+        var peak = 1.0
+        for (index in actual.indices) {
+            val difference = kotlin.math.abs(actual[index].toDouble() - reference[index])
+            maximumAbsoluteError = maxOf(maximumAbsoluteError, difference)
+            totalAbsoluteError += difference
+            squaredError += difference * difference
+            peak = maxOf(peak, kotlin.math.abs(reference[index].toDouble()))
+        }
+        val meanAbsoluteError = totalAbsoluteError / actual.size
+        val mse = squaredError / actual.size
+        val psnr = if (mse == 0.0) Double.POSITIVE_INFINITY else
+            20.0 * kotlin.math.log10(peak / kotlin.math.sqrt(mse))
+        val sourceAfter = bitmapPixelSha256(cover)
+        val passed = maximumAbsoluteError <= 5e-5 && sourceBefore == sourceAfter
+        val elapsedMs = (android.os.SystemClock.elapsedRealtimeNanos() - started) / 1_000_000.0
+        val evidence = JSONObject()
+            .put("schema_version", 1)
+            .put("status", if (passed) "PASS_ANDROID_OWLV2_INPUTS" else "FAIL")
+            .put("vocabulary_sha256", fileSha256(vocabulary))
+            .put("merges_sha256", fileSha256(merges))
+            .put("pixel_reference_sha256", fileSha256(pixelReference))
+            .put("broad_input_ids", JSONArray(broad.inputIds.toList()))
+            .put("precise_input_ids", JSONArray(precise.inputIds.toList()))
+            .put("pixel_value_count", actual.size)
+            .put("pixel_psnr_db", if (psnr.isFinite()) psnr else "inf")
+            .put("pixel_maximum_absolute_error", maximumAbsoluteError)
+            .put("pixel_mean_absolute_error", meanAbsoluteError)
+            .put("source_pixel_sha256_before", sourceBefore)
+            .put("source_pixel_sha256_after", sourceAfter)
+            .put("source_media_modified", false)
+            .put("elapsed_ms", elapsedMs)
+        val target = File(outDir(), "j_owlv2_input_evidence.json")
+        target.writeText(evidence.toString(2) + "\n")
+        log(
+            "    J status=${evidence.getString("status")} pixel_psnr=${"%.2f".format(psnr)} " +
+                "max_abs=${"%.8f".format(maximumAbsoluteError)} elapsed_ms=${"%.2f".format(elapsedMs)}"
+        )
+        check(passed) { "Android OWLv2 input differential failed" }
+    }
+
+    private fun readFloatRaw(file: File, expectedCount: Int): FloatArray {
+        require(file.length() == expectedCount.toLong() * 4)
+        val bytes = file.readBytes()
+        val buffer = ByteBuffer.wrap(bytes).order(ByteOrder.LITTLE_ENDIAN)
+        return FloatArray(expectedCount) { buffer.float }
+    }
+
+    private fun fileSha256(file: File): String {
+        val digest = java.security.MessageDigest.getInstance("SHA-256")
+        file.inputStream().use { source ->
+            val buffer = ByteArray(1024 * 1024)
+            while (true) {
+                val count = source.read(buffer)
+                if (count < 0) break
+                digest.update(buffer, 0, count)
+            }
+        }
+        return digest.digest().joinToString("") { "%02x".format(it.toInt() and 0xff) }
     }
 
     private fun buffer(values: FloatArray): java.nio.FloatBuffer =

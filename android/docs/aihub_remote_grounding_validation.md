@@ -434,10 +434,15 @@ object score之外增加确定性时序覆盖检查：raw mask面积若突然低
 | text/head | 6.96ms | 平均3.07ms | 144,880 / 139,577KiB |
 
 该结果关闭“可获得且能在vivo正确执行的2.45 locator张量backend”Gate，但**没有**关闭Android产品
-集成：当前仍由host生成CLIP BPE tokens和960输入，再由`qnn-net-run`探针加载context；尚无Android
-QNN JNI/context生命周期、端侧tokenizer/图像预处理差分。两个context合计454,336,512B（433.29MiB），
-包体Gate明确不通过。RSS也不包含DSP allocations，不能冒充总内存。短时运行thermal status为0，
-不替代多分钟soak。
+集成：context仍由`qnn-net-run`探针加载，尚无Android QNN JNI/context生命周期。两个context合计
+454,336,512B（433.29MiB），包体Gate明确不通过。RSS也不包含DSP allocations，不能冒充总内存。
+短时运行thermal status为0，不替代多分钟soak。
+
+Android Kotlin输入侧已单独闭环。`OwlV2ClipTokenizer`加载官方vocab/merges，宽泛和澄清query的16个
+token ID与Hugging Face逐个一致；`OwlV2ImagePreprocessor`复现0.5右/下补边、Gaussian antialias、
+bilinear resize和CLIP normalize，1080×1440真实帧对Python raw达到**133.93dB**，最大绝对误差
+`1.91e-6`，且源帧SHA不变。2.70秒是包含冷tokenizer解析、预处理、两次源SHA和reference读取的诊断
+总时间，不作为稳态性能结论。tokenizer文件仍是外部模型包制品，尚未并入APK。
 
 Android侧已增加纯Kotlin `OwlV2GroundingPostprocessor`，固定执行score gate、per-label NMS、box映射、
 候选数量决策和证据SHA；交给track bridge的只有canonical language、candidate count和SHA，不把box放入
@@ -447,7 +452,10 @@ Goal IR。它已有host单测与shadow真机probe，但还没有接到真实QNN�
 
 ```text
 /mnt/ssd/lpa-aihub-probe/artifacts/owlv2-qnn245/summary.json
-SHA-256 c097cdbc81a48a83bb2cd0c1019db9340113c3ca198212a6f851eee681b85ec2
+SHA-256 88e651805309bd2ad5884d1bc81b3a9026ffdbb23cb697854fb6d9ef2ff2ba78
+
+/mnt/ssd/lpa-aihub-probe/artifacts/owlv2-qnn245/android-input-validation.json
+SHA-256 f5edb69c6ad06b6fd6aa9c47ba297facf83099595cccbf5f7351b0a564533e4e
 ```
 
 ## 6. 只读闭环工具
@@ -488,8 +496,8 @@ EdgeTAM grounding探针首选float模型验证语义，随后才比较W8A8；这
 
 ## 7. 当前门禁
 
-- OWLv2公开、Apache-2.0；QAIRT 2.45 contexts已在S26和vivo通过数值对照，宽泛语言`NeedUser`和
-  澄清后唯一候选均通过；Android QNN/tokenizer bridge尚未完成。
+- OWLv2公开、Apache-2.0；QAIRT 2.45 contexts已在S26和vivo通过数值对照，Android tokenizer/图像
+  输入也已差分通过，宽泛语言`NeedUser`和澄清后唯一候选均通过；Android QNN JNI尚未完成。
 - EdgeTAM float QAIRT 2.45 QNN/TFLite单帧mask和memory encoder通过；vivo固定计数attention图银行
   已覆盖1/1到7/16，合成/自然遮挡、快速镜头、出画重入、取消恢复与短时soak通过；
   QAIRT 2.50/2.51明确禁用。
@@ -505,8 +513,8 @@ EdgeTAM grounding探针首选float模型验证语义，随后才比较W8A8；这
 
 ## 8. 后续Gate
 
-1. 把已验证的OWLv2 2.45 contexts接入Android QNN JNI、CLIP BPE tokenizer和960图像预处理，并与
-   当前raw tensor证据差分，闭合应用内语言→box路径。
+1. 把已验证的OWLv2 2.45 contexts接入Android QNN JNI/context生命周期，并把已通过差分的CLIP BPE
+   与960图像预处理接上真实输出，闭合应用内语言→box路径。
 2. 从抽样扩展到逐帧长序列，并增加多分钟完整pipeline soak和总host/DSP峰值内存观测。
 3. 增加进程终止、Activity重建和Android bridge级context重载；底层TERM取消/重载已通过。
 4. 把10%时序覆盖阈值扩展到更多尺度变化fixture；不充分时返回`NeedObservation`，不能静默接受。
@@ -548,11 +556,11 @@ SHA-256 7ce67e2128d0212609cb5ae1bd88612ebd0d48448463bcd6b055401c87ab6b16
 SHA-256 a8118e3bdb58d85426845d19d33da9f2877334387e1aec71101b2cc2fae7c6e1
 
 /mnt/ssd/lpa-aihub-probe/artifacts/owlv2-qnn245/summary.json
-SHA-256 c097cdbc81a48a83bb2cd0c1019db9340113c3ca198212a6f851eee681b85ec2
+SHA-256 88e651805309bd2ad5884d1bc81b3a9026ffdbb23cb697854fb6d9ef2ff2ba78
 
 /mnt/ssd/lpa-aihub-probe/artifacts/local-deterministic-preview-vivo-gles/summary.json
 SHA-256 73da947f37d8cdb3b59b5e774de342d955e20eb107f94fc25fe22d0ce762da71
 
 /mnt/ssd/lpa-aihub-probe/artifacts/local-preview-shadow-bridge-vivo/summary.json
-SHA-256 610530abfd7d6a8bce42051e11a6021676ff242afa31f2e830449e5e5b5fad74
+SHA-256 daf8238cb553fcff6473f9c47bff5a3da0f7a17c87dd9e2130c38d63d6310688
 ```

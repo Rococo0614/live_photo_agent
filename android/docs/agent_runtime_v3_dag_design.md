@@ -258,8 +258,8 @@ accelerator为14.65–19.24ms。17帧真实链最低host IoU为0.9536。一个�
 观测标为`UNCERTAIN_TEMPORAL_COVERAGE`并fail-closed。它尚未写入Android或生产阈值。上述结果只把
 `MASK_TRACK`模型backend推进为“可设计Android只读bridge”；它不自动生成`ScopeCertificate`，也不
 授权`TRANSFORM`、`STATE_MUTATION`或`COMMIT`。底层TERM取消、10次context重载和3000次短时soak
-已通过；OWLv2 QAIRT 2.45 contexts也已在vivo通过张量差分，但Android QNN/tokenizer接入、逐帧覆盖、
-多分钟完整pipeline soak、总host/DSP内存和Android生命周期恢复仍是前置门禁。
+已通过；OWLv2 QAIRT 2.45 contexts及Android tokenizer/图像输入均已通过差分，但Android QNN JNI、
+逐帧覆盖、多分钟完整pipeline soak、总host/DSP内存和Android生命周期恢复仍是前置门禁。
 
 固定图银行的单图性能不等于包体已通过：16个独立DLC约560MiB，vivo O3 contexts约234MiB；
 QAIRT 2.45对两个独立DLC的weight-sharing compose在序列化阶段返回`0x138f`。Android bridge必须
@@ -410,7 +410,7 @@ publish但无validated artifact  → NeedObservation(MEDIA_ARTIFACT)
 固定图拓扑选择、track observation、`AgentScopeCertificate`和局部preview compiler加入后，首轮
 debug/release单测为66/66。renderer在1080×1440真实mask及非对称软mask、半径1/6/64上共6组通过：
 mask外变化0、alpha差0、RGB最大差≤1；真实r=6 blur与CPU oracle逐字节一致。加入shadow bridge与
-review lifecycle及locator evidence hash后单测为84/84，真机完整链达到`FINISHED`，确认后undo且
+review lifecycle、locator evidence hash及OWLv2输入后单测为87/87，真机完整链达到`FINISHED`，确认后undo且
 源帧SHA不变。证据见
 `local_deterministic_preview_validation.md`。真实生产DAG SDK执行仍关闭，未注册内容修改executor。
 
