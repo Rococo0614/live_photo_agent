@@ -285,8 +285,9 @@ SCOPE_CERTIFICATE ──────────┘
 目标唯一、保护检查通过、时间覆盖完整且Qwen给出合法typed effect参数时，才生成单节点preview DAG。
 证书的全部观测事实会生成SHA-256 fingerprint并进入DAG external binding，避免只复用certificate ID
 掩盖内容变化。纯Kotlin `LocalMaskChangeReferenceRenderer`定义ARGB调色、软mask混合和mask内box blur
-的CPU oracle，mask外像素必须逐位不变。未来vivo GPU/SDK renderer必须对该oracle做差分。目前只有
-fake backend与CPU oracle，没有注册Android renderer或生产executor。
+的CPU oracle，mask外像素必须逐位不变。隔离的`AndroidLocalMaskPreviewRenderer`现已实现GLES局部调色
+和整数域两遍box blur，并在vivo真机对CPU oracle完成单帧差分；GL不可用时才回退CPU。它尚未注册为
+DAG或生产executor，也不接收媒体路径或执行写回。
 
 ## 8. 当前shadow实现
 
@@ -307,6 +308,7 @@ fake backend与CPU oracle，没有注册Android renderer或生产executor。
   非唯一目标、保护重叠或覆盖缺口都不能授权mutation；
 - 局部调色/模糊的preview-only typed contract与单节点shadow compiler；源媒体、mask和证书都是
   必需端口，输出只能是临时`MEDIA_ARTIFACT`；
+- 隔离的Android单帧preview renderer：GLES调色与box blur、CPU oracle fallback、显式backend ID；
 - Runtime v2动作顺序、节点状态与DAG拓扑的逐快照差分；
 - `agentRuntime=dag`实验构建；
 - 每次Runtime v2计划快照同步生成`PLAN_GRAPH`与`CONTENT_GRAPH`审计；
@@ -392,8 +394,10 @@ publish但无validated artifact  → NeedObservation(MEDIA_ARTIFACT)
 ```
 
 固定图拓扑选择、track observation、`AgentScopeCertificate`和局部preview compiler加入后，
-debug/release单测均为66/66，`lintDebug`通过；这些类型仍只参与shadow preflight和fake backend，
-没有注册内容修改executor。
+debug/release单测均为66/66，`lintDebug`通过。随后Android renderer在1080×1440真实mask及非对称
+软mask、半径1/6/64上共6组通过：mask外变化0、alpha差0、RGB最大差≤1；真实r=6 blur与CPU oracle
+逐字节一致。证据见`local_deterministic_preview_validation.md`。renderer仍是隔离诊断入口，执行引擎
+仍只使用fake backend，没有注册内容修改executor。
 
 真机F002最后一个shadow快照返回：
 

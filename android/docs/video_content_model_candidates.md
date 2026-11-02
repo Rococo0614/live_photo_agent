@@ -369,7 +369,9 @@ TrackedComposite
 2. 首版effect限定为局部调色与局部模糊，参数有界且由Qwen在Goal IR中选择；
 3. 候选coverage policy可预览但不可写回；preview contract强制`writeback=false`；
 4. 纯Kotlin CPU oracle已固定调色、软mask与mask内模糊语义，mask外像素逐位不变；
-5. 用户确认、撤销、逐帧preservation和Android GPU/SDK renderer差分通过后，才单独评审mutation权限。
+5. vivo单帧GLES调色/box blur已在真实mask与非对称软mask上通过CPU差分（最大RGB差≤1、mask外0）；
+6. 仍需track/certificate bridge、用户确认/取消/undo、逐帧preservation与生命周期Gate，全部通过后才
+   单独评审mutation权限。
 
 ### P1：单帧LaMa probe
 

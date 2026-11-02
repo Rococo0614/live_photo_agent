@@ -25,6 +25,8 @@ import com.vivo.mediaeffectsdk.motioneffect.core.render.gpufilters.livephoto.GPU
 import java.io.File
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
+import org.json.JSONArray
+import org.json.JSONObject
 
 /**
  * Headless feasibility probe for the not-yet-wired mediaeffectsdk capabilities.
@@ -51,7 +53,12 @@ class SdkProbeService : Service() {
         promoteToForeground()
         val coverPath = intent?.getStringExtra("cover_path")
         val personPath = intent?.getStringExtra("person_path")
-        Thread({ runProbes(coverPath, personPath) }, "lpa-probe2").start()
+        val maskPath = intent?.getStringExtra("mask_path")
+        val localPreviewOnly = intent?.getBooleanExtra("local_preview_only", false) == true
+        Thread(
+            { runProbes(coverPath, personPath, maskPath, localPreviewOnly) },
+            "lpa-probe2"
+        ).start()
         return START_NOT_STICKY
     }
 
@@ -69,7 +76,12 @@ class SdkProbeService : Service() {
 
     private fun outDir(): File = File(filesDir, "probe2").apply { mkdirs() }
 
-    private fun runProbes(coverPath: String?, personPath: String?) {
+    private fun runProbes(
+        coverPath: String?,
+        personPath: String?,
+        maskPath: String?,
+        localPreviewOnly: Boolean
+    ) {
         log("=== SDK PROBE BEGIN ===")
         val coverFile = resolveCover(coverPath)
         if (coverFile == null) {
@@ -86,6 +98,21 @@ class SdkProbeService : Service() {
             return
         }
         log("输入封面: ${coverFile.absolutePath} ${cover.width}x${cover.height}")
+        if (localPreviewOnly) {
+            val externalMask = maskPath?.let { path ->
+                File(path).takeIf { it.isFile }?.let { BitmapFactory.decodeFile(it.absolutePath) }
+            }
+            val latch = java.util.concurrent.CountDownLatch(1)
+            android.os.Handler(android.os.Looper.getMainLooper()).post {
+                runCatching { probeH(cover, externalMask) }
+                    .onFailure { log("H 抛异常: ${it::class.java.simpleName}: ${it.message}") }
+                latch.countDown()
+            }
+            latch.await(60, java.util.concurrent.TimeUnit.SECONDS)
+            log("=== SDK PROBE END ===")
+            stopSelf()
+            return
+        }
 
         // The videoeditorsdk VMEditor only inits on the main Looper (see
         // headless_render_findings.md). The image render and the edit engine may share that
@@ -102,10 +129,15 @@ class SdkProbeService : Service() {
         val mask = runCatching { probeE(maskInput) }
             .onFailure { log("E 抛异常: ${it::class.java.simpleName}: ${it.message}") }
             .getOrNull()
+        val externalMask = maskPath?.let { path ->
+            File(path).takeIf { it.isFile }?.let { BitmapFactory.decodeFile(it.absolutePath) }
+        }
         val fgLatch = java.util.concurrent.CountDownLatch(1)
         main.post {
             runCatching { probeFAndG(cover, mask) }
                 .onFailure { log("F/G 抛异常: ${it::class.java.simpleName}: ${it.message}") }
+            runCatching { probeH(cover, externalMask ?: mask) }
+                .onFailure { log("H 抛异常: ${it::class.java.simpleName}: ${it.message}") }
             fgLatch.countDown()
         }
         fgLatch.await(60, java.util.concurrent.TimeUnit.SECONDS)
@@ -297,6 +329,255 @@ class SdkProbeService : Service() {
             }
         }
         egl.destroy()
+    }
+
+    /** H: preview-only mask-scoped GLES color and blur bridge with CPU-oracle differential. */
+    private fun probeH(cover: Bitmap, suppliedMask: Bitmap?) {
+        log("")
+        log("[H] Local deterministic mask preview (GLES color/blur vs CPU oracle)")
+        val mask = normalizeMask(cover, suppliedMask)
+        val cases = JSONArray()
+        cases.put(runPreviewDifferential(
+            caseId = "real_full_frame_color",
+            source = cover,
+            mask = mask,
+            change = LocalDeterministicChange.ColorTint("#22AA66", 0.65),
+            outputName = "h_color_preview.png",
+            referenceName = "h_color_cpu_reference.png"
+        ))
+        cases.put(runPreviewDifferential(
+            caseId = "real_full_frame_blur_r6",
+            source = cover,
+            mask = mask,
+            change = LocalDeterministicChange.Blur(6.0),
+            outputName = "h_blur_preview.png",
+            referenceName = "h_blur_cpu_reference.png"
+        ))
+
+        val (syntheticSource, syntheticMask) = asymmetricSoftMaskFixture()
+        File(outDir(), "h_asymmetric_source.png").outputStream().use {
+            syntheticSource.compress(Bitmap.CompressFormat.PNG, 100, it)
+        }
+        File(outDir(), "h_asymmetric_soft_mask.png").outputStream().use {
+            syntheticMask.compress(Bitmap.CompressFormat.PNG, 100, it)
+        }
+        cases.put(runPreviewDifferential(
+            "asymmetric_soft_color",
+            syntheticSource,
+            syntheticMask,
+            LocalDeterministicChange.ColorTint("#D13F9A", 0.37),
+            outputName = "h_asymmetric_color_preview.png",
+            referenceName = "h_asymmetric_color_cpu_reference.png"
+        ))
+        listOf(
+            Triple(0.5, 1, "r1_from_0_5"),
+            Triple(6.4, 6, "r6_from_6_4"),
+            Triple(63.6, 64, "r64_from_63_6")
+        ).forEach { (radius, effectiveRadius, label) ->
+            cases.put(runPreviewDifferential(
+                "asymmetric_soft_blur_$label",
+                syntheticSource,
+                syntheticMask,
+                LocalDeterministicChange.Blur(radius),
+                outputName = "h_asymmetric_blur_${effectiveRadius}_preview.png",
+                referenceName = "h_asymmetric_blur_${effectiveRadius}_cpu_reference.png"
+            ))
+        }
+        syntheticSource.recycle()
+        syntheticMask.recycle()
+
+        val allPassed = (0 until cases.length()).all { cases.getJSONObject(it).getBoolean("passed") }
+        val evidence = JSONObject()
+            .put("schema_version", 1)
+            .put("status", if (allPassed) "PASS_READ_ONLY_PREVIEW" else "FAIL")
+            .put("preview_only", true)
+            .put("writeback", false)
+            .put("source_media_modified", false)
+            .put("production_executor_registered", false)
+            .put("cases", cases)
+        val evidenceFile = File(outDir(), "h_local_preview_evidence.json")
+        evidenceFile.writeText(evidence.toString(2) + "\n")
+        log("    H status=${evidence.getString("status")} cases=${cases.length()} evidence=${evidenceFile.length()} bytes")
+        check(allPassed) { "local deterministic preview differential failed" }
+    }
+
+    private fun runPreviewDifferential(
+        caseId: String,
+        source: Bitmap,
+        mask: Bitmap,
+        change: LocalDeterministicChange,
+        outputName: String? = null,
+        referenceName: String? = null
+    ): JSONObject {
+        val started = android.os.SystemClock.elapsedRealtimeNanos()
+        val cpuStarted = android.os.SystemClock.elapsedRealtimeNanos()
+        val expected = AndroidLocalMaskPreviewRenderer.renderCpu(source, mask, change)
+        val cpuElapsedMs =
+            (android.os.SystemClock.elapsedRealtimeNanos() - cpuStarted) / 1_000_000.0
+        val rendererStarted = android.os.SystemClock.elapsedRealtimeNanos()
+        val actual = AndroidLocalMaskPreviewRenderer.render(source, mask, change)
+        val rendererElapsedMs =
+            (android.os.SystemClock.elapsedRealtimeNanos() - rendererStarted) / 1_000_000.0
+        val differential = bitmapDifferential(source, mask, expected, actual.bitmap)
+        outputName?.let { name ->
+            File(outDir(), name).outputStream().use {
+                actual.bitmap.compress(Bitmap.CompressFormat.PNG, 100, it)
+            }
+        }
+        referenceName?.let { name ->
+            File(outDir(), name).outputStream().use {
+                expected.compress(Bitmap.CompressFormat.PNG, 100, it)
+            }
+        }
+        val expectedBackend = when (change) {
+            is LocalDeterministicChange.ColorTint ->
+                AndroidLocalMaskPreviewRenderer.BACKEND_GLES_COLOR_TINT
+            is LocalDeterministicChange.Blur ->
+                AndroidLocalMaskPreviewRenderer.BACKEND_GLES_BOX_BLUR
+        }
+        val passed = actual.backendId == expectedBackend &&
+            differential.outsideChanged == 0 &&
+            differential.maxChannelDifference <= 1 &&
+            differential.maxAlphaDifference == 0
+        val probeElapsedMs =
+            (android.os.SystemClock.elapsedRealtimeNanos() - started) / 1_000_000.0
+        log(
+            "    H case=$caseId backend=${actual.backendId} outside_changed=${differential.outsideChanged} " +
+                "max_rgb_diff=${differential.maxChannelDifference} " +
+                "max_alpha_diff=${differential.maxAlphaDifference} " +
+                "mean_abs=${"%.6f".format(differential.meanAbsoluteDifference)} " +
+                "renderer_ms=${"%.2f".format(rendererElapsedMs)} pass=$passed"
+        )
+        val result = JSONObject()
+            .put("case_id", caseId)
+            .put("effect_kind", change.effectKind)
+            .put("parameters", change.parameters())
+            .put("width", source.width)
+            .put("height", source.height)
+            .put("backend", actual.backendId)
+            .put("expected_backend", expectedBackend)
+            .put("outside_mask_changed_pixels", differential.outsideChanged)
+            .put("max_rgb_channel_difference_vs_cpu", differential.maxChannelDifference)
+            .put("max_alpha_difference_vs_source", differential.maxAlphaDifference)
+            .put("mean_absolute_rgb_difference_vs_cpu", differential.meanAbsoluteDifference)
+            .put("differing_pixels_vs_cpu", differential.differingPixels)
+            .put("cpu_reference_ms", cpuElapsedMs)
+            .put("renderer_ms", rendererElapsedMs)
+            .put("probe_elapsed_ms", probeElapsedMs)
+            .put("passed", passed)
+        actual.bitmap.recycle()
+        expected.recycle()
+        return result
+    }
+
+    private fun asymmetricSoftMaskFixture(): Pair<Bitmap, Bitmap> {
+        val width = 97
+        val height = 73
+        val source = IntArray(width * height) { index ->
+            val x = index % width
+            val y = index / width
+            val red = (x * 29 + y * 11 + 17) and 0xff
+            val green = (x * 7 + y * 43 + 91) and 0xff
+            val blue = (x * 53 + y * 3 + 37) and 0xff
+            0xff000000.toInt() or (red shl 16) or (green shl 8) or blue
+        }
+        val mask = IntArray(width * height) { index ->
+            val x = index % width
+            val y = index / width
+            val value = when {
+                x == 0 && y in 2..31 -> (31 + y * 7).coerceAtMost(254)
+                y == height - 1 && x in 48 until width -> 255
+                x in 11..79 && y in 7..58 && (x * 3 + y * 5) % 11 < 7 ->
+                    ((x * 23 + y * 31) % 254) + 1
+                x in 83..94 && y in 1..9 -> 173
+                else -> 0
+            }
+            0xff000000.toInt() or (value shl 16) or (value shl 8) or value
+        }
+        return Bitmap.createBitmap(source, width, height, Bitmap.Config.ARGB_8888) to
+            Bitmap.createBitmap(mask, width, height, Bitmap.Config.ARGB_8888)
+    }
+
+    private fun normalizeMask(cover: Bitmap, supplied: Bitmap?): Bitmap {
+        val source = supplied ?: Bitmap.createBitmap(
+            cover.width,
+            cover.height,
+            Bitmap.Config.ARGB_8888
+        ).also { bitmap ->
+            val canvas = android.graphics.Canvas(bitmap)
+            canvas.drawColor(android.graphics.Color.BLACK)
+            canvas.drawRect(
+                android.graphics.RectF(
+                    cover.width * 0.25f,
+                    cover.height * 0.25f,
+                    cover.width * 0.75f,
+                    cover.height * 0.75f
+                ),
+                android.graphics.Paint().apply { color = android.graphics.Color.WHITE }
+            )
+        }
+        return if (source.width == cover.width && source.height == cover.height) {
+            source
+        } else {
+            Bitmap.createScaledBitmap(source, cover.width, cover.height, false)
+        }
+    }
+
+    private data class BitmapDifferential(
+        val outsideChanged: Int,
+        val maxChannelDifference: Int,
+        val maxAlphaDifference: Int,
+        val meanAbsoluteDifference: Double,
+        val differingPixels: Int
+    )
+
+    private fun bitmapDifferential(
+        source: Bitmap,
+        mask: Bitmap,
+        expected: Bitmap,
+        actual: Bitmap
+    ): BitmapDifferential {
+        val sourcePixels = pixels(source)
+        val maskPixels = pixels(mask)
+        val expectedPixels = pixels(expected)
+        val actualPixels = pixels(actual)
+        var outsideChanged = 0
+        var maxDifference = 0
+        var maxAlphaDifference = 0
+        var totalDifference = 0L
+        var channelCount = 0L
+        var differingPixels = 0
+        for (index in actualPixels.indices) {
+            val masked = (maskPixels[index] ushr 16 and 0xff) > 0
+            if (!masked && sourcePixels[index] != actualPixels[index]) outsideChanged += 1
+            if (expectedPixels[index] != actualPixels[index]) differingPixels += 1
+            maxAlphaDifference = maxOf(
+                maxAlphaDifference,
+                kotlin.math.abs(
+                    (sourcePixels[index] ushr 24 and 0xff) -
+                        (actualPixels[index] ushr 24 and 0xff)
+                )
+            )
+            for (shift in intArrayOf(16, 8, 0)) {
+                val expectedChannel = expectedPixels[index] ushr shift and 0xff
+                val actualChannel = actualPixels[index] ushr shift and 0xff
+                val difference = kotlin.math.abs(expectedChannel - actualChannel)
+                maxDifference = maxOf(maxDifference, difference)
+                totalDifference += difference
+                channelCount += 1
+            }
+        }
+        return BitmapDifferential(
+            outsideChanged,
+            maxDifference,
+            maxAlphaDifference,
+            totalDifference.toDouble() / channelCount,
+            differingPixels
+        )
+    }
+
+    private fun pixels(bitmap: Bitmap): IntArray = IntArray(bitmap.width * bitmap.height).also {
+        bitmap.getPixels(it, 0, bitmap.width, 0, 0, bitmap.width, bitmap.height)
     }
 
     private fun buffer(values: FloatArray): java.nio.FloatBuffer =
