@@ -135,6 +135,10 @@ MP4 起点 806,721，EOI 紧邻校验通过，切出的 MP4 为 17,318,974 字�
 framemd5一致、AAC bitstream一致、duration仍为6.034秒，decode返回timestamp仍为`1,000,000µs`。
 产物只存在应用私有目录，没有写入MediaStore。
 
+另有`publish_livephoto`诊断入口用于用户明确授权后的验收发布。它只在debug build可用，且必须传
+`user_authorized_publish=true`；发布前decode，发布后检查MediaStore路径、大小、pending状态和vivo
+`live_photo`扩展列，任一步失败都会删除新建记录。生产发布不使用该入口。
+
 ## 6. 复现步骤
 
 ```bash

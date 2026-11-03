@@ -4,10 +4,14 @@ import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.Service
+import android.content.ContentValues
 import android.content.Intent
+import android.net.Uri
+import android.os.Build
 import android.os.Handler
 import android.os.IBinder
 import android.os.Looper
+import android.provider.MediaStore
 import android.util.Log
 import com.vivo.videoeditorsdk.editor.api.VMEditor
 import com.vivo.videoeditorsdk.editor.api.VMVideoConverter
@@ -21,6 +25,7 @@ import com.vivo.videoeditorsdk.editor.api.entity.output.VMConverterConfig
 import com.vivo.videoeditorsdk.videoeditor.VideoConverter
 import com.vivo.videoeditorsdk.videoeditor.VideoExportEngine
 import java.io.File
+import java.io.FileInputStream
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 import org.json.JSONObject
@@ -62,6 +67,8 @@ class HeadlessService : Service() {
             ?.let { runCatching { JSONObject(it) }.getOrNull() } ?: JSONObject()
         val photoTimestampUs = intent?.getLongExtra("photo_timestamp_us", 1_500_000L)
             ?: 1_500_000L
+        val outputName = intent?.getStringExtra("output_name")
+        val userAuthorizedPublish = intent?.getBooleanExtra("user_authorized_publish", false) == true
         Thread({
             if (inputPaths.isEmpty()) runAll()
             else runNativeAdapter(
@@ -70,7 +77,9 @@ class HeadlessService : Service() {
                 layout,
                 layoutContext,
                 imageParams,
-                photoTimestampUs
+                photoTimestampUs,
+                outputName,
+                userAuthorizedPublish
             )
         }, "lpa-headless").start()
         return START_NOT_STICKY
@@ -120,7 +129,9 @@ class HeadlessService : Service() {
         layout: String,
         layoutContext: JSONObject?,
         imageParams: JSONObject,
-        photoTimestampUs: Long
+        photoTimestampUs: Long,
+        outputName: String?,
+        userAuthorizedPublish: Boolean
     ) {
         val inputs = inputPaths.map(::File)
         val missing = inputs.firstOrNull { !it.isFile }
@@ -134,6 +145,30 @@ class HeadlessService : Service() {
         log("操作: $operation / 布局: $layout")
         inputs.forEach { log("输入 MP4: ${it.absolutePath} (${it.length()} bytes)") }
         runCatching {
+            if (operation == "publish_livephoto") {
+                require(BuildConfig.DEBUG && userAuthorizedPublish) {
+                    "diagnostic gallery publishing requires a debug build and explicit user authorization"
+                }
+                require(inputs.size == 1) { "publish_livephoto requires one packed Live Photo" }
+                val packed = inputs.single()
+                require(packed.extension.equals("jpg", true) || packed.extension.equals("jpeg", true)) {
+                    "publish_livephoto requires a JPEG container"
+                }
+                val adapter = LivePhotoSdkAdapter(this)
+                require(adapter.decode(packed, File(outputDir, "publish-decode-probe")) != null) {
+                    "refusing to publish a Live Photo that cannot be decoded"
+                }
+                val displayName = outputName?.takeIf { it.isNotBlank() }
+                    ?: "tracked-tint-${System.currentTimeMillis()}.jpg"
+                val published = publishLivePhoto(packed, displayName)
+                log(
+                    "PASS Gallery publish: uri=$published name=$displayName " +
+                        "bytes=${packed.length()}"
+                )
+                log("=== NATIVE ADAPTER TEST END ===")
+                stopSelf()
+                return
+            }
             if (operation == "livephoto_pack") {
                 require(inputs.size >= 2) { "livephoto_pack requires image,video" }
                 require(photoTimestampUs >= 0) { "photo timestamp cannot be negative" }
@@ -186,6 +221,66 @@ class HeadlessService : Service() {
         }
         log("=== NATIVE ADAPTER TEST END ===")
         stopSelf()
+    }
+
+    private fun publishLivePhoto(source: File, displayName: String): Uri {
+        require(Regex("[A-Za-z0-9._-]+\\.(jpg|jpeg)", RegexOption.IGNORE_CASE).matches(displayName)) {
+            "unsafe output name"
+        }
+        val values = ContentValues().apply {
+            put(MediaStore.Images.Media.DISPLAY_NAME, displayName)
+            put(MediaStore.Images.Media.MIME_TYPE, "image/jpeg")
+            put("live_photo", "motionphoto00010000000000000")
+            if (Build.VERSION.SDK_INT >= 29) {
+                put(MediaStore.Images.Media.RELATIVE_PATH, MobileAgentRunner.OUTPUT_IMAGE_PATH)
+                put(MediaStore.Images.Media.IS_PENDING, 1)
+            }
+        }
+        val resolver = contentResolver
+        val uri = resolver.insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, values)
+            ?: error("unable to create MediaStore row")
+        try {
+            FileInputStream(source).use { input ->
+                resolver.openOutputStream(uri)?.use { output -> input.copyTo(output, 128 * 1024) }
+                    ?: error("unable to open MediaStore output")
+            }
+            if (Build.VERSION.SDK_INT >= 29) {
+                resolver.update(uri, ContentValues().apply {
+                    put(MediaStore.Images.Media.IS_PENDING, 0)
+                }, null, null)
+            }
+            resolver.update(uri, ContentValues().apply {
+                put("live_photo", "motionphoto00010000000000000")
+            }, null, null)
+            val verified = resolver.query(
+                uri,
+                arrayOf(
+                    MediaStore.Images.Media.DISPLAY_NAME,
+                    MediaStore.Images.Media.SIZE,
+                    MediaStore.Images.Media.RELATIVE_PATH,
+                    MediaStore.Images.Media.IS_PENDING,
+                    "live_photo"
+                ),
+                null,
+                null,
+                null
+            )?.use { cursor ->
+                if (!cursor.moveToFirst()) return@use false
+                val name = cursor.getString(0)
+                val size = cursor.getLong(1)
+                val path = cursor.getString(2)
+                val pending = cursor.getInt(3)
+                val marker = cursor.getString(4).orEmpty()
+                name == displayName && size == source.length() &&
+                    path == MobileAgentRunner.OUTPUT_IMAGE_PATH + "/" &&
+                    pending == 0 && marker.isNotBlank()
+            } == true
+            require(verified) { "published MediaStore row failed verification" }
+            return uri
+        } catch (error: Throwable) {
+            resolver.delete(uri, null, null)
+            throw error
+        }
     }
 
     /**

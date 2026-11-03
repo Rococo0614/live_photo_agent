@@ -308,6 +308,10 @@ box/point交给用户。`AndroidLocalPreviewShadowExecutor`仅接受完整eviden
 封面像素、181帧framemd5、AAC bitstream和1,000,000µs photo timestamp均保持。该里程碑证明完整
 效果/容器契约，但模型全帧执行仍是PyTorch oracle，生产迁移必须替换成Android QNN与持久GLES。
 
+用户随后明确授权发布一份验收结果。host仅把已验证私有artifact写入新的MediaStore记录，设置vivo
+`live_photo`标记且不覆盖原片；这次显式发布不改变shadow action的`writeback=false`契约，也不代表
+mutation feature flag已经开启。
+
 ## 8. 当前shadow实现
 
 已加入：

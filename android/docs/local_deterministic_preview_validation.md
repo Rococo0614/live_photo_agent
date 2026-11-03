@@ -172,6 +172,30 @@ SHA-256 d18ba66d98923f1a42fdc41f0d76e760ca3c2edd819aaefd107c3ee7d1359b2e
 这里完整181帧由PyTorch oracle生成，vivo QNN只在17个时刻做差分，因此仍不能宣称Android端全帧
 tracking已经闭环；但“全时间线mask驱动调色并repack为可解码Live Photo”的效果契约已经跑通。
 
+### 5.1 用户明确授权后的相册发布
+
+上述阶段均保持preview-only。2026-11-03用户随后明确要求把结果放入相册，因此只发布一份、使用新
+文件名且不覆盖原片。发布前再次通过LivePhotoSDK decode；发布后MediaStore核对通过：
+
+```text
+uri           = content://media/external/images/media/2202
+display name  = LPA_TrackedTint_Cat_20261103.jpg
+relative path = Pictures/LivePhotoAgent/Generated/
+size          = 5,752,408 bytes
+live_photo    = motionphoto00010000000000000
+is_pending    = 0
+gallery SHA   = d18ba66d98923f1a42fdc41f0d76e760ca3c2edd819aaefd107c3ee7d1359b2e
+```
+
+相册文件与私有验证产物逐字节一致；原始Live Photo未覆盖。诊断发布入口只允许debug build且要求显式
+`user_authorized_publish=true`，生产发布仍走已有validated artifact门禁。证据：
+
+```text
+/mnt/ssd/lpa-aihub-probe/artifacts/edgetam-full-frame-tracked-tint/gallery-publish/
+  gallery-publish-evidence.json
+SHA-256 e2189af7efdaacc1a97e88c2d67e0246c04bcd74e8fa74707974fdccfeb2b653
+```
+
 ## 6. 复现入口
 
 ```bash
