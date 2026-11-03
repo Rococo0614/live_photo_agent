@@ -304,6 +304,10 @@ box/point交给用户。`AndroidLocalPreviewShadowExecutor`仅接受完整eviden
 保护区泄漏0。这证明同一`MASK_TRACK`能够稳定驱动确定性transform；它仍是抽样frame fixture，不能
 代替完整Live Photo全帧解码、时间戳保持、编码与repack。
 
+同一运动轨道随后完成PyTorch全181帧track/tint，并由vivo LivePhotoSDK在应用私有目录repack和decode：
+封面像素、181帧framemd5、AAC bitstream和1,000,000µs photo timestamp均保持。该里程碑证明完整
+效果/容器契约，但模型全帧执行仍是PyTorch oracle，生产迁移必须替换成Android QNN与持久GLES。
+
 ## 8. 当前shadow实现
 
 已加入：

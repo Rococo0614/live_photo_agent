@@ -141,6 +141,37 @@ SHA-256 b3f28bb6a6ebcb7e41c88849e100013537dfb4d2a441b5612756ab962b817491
 MP4是并排人工验收产物，像素Gate只依据无损PNG。该fixture覆盖17个抽样时刻和16个真实pointer，
 尚不是完整Live Photo的所有解码帧，也没有执行Live Photo repack或写回。
 
+随后从真实`loop-chain-color.jpg` Live Photo拆出完全一致的1080×1440 / 181帧 / 6.034秒运动轨道，
+运行EdgeTAM PyTorch全帧oracle，并与上述17个vivo QAIRT 2.45抽样mask交叉验证：
+
+```text
+full frames tracked                         = 181/181
+all frame observations                     = VISIBLE_VALIDATED
+outside-mask changed pixels                 = 0
+maximum protected-panel outside fraction   = 0.0000813
+sampled vivo masks compared                 = 17
+minimum full-oracle vs vivo sampled IoU     = 0.951296
+```
+
+全帧调色视频保留181帧、原AAC音频及6.034秒时长，并使用第30帧生成1,000,000µs对应封面。vivo
+LivePhotoSDK在应用私有目录完成pack后又成功decode；解包封面像素完全一致，181帧framemd5完全一致，
+AAC bitstream SHA一致，photo timestamp仍为1,000,000µs。没有写入MediaStore：
+
+```text
+/mnt/ssd/lpa-aihub-probe/artifacts/edgetam-full-frame-tracked-tint/
+  livephoto-tracked-tint-summary.json
+SHA-256 7a06a42544df53f947c621f45e50f620d6107bfc97fd146f587378e1267f929d
+
+  full-frame-tracked-tint-preview.mp4
+SHA-256 1722cf4d68a0060c7e4a90137454e32ab853e1f2fe91c94cdb559d7d80ba8f6e
+
+  vivo-livephoto-pack/tracked-tint-livephoto.jpg
+SHA-256 d18ba66d98923f1a42fdc41f0d76e760ca3c2edd819aaefd107c3ee7d1359b2e
+```
+
+这里完整181帧由PyTorch oracle生成，vivo QNN只在17个时刻做差分，因此仍不能宣称Android端全帧
+tracking已经闭环；但“全时间线mask驱动调色并repack为可解码Live Photo”的效果契约已经跑通。
+
 ## 6. 复现入口
 
 ```bash
@@ -162,7 +193,8 @@ alpha变化或RGB误差大于1都会返回FAIL。
 
 1. OWLv2 QAIRT 2.45张量backend与Android输入均已通过，但Android QNN JNI尚未接入bridge；当前真机
    target/mask仍是已验证fixture，不是完整用户请求；
-2. 抽样跟踪调色已通过；视频/Live Photo全帧解码、持久EGL context、时间戳保持和repack尚未验证；
+2. PyTorch全帧调色与私有Live Photo repack已通过；仍需把181帧tracking/render替换成vivo QNN与
+   持久Android EGL pipeline；
 3. UI已实现但尚未做触屏自动化、Activity/进程重建、会话恢复与旋转Gate；
 4. 多分钟完整pipeline soak、总host/GPU/DSP内存与温升尚未通过；
 5. 固定context银行包体仍未解决；任何确认仍只接受临时预览，不能写回。

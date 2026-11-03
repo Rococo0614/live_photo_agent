@@ -60,7 +60,19 @@ class HeadlessService : Service() {
         val layoutContext = intent?.getStringExtra("layout_context")?.let { runCatching { JSONObject(it) }.getOrNull() }
         val imageParams = intent?.getStringExtra("image_params")
             ?.let { runCatching { JSONObject(it) }.getOrNull() } ?: JSONObject()
-        Thread({ if (inputPaths.isEmpty()) runAll() else runNativeAdapter(inputPaths, operation, layout, layoutContext, imageParams) }, "lpa-headless").start()
+        val photoTimestampUs = intent?.getLongExtra("photo_timestamp_us", 1_500_000L)
+            ?: 1_500_000L
+        Thread({
+            if (inputPaths.isEmpty()) runAll()
+            else runNativeAdapter(
+                inputPaths,
+                operation,
+                layout,
+                layoutContext,
+                imageParams,
+                photoTimestampUs
+            )
+        }, "lpa-headless").start()
         return START_NOT_STICKY
     }
 
@@ -102,7 +114,14 @@ class HeadlessService : Service() {
     }
 
     /** Run the migrated PlanExecutor's SDK path against an explicit local MP4. */
-    private fun runNativeAdapter(inputPaths: List<String>, operation: String, layout: String, layoutContext: JSONObject?, imageParams: JSONObject) {
+    private fun runNativeAdapter(
+        inputPaths: List<String>,
+        operation: String,
+        layout: String,
+        layoutContext: JSONObject?,
+        imageParams: JSONObject,
+        photoTimestampUs: Long
+    ) {
         val inputs = inputPaths.map(::File)
         val missing = inputs.firstOrNull { !it.isFile }
         if (missing != null) {
@@ -117,11 +136,20 @@ class HeadlessService : Service() {
         runCatching {
             if (operation == "livephoto_pack") {
                 require(inputs.size >= 2) { "livephoto_pack requires image,video" }
-                val packed = LivePhotoSdkAdapter(this).pack(inputs[0], inputs[1], outputDir)
-                require(LivePhotoSdkAdapter(this).unpack(packed, File(outputDir, "decoded-probe")) != null) {
+                require(photoTimestampUs >= 0) { "photo timestamp cannot be negative" }
+                val adapter = LivePhotoSdkAdapter(this)
+                val packed = adapter.pack(inputs[0], inputs[1], outputDir, photoTimestampUs)
+                val decoded = adapter.decode(packed, File(outputDir, "decoded-probe"))
+                require(decoded != null) {
                     "packed output could not be decoded"
                 }
-                log("PASS LivePhotoSDK pack/decode: ${packed.absolutePath} (${packed.length()} bytes)")
+                require(decoded.photoTimestampUs == photoTimestampUs) {
+                    "photo timestamp changed: expected=$photoTimestampUs actual=${decoded.photoTimestampUs}"
+                }
+                log(
+                    "PASS LivePhotoSDK pack/decode: ${packed.absolutePath} " +
+                        "(${packed.length()} bytes) timestamp_us=${decoded.photoTimestampUs}"
+                )
                 log("=== NATIVE ADAPTER TEST END ===")
                 stopSelf()
                 return

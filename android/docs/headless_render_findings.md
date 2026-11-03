@@ -128,6 +128,13 @@ vivo Live Photo 是 `JPEG + MP4` 顺序拼接的单文件。拆包做法：
 实测样本 `/sdcard/DCIM/Camera/115.jpg`：总长 18,125,695 字节，
 MP4 起点 806,721，EOI 紧邻校验通过，切出的 MP4 为 17,318,974 字节且可正常解码。
 
+### 5.1 指定photo timestamp的私有pack/decode
+
+`HeadlessService`的`livephoto_pack`诊断入口现接受`photo_timestamp_us`，并在pack后立即decode核对。
+181帧局部调色视频以第30帧封面和`1,000,000µs`打包后：解包封面像素完全一致、视频181帧
+framemd5一致、AAC bitstream一致、duration仍为6.034秒，decode返回timestamp仍为`1,000,000µs`。
+产物只存在应用私有目录，没有写入MediaStore。
+
 ## 6. 复现步骤
 
 ```bash

@@ -385,6 +385,12 @@ mask外改变像素总数为0，mask内改变1,190,825像素，最低mask IoU仍
 背景不变。该结果证明“已跟踪区域可稳定驱动确定性transform”，但输入仍是17帧抽样fixture，不等于
 完整Live Photo逐帧解码、编码和容器重组已经通过。
 
+进一步从真实Live Photo拆出同一181帧原始运动轨道并运行EdgeTAM PyTorch全帧oracle；17个vivo抽样
+mask与全帧对应时刻最低IoU为0.9513。181帧全部通过10%coverage和保护区Gate，调色后mask外变化0。
+生成的视频保留181帧、AAC音频和6.034秒时长；以第30帧作为1,000,000µs封面后，vivo LivePhotoSDK在应用私有目录完成
+pack/decode，封面像素、所有解码视频framemd5和AAC bitstream均保持一致。该证明仍是“PyTorch全帧+
+vivo抽样差分”，不是Android QNN全帧执行。
+
 7/16 context还通过了生命周期和短时热门禁：执行中TERM取消后无残留进程，连续10次重载输出SHA
 全部一致；3000次连续推理耗时77.99秒，NPU传感器峰值86.5°C，系统thermal status和CDSP cooling
 保持0，输出哈希不变。该结果不替代多分钟完整pipeline soak，也不代表DSP总峰值内存已量准。
@@ -410,6 +416,8 @@ object score之外增加确定性时序覆盖检查：raw mask面积若突然低
   vivo-dense-seventeen-frame-fixed-bank-evidence.json
 /mnt/ssd/lpa-aihub-probe/artifacts/vivo-qnn245-dense-seventeen-frame/tracked-tint-proof/
   tracked-tint-evidence.json
+/mnt/ssd/lpa-aihub-probe/artifacts/edgetam-full-frame-tracked-tint/
+  livephoto-tracked-tint-summary.json
 /mnt/ssd/lpa-aihub-probe/artifacts/vivo-qnn245-fixed-bank/cancel-reload-lifecycle-summary.json
 /mnt/ssd/lpa-aihub-probe/artifacts/vivo-qnn245-fixed-bank/soak-7-memory-16-pointer-summary.json
 /mnt/ssd/lpa-aihub-probe/artifacts/vivo-qnn245-fixed-bank/weight-sharing-probe.json
@@ -522,7 +530,8 @@ EdgeTAM grounding探针首选float模型验证语义，随后才比较W8A8；这
 - 下游Android单帧GLES renderer及supplied observations → track/certificate → temporary artifact →
   confirm/undo shadow链已通过；但尚未接收本节locator的Android输出与真实逐帧`MASK_TRACK`，不改变
   上述Grounding与mutation门禁。
-- 17帧设备`MASK_TRACK`已通过调色显色验证；完整Live Photo全帧decode/render/repack仍未通过。
+- 17帧设备`MASK_TRACK`已通过调色显色验证；Android QNN/GLES全帧链仍未通过。
+- PyTorch全帧oracle到私有Live Photo repack已通过；Android QNN/GLES全帧替换仍未通过。
 
 ## 8. 后续Gate
 
@@ -574,6 +583,10 @@ SHA-256 88e651805309bd2ad5884d1bc81b3a9026ffdbb23cb697854fb6d9ef2ff2ba78
 /mnt/ssd/lpa-aihub-probe/artifacts/vivo-qnn245-dense-seventeen-frame/tracked-tint-proof/
   tracked-tint-evidence.json
 SHA-256 bbe69a034c77cdf1f1a2ac3c3a052d11506b5dca506f09d394bdcd6d7c1e80dc
+
+/mnt/ssd/lpa-aihub-probe/artifacts/edgetam-full-frame-tracked-tint/
+  livephoto-tracked-tint-summary.json
+SHA-256 7a06a42544df53f947c621f45e50f620d6107bfc97fd146f587378e1267f929d
 
 /mnt/ssd/lpa-aihub-probe/artifacts/local-deterministic-preview-vivo-gles/summary.json
 SHA-256 73da947f37d8cdb3b59b5e774de342d955e20eb107f94fc25fe22d0ce762da71
