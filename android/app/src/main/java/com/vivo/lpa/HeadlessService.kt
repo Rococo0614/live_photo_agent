@@ -913,7 +913,8 @@ class HeadlessService : Service() {
                     require(expectedRawMask.isFile) { "expected decoder mask is missing" }
                     val expectedRawSha = fileSha256(expectedRawMask)
                     require(result.decoderMaskRawSha256 == expectedRawSha) {
-                        "decoder mask differs from prior vivo run at $sequenceIndex"
+                        "decoder mask differs from prior vivo run at $sequenceIndex: " +
+                            "actual=${result.decoderMaskRawSha256} expected=$expectedRawSha"
                     }
                     rows.put(JSONObject()
                         .put("sequence_index", sequenceIndex)
@@ -932,6 +933,15 @@ class HeadlessService : Service() {
                         .put("memory_encoder_ms", result.memoryEncoderMs ?: JSONObject.NULL)
                         .put("evidence_fingerprint", result.evidenceFingerprint))
                 }
+                val residentContextsAtCompletion = if (BuildConfig.PERSISTENT_QNN) {
+                    AndroidQnnPersistentNativeBridge.loadedContextCount().also {
+                        require(it in 1..4) { "persistent QNN context LRU exceeded its bound: $it" }
+                    }
+                } else {
+                    0
+                }
+                val powerVoteActiveAtCompletion = BuildConfig.PERSISTENT_QNN &&
+                    AndroidQnnPersistentNativeBridge.isPowerVoteActive()
                 val evidence = JSONObject()
                     .put("schema_version", 1)
                     .put("status", "PASS_ANDROID_APP_UID_EDGETAM_TEMPORAL_QNN")
@@ -939,10 +949,36 @@ class HeadlessService : Service() {
                     .put("frame_count_source", "fixture directory discovery")
                     .put("all_decoder_masks_bit_exact_vs_prior_vivo", true)
                     .put("qairt_exact", AndroidQnnContextProcessRunner.QAIRT_EXACT)
+                    .put(
+                        "execution_bridge",
+                        if (BuildConfig.PERSISTENT_QNN) "persistent-qairt245-jni-context-lru4"
+                        else "packaged-qnn-net-run-child-process"
+                    )
+                    .put("persistent_jni_context", BuildConfig.PERSISTENT_QNN)
+                    .put("maximum_resident_contexts", if (BuildConfig.PERSISTENT_QNN) 4 else 0)
+                    .put("resident_contexts_at_completion", residentContextsAtCompletion)
+                    .put("burst_power_vote_active_at_completion", powerVoteActiveAtCompletion)
                     .put("fixed_context_selected_by_state_count", true)
                     .put("frames", rows)
                     .put("media_modified", false)
                     .put("published", false)
+                AndroidQnnContextRunnerFactory.releasePersistentContexts()
+                if (BuildConfig.PERSISTENT_QNN) {
+                    require(AndroidQnnPersistentNativeBridge.loadedContextCount() == 0)
+                    require(!AndroidQnnPersistentNativeBridge.isPowerVoteActive())
+                }
+                evidence
+                    .put(
+                        "resident_contexts_after_release",
+                        if (BuildConfig.PERSISTENT_QNN) {
+                            AndroidQnnPersistentNativeBridge.loadedContextCount()
+                        } else 0
+                    )
+                    .put(
+                        "burst_power_vote_active_after_release",
+                        BuildConfig.PERSISTENT_QNN &&
+                            AndroidQnnPersistentNativeBridge.isPowerVoteActive()
+                    )
                 File(outputDir, "qnn-edgetam-temporal-fixture-evidence.json")
                     .writeText(evidence.toString(2) + "\n")
                 log(
@@ -993,7 +1029,7 @@ class HeadlessService : Service() {
                         AndroidQnnTensorContract("image_embeddings", 4_194_304)
                     )
                 )
-                AndroidQnnContextProcessRunner(this, modelRoot).execute(
+                AndroidQnnContextRunnerFactory.create(this, modelRoot).execute(
                     contract,
                     mapOf(
                         "image" to image,
@@ -1018,19 +1054,121 @@ class HeadlessService : Service() {
                     require(actualHashes == expectedHashes) {
                         "app-owned QNN outputs differ from validated vivo tensors"
                     }
+                    var warmElapsedMs: Long? = null
+                    var warmHashes: Map<String, String>? = null
+                    var inFlightCancelCaught = false
+                    var cancelObservedGraphDispatch = false
+                    var nativeGraphAbortIssued = false
+                    var residentContextsAfterCancel: Int? = null
+                    var recoveryElapsedMs: Long? = null
+                    if (BuildConfig.PERSISTENT_QNN) {
+                        AndroidQnnContextRunnerFactory.create(this, modelRoot).execute(
+                            contract,
+                            mapOf(
+                                "image" to image,
+                                "unnorm_coords" to coordinates,
+                                "labels" to labels
+                            ),
+                            AtomicBoolean(false)
+                        ).use { warm ->
+                            warmElapsedMs = warm.elapsedMs
+                            warmHashes = warm.outputs.mapValues { fileSha256(it.value) }
+                        }
+                        require(warmHashes == expectedHashes) {
+                            "reused persistent QNN context changed output tensors"
+                        }
+                        val cancelSignal = AtomicBoolean(false)
+                        val cancelThread = Thread({
+                            val deadline = System.nanoTime() +
+                                java.util.concurrent.TimeUnit.SECONDS.toNanos(5)
+                            while (System.nanoTime() < deadline &&
+                                !AndroidQnnPersistentNativeBridge.isGraphInFlight()
+                            ) {
+                                Thread.sleep(1)
+                            }
+                            cancelObservedGraphDispatch =
+                                AndroidQnnPersistentNativeBridge.isGraphInFlight()
+                            if (cancelObservedGraphDispatch) {
+                                nativeGraphAbortIssued =
+                                    AndroidQnnPersistentNativeBridge.cancelGraphInFlight()
+                            }
+                            cancelSignal.set(true)
+                        }, "persistent-qnn-fixture-cancel").apply { start() }
+                        try {
+                            AndroidQnnContextRunnerFactory.create(this, modelRoot).execute(
+                                contract,
+                                mapOf(
+                                    "image" to image,
+                                    "unnorm_coords" to coordinates,
+                                    "labels" to labels
+                                ),
+                                cancelSignal
+                            ).use { error("warm QNN execution completed after cancellation") }
+                        } catch (_: InterruptedException) {
+                            inFlightCancelCaught = true
+                        } finally {
+                            cancelThread.join(5_000)
+                        }
+                        require(inFlightCancelCaught && cancelSignal.get() &&
+                            cancelObservedGraphDispatch && nativeGraphAbortIssued
+                        ) {
+                            "persistent QNN graph execution did not honor cancellation"
+                        }
+                        residentContextsAfterCancel =
+                            AndroidQnnPersistentNativeBridge.loadedContextCount()
+                        require(residentContextsAfterCancel == 0) {
+                            "cancelled persistent context was retained"
+                        }
+                        AndroidQnnContextRunnerFactory.create(this, modelRoot).execute(
+                            contract,
+                            mapOf(
+                                "image" to image,
+                                "unnorm_coords" to coordinates,
+                                "labels" to labels
+                            ),
+                            AtomicBoolean(false)
+                        ).use { recovery ->
+                            recoveryElapsedMs = recovery.elapsedMs
+                            require(recovery.outputs.mapValues { fileSha256(it.value) } == expectedHashes) {
+                                "persistent QNN context did not recover bit-exactly after cancellation"
+                            }
+                        }
+                    }
+                    val persistentLoadedContexts = if (BuildConfig.PERSISTENT_QNN) {
+                        AndroidQnnPersistentNativeBridge.loadedContextCount()
+                    } else {
+                        0
+                    }
                     val evidence = JSONObject()
                         .put("schema_version", 1)
                         .put("status", "PASS_ANDROID_APP_UID_QNN245_CONTEXT")
                         .put("component", result.componentId)
-                        .put("execution_bridge", "packaged-qnn-net-run-child-process")
+                        .put(
+                            "execution_bridge",
+                            if (BuildConfig.PERSISTENT_QNN) "persistent-qairt245-jni-context"
+                            else "packaged-qnn-net-run-child-process"
+                        )
                         .put("qairt_exact", AndroidQnnContextProcessRunner.QAIRT_EXACT)
                         .put("context_sha256", EDGETAM_ENCODER_CONTEXT_SHA256)
                         .put("dsp_skel_sha256", QAIRT_245_V81_SKEL_SHA256)
                         .put("elapsed_ms", result.elapsedMs)
+                        .put("cold_elapsed_ms", result.elapsedMs)
+                        .put("warm_elapsed_ms", warmElapsedMs ?: JSONObject.NULL)
+                        .put("context_reused", warmElapsedMs != null)
+                        .put("in_flight_cancel_caught", inFlightCancelCaught)
+                        .put("cancel_observed_graph_dispatch", cancelObservedGraphDispatch)
+                        .put("native_graph_abort_issued", nativeGraphAbortIssued)
+                        .put(
+                            "resident_contexts_after_cancel",
+                            residentContextsAfterCancel ?: JSONObject.NULL
+                        )
+                        .put("recovery_elapsed_ms", recoveryElapsedMs ?: JSONObject.NULL)
+                        .put("recovered_after_cancel", recoveryElapsedMs != null)
                         .put("output_sha256", JSONObject(actualHashes))
                         .put("outputs_bit_exact_vs_validated_vivo", true)
                         .put("app_uid_owned", true)
-                        .put("persistent_jni_context", false)
+                        .put("persistent_jni_context", BuildConfig.PERSISTENT_QNN)
+                        .put("resident_contexts_after_execute", persistentLoadedContexts)
                         .put("media_modified", false)
                         .put("published", false)
                     File(outputDir, "qnn-edgetam-encoder-fixture-evidence.json")
@@ -1039,6 +1177,12 @@ class HeadlessService : Service() {
                         "PASS app-UID QNN 2.45 context: component=${result.componentId} " +
                             "elapsed=${result.elapsedMs}ms bit_exact=true"
                     )
+                }
+                AndroidQnnContextRunnerFactory.releasePersistentContexts()
+                if (BuildConfig.PERSISTENT_QNN) {
+                    require(AndroidQnnPersistentNativeBridge.loadedContextCount() == 0) {
+                        "persistent QNN contexts were not released after the probe"
+                    }
                 }
                 modelRoot.deleteRecursively()
                 log("=== NATIVE ADAPTER TEST END ===")

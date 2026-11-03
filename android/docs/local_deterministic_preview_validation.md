@@ -1,8 +1,8 @@
 # 局部确定性预览 Renderer 验证
 
-> 验证日期：2026-11-02  
+> 验证日期：2026-11-03
 > 设备：vivo V2547A / PD2547，SM8850，Android 16（SDK 36）  
-> 状态：**真实语言→OWLv2→EdgeTAM关键帧mask→GLES区域工具已通过；全时序与写回仍禁用**
+> 状态：**真实语言→OWLv2→EdgeTAM全时序mask→私有Live Photo预览已通过显式实验路径；写回仍禁用**
 
 ## 1. 边界
 
@@ -121,9 +121,9 @@ interaction/store状态机，但尚未做触屏自动化或Activity重建测试�
 `CHANGE_CONTENT` Goal IR和ASCII canonical target，box、points、mask、context及DAG连线仍由host持有。
 任何Goal格式、唯一性或观察门禁失败都会停止，不回退为全局`apply_style`。
 
-QAIRT执行层使用随实验APK提取的官方2.45 `qnn-net-run`，由App UID启动可取消子进程；context和DSP
-skel来自外部模型包并逐个校验SHA-256。它已关闭“应用进程能否拥有并取消2.45 context执行”的Gate，
-但不是持久JNI context，不能写成JNI生命周期已经完成。EdgeTAM encoder固定fixture的五个输出与此前
+初始QAIRT执行层使用随实验APK提取的官方2.45 `qnn-net-run`，由App UID启动可取消子进程；context和
+DSP skel来自外部模型包并逐个校验SHA-256。它关闭了“应用UID能否拥有并取消2.45 context执行”的
+Gate，并继续作为回退实现；后续持久JNI结果见4.4。EdgeTAM encoder固定fixture的五个输出与此前
 vivo张量逐字节一致，App-UID执行总时长703ms：
 
 ```text
@@ -181,13 +181,14 @@ SHA-256 438a3d13bf0de46c9730fee89199ac0a104eefdd1cdade9fcbbd917120fc3dd4
                       SHA-256 4691654241a483d9c249f5300870daa124a96effd4cd0d0d0079147f9be6cec0
 ```
 
-当前debug/release单测均为125/125，`lintDebug`、`lintRelease`及debug/release assemble通过。默认
+当前debug/release单测均为127/127，`lintDebug`、`lintRelease`及debug/release assemble通过。默认
 debug/release APK都不包含`libqnn_net_run.so`；只有显式实验构建包含：
 
 ```text
-default debug APK       cc8721d6c9b51779ddb9992d6369b6cbcc918bfdee1d8e6765de5221117c51d3
-default release APK     4185c1e4cf410e0bbc5914d2602277744c64ddada80a384ecfa0f037331c3979
-full-timeline debug APK c6603f8af8e7499bed87433c19742c4064b1d4fc99a2d24bb2f6883bc901572d
+default debug APK        6bdccc048dc982fe7ccdbace21741748b845c36d7f8b0301e2ada0283e75a8a5
+default release APK      4e6edfd6f776355ab9df8d720091856c4d74dc49400122c4b97529d884d92e40
+full-timeline fallback   721b522a105b0db2d630e640a8f6efa33b4b956e50f5e8e6a3892de2de6f871d
+persistent-QNN debug APK b2bc69981cda957a0ac223f0329c6e27b4de7f32a639b018b1dad2168e26b5b5
 ```
 
 所有自定义Gradle属性已注册为task inputs；同一worktree按“clean默认→实验→默认”构建，前后两个默认
@@ -262,7 +263,8 @@ Android host状态银行也已按真实处理进度实现：condition memory固�
 ./gradlew assembleDebug \
   -PagentRuntime=dag \
   -PlocalTrackedPreview=true \
-  -PfullTimelineTrackedPreview=true
+  -PfullTimelineTrackedPreview=true \
+  -PpersistentQnn=true
 ```
 
 随后对53帧Live Photo执行真实Agent全链：Qwen Goal IR → OWLv2 → 以frame 24为condition双向传播 →
@@ -358,6 +360,50 @@ partial track目录和`qnn-context-runs`均为0，源媒体未改变：
 ```text
 /mnt/ssd/lpa-aihub-probe/artifacts/android-dynamic-frame-timeline/cancel-probe/evidence.json
 SHA-256 e6f45e11d8b32877ad42808927d84567f331ad3f8e0c5ee3f33f3e58b885a6a7
+```
+
+### 4.4 QAIRT 2.45持久JNI context
+
+`-PpersistentQnn=true`现在增加第三层显式开关；未设置时仍使用上述子进程回退，默认`loop` APK既不
+编译也不打包JNI runner。JNI只接受已由Kotlin完成路径、大小和SHA校验的context；再用QAIRT 2.45
+System API反射图名、tensor名称、类型和维度，逐项核对contract，禁止仅按文件字节数猜ABI。运行时
+同时校验QNN core API `2.34.0`、System API `1.9.0`及backend build ID
+`2.45.0.260326154327`，2.50/2.51仍不可加载。
+
+context按“canonical path + content SHA”进入最多4项的确定性LRU，适配每帧
+encoder→current-attention→decoder→memory的访问序列；结束/取消时释放全部context及HTP burst power
+vote。V81 transport通过manifest声明设备公开的`libcdsprpc.so`，不复制vendor库。QNN abort signal已在
+真实graph dispatch中触发：context被逐出、partial输出清理，随后重新加载同一context仍产生五个逐字节
+一致的encoder输出。双线性mask resize还预计算横纵采样轴；单测证明与原逐像素floor实现float-bit/
+binary-bit一致。
+
+17帧固定图银行再次通过17/17 decoder raw mask逐字节复现；完成时LRU恰为4项，release后为0且burst
+vote关闭。完整5帧与53帧Live Photo也通过certificate、持久GLES、MediaCodec、AAC sample copy和
+repack。53帧总墙钟从子进程基线220.481秒降至73.464秒（3.001×），跟踪阶段从190.393秒降至
+45.821秒（4.155×）；`7/16`稳定attention的20次热执行为35–47ms、中位41ms。53帧输出保留53个
+实际PTS和104个AAC packet完整时间线/payload；封面preview SHA与子进程结果相同。结束后App
+PSS/RSS为52,872/151,320KiB，thermal status为0；该数字仍不含DSP总分配。
+
+现有长序列也由同一代码再次动态解码至EOS得到`N=181`，condition frame 45；181/181 mask、完整
+编码、181帧PTS/DTS/duration、281个AAC packet及payload、Live Photo repack全部保持。总墙钟由
+684.405秒降至185.957秒（3.680×），跟踪由647.859秒降至155.914秒（4.155×）；150次`7/16`
+执行中148次热执行为38–58ms、中位47ms。结束后App PSS/RSS为58,967/153,752KiB，thermal status
+仍为0，源媒体未修改且未发布。
+
+```text
+/mnt/ssd/lpa-aihub-probe/artifacts/android-dynamic-frame-timeline/
+  persistent-jni-context/encoder-evidence.json
+    SHA-256 7f9dec26f146afbc6bad4648f3b82d9e1488dc9a4fd915a224ad71d35408ddfe
+  persistent-jni-17-temporal/evidence.json
+    SHA-256 22176a45b32b7ff7a91666a6986f94594c24a88ff04b6dbb612748a04eca56ef
+  persistent-jni-5-agent-encoded/summary.json
+    SHA-256 632352453fbda5ea70c72543c65ee1b3e6de9bb4e701ca64d553bef3a6263488
+  persistent-jni-53-agent-encoded/summary.json
+    SHA-256 1285a6bace4391c91b22d11352a08466e022afff34853ddd55d2ad2440e07b50
+  persistent-jni-181-agent-encoded/summary.json
+    SHA-256 c6d2a875d438cb5726ddf78b068f8f05f6b507dfc544d4a59797cba9c80019bf
+  persistent-jni-cancel/evidence.json
+    SHA-256 2285c2244077bb3d4f804e7ea6d3a29d1bee5602550fa2ea14bf1ee52c1ee2b2
 ```
 
 当前完整视频artifact仅开放`color_tint`；`blur`仍只生成单帧review，必须完成持久双pass shader与视频
@@ -465,8 +511,8 @@ alpha变化或RGB误差大于1都会返回FAIL。
 本结果关闭“单帧renderer数值等价”“真实语言到真实关键帧mask”“动态N双向时序QNN”和“完整track
 certificate到临时区域工具”Gate；以下仍阻止mutation：
 
-1. App-UID QAIRT 2.45子进程已在实际解码`N=5`、`N=53`和现有长序列基准`N=181`完成全时间线传播；
-   但持久JNI context尚未完成，当前`N=181`墙钟约684秒，因此该路径仍由二次实验开关保护；
+1. App-UID QAIRT 2.45持久JNI已在实际解码`N=5`、`N=53`和现有长序列`N=181`完成全时间线传播，
+   子进程仍是回退；更多不同`N`/VFR/遮挡输入及重复soak仍需完成，因此路径继续由第三层实验开关保护；
 2. Android持久GLES→MediaCodec→AAC sample copy→Live Photo repack已在`N=5`、`N=53`和`N=181`
    素材通过，QNN执行中取消也已通过；仍需更多不同`N`/VFR素材、重复soak和DSP资源峰值验证；完整
    视频blur尚未实现；
@@ -478,7 +524,7 @@ certificate到临时区域工具”Gate；以下仍阻止mutation：
 一致，且不包含实验`qnn-net-run`：
 
 ```text
-SHA-256 cc8721d6c9b51779ddb9992d6369b6cbcc918bfdee1d8e6765de5221117c51d3
+SHA-256 6bdccc048dc982fe7ccdbace21741748b845c36d7f8b0301e2ada0283e75a8a5
 ```
 
 vivo百度输入法保持启用，ADBKeyboard为disabled-user，stay-awake为0，LPA进程已停止。

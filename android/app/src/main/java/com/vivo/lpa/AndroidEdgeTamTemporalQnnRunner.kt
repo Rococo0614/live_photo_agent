@@ -79,7 +79,7 @@ class AndroidEdgeTamTemporalQnnRunner(
                 AndroidOwlV2QnnLocator.writeFloats(coordinates, FloatArray(4))
                 AndroidOwlV2QnnLocator.writeFloats(labels, floatArrayOf(-1f, -1f))
             }
-            val runner = AndroidQnnContextProcessRunner(context, modelRoot)
+            val runner = AndroidQnnContextRunnerFactory.create(context, modelRoot)
             progress("EdgeTAM frame ${sequenceIndex + 1}: encoder")
             runner.execute(
                 encoderContract(),
@@ -371,29 +371,47 @@ class AndroidEdgeTamTemporalQnnRunner(
         ): FloatArray {
             require(input.size == sourceWidth * sourceHeight)
             val output = FloatArray(targetWidth * targetHeight)
-            val scaleX = sourceWidth.toDouble() / targetWidth
-            val scaleY = sourceHeight.toDouble() / targetHeight
+            val horizontal = bilinearAxis(sourceWidth, targetWidth)
+            val vertical = bilinearAxis(sourceHeight, targetHeight)
             for (y in 0 until targetHeight) {
-                val sourceY = (y + 0.5) * scaleY - 0.5
-                val rawTop = floor(sourceY).toInt()
-                val top = rawTop.coerceIn(0, sourceHeight - 1)
-                val bottom = (rawTop + 1).coerceIn(0, sourceHeight - 1)
-                val yWeight = (sourceY - floor(sourceY)).toFloat().coerceIn(0f, 1f)
+                val topOffset = vertical.lower[y] * sourceWidth
+                val bottomOffset = vertical.upper[y] * sourceWidth
+                val yWeight = vertical.weight[y]
                 for (x in 0 until targetWidth) {
-                    val sourceX = (x + 0.5) * scaleX - 0.5
-                    val rawLeft = floor(sourceX).toInt()
-                    val left = rawLeft.coerceIn(0, sourceWidth - 1)
-                    val right = (rawLeft + 1).coerceIn(0, sourceWidth - 1)
-                    val xWeight = (sourceX - floor(sourceX)).toFloat().coerceIn(0f, 1f)
-                    val topValue = input[top * sourceWidth + left] * (1f - xWeight) +
-                        input[top * sourceWidth + right] * xWeight
-                    val bottomValue = input[bottom * sourceWidth + left] * (1f - xWeight) +
-                        input[bottom * sourceWidth + right] * xWeight
+                    val left = horizontal.lower[x]
+                    val right = horizontal.upper[x]
+                    val xWeight = horizontal.weight[x]
+                    val topValue = input[topOffset + left] * (1f - xWeight) +
+                        input[topOffset + right] * xWeight
+                    val bottomValue = input[bottomOffset + left] * (1f - xWeight) +
+                        input[bottomOffset + right] * xWeight
                     output[y * targetWidth + x] =
                         topValue * (1f - yWeight) + bottomValue * yWeight
                 }
             }
             return output
+        }
+
+        private data class BilinearAxis(
+            val lower: IntArray,
+            val upper: IntArray,
+            val weight: FloatArray
+        )
+
+        private fun bilinearAxis(sourceSize: Int, targetSize: Int): BilinearAxis {
+            val scale = sourceSize.toDouble() / targetSize
+            val lower = IntArray(targetSize)
+            val upper = IntArray(targetSize)
+            val weight = FloatArray(targetSize)
+            for (index in 0 until targetSize) {
+                val source = (index + 0.5) * scale - 0.5
+                val floorValue = floor(source)
+                val rawLower = floorValue.toInt()
+                lower[index] = rawLower.coerceIn(0, sourceSize - 1)
+                upper[index] = (rawLower + 1).coerceIn(0, sourceSize - 1)
+                weight[index] = (source - floorValue).toFloat().coerceIn(0f, 1f)
+            }
+            return BilinearAxis(lower, upper, weight)
         }
 
         private fun sigmoid(value: Float): Float = if (value >= 0f) {

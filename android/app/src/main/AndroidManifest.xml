@@ -33,6 +33,13 @@
         android:supportsRtl="true"
         android:theme="@style/Theme.AppCompat.DayNight.NoActionBar">
 
+        <!-- Qualcomm's V81 HTP stub depends on this vendor-public transport. Declaring it only
+             makes the library visible to the app linker namespace; persistent QNN code is still
+             absent unless the explicit Gradle experiment is enabled. -->
+        <uses-native-library
+            android:name="libcdsprpc.so"
+            android:required="false" />
+
         <activity
             android:name=".AgentActivity"
             android:exported="true"

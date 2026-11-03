@@ -4,6 +4,8 @@ import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import kotlin.math.floor
+import kotlin.random.Random
 
 class AndroidEdgeTamQnnSegmenterTest {
     @Test
@@ -45,5 +47,56 @@ class AndroidEdgeTamQnnSegmenterTest {
         assertEquals(0, mask[0].toInt() and 0xff)
         assertEquals(255, mask[1].toInt() and 0xff)
         assertTrue(mask.count { (it.toInt() and 0xff) > 0 } == 2)
+    }
+
+    @Test
+    fun precomputedResizeAxesRemainBitExactToPerPixelReference() {
+        val random = Random(45)
+        val sourceSize = 17
+        val logits = FloatArray(sourceSize * sourceSize) { random.nextFloat() * 4f - 2f }
+        val width = 53
+        val height = 31
+
+        val actual = AndroidEdgeTamQnnSegmenter.resizeAndThreshold(
+            logits,
+            sourceSize,
+            width,
+            height
+        )
+
+        assertArrayEquals(referenceResizeAndThreshold(logits, sourceSize, width, height), actual)
+    }
+
+    private fun referenceResizeAndThreshold(
+        logits: FloatArray,
+        sourceSize: Int,
+        width: Int,
+        height: Int
+    ): ByteArray {
+        val output = ByteArray(width * height)
+        val scaleX = sourceSize.toDouble() / width
+        val scaleY = sourceSize.toDouble() / height
+        for (y in 0 until height) {
+            val sourceY = (y + 0.5) * scaleY - 0.5
+            val rawTop = floor(sourceY).toInt()
+            val top = rawTop.coerceIn(0, sourceSize - 1)
+            val bottom = (rawTop + 1).coerceIn(0, sourceSize - 1)
+            val yWeight = (sourceY - floor(sourceY)).toFloat().coerceIn(0f, 1f)
+            for (x in 0 until width) {
+                val sourceX = (x + 0.5) * scaleX - 0.5
+                val rawLeft = floor(sourceX).toInt()
+                val left = rawLeft.coerceIn(0, sourceSize - 1)
+                val right = (rawLeft + 1).coerceIn(0, sourceSize - 1)
+                val xWeight = (sourceX - floor(sourceX)).toFloat().coerceIn(0f, 1f)
+                val topValue = logits[top * sourceSize + left] * (1f - xWeight) +
+                    logits[top * sourceSize + right] * xWeight
+                val bottomValue = logits[bottom * sourceSize + left] * (1f - xWeight) +
+                    logits[bottom * sourceSize + right] * xWeight
+                if (topValue * (1f - yWeight) + bottomValue * yWeight > 0f) {
+                    output[y * width + x] = 0xff.toByte()
+                }
+            }
+        }
+        return output
     }
 }

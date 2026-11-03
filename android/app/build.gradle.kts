@@ -39,6 +39,15 @@ require(fullTimelineTrackedPreview in setOf("true", "false")) {
 require(fullTimelineTrackedPreview == "false" || localTrackedPreview == "true") {
     "fullTimelineTrackedPreview requires -PlocalTrackedPreview=true"
 }
+val persistentQnn = providers.gradleProperty("persistentQnn")
+    .orElse("false")
+    .get()
+require(persistentQnn in setOf("true", "false")) {
+    "persistentQnn must be true or false"
+}
+require(persistentQnn == "false" || localTrackedPreview == "true") {
+    "persistentQnn requires -PlocalTrackedPreview=true"
+}
 val qwenModelPack = providers.gradleProperty("qwenModelPack")
     .orElse("instruct")
     .get()
@@ -62,6 +71,10 @@ android {
     namespace = "com.vivo.lpa"
     compileSdk = 36
     buildToolsVersion = "36.1.0"
+    if (persistentQnn == "true") {
+        // Keep the experimental JNI build reproducible; normal builds do not require an NDK.
+        ndkVersion = "27.0.12077973"
+    }
 
     defaultConfig {
         applicationId = "com.vivo.lpa"
@@ -88,6 +101,9 @@ android {
         // Runs every decoded frame in both directions from the Live Photo cover timestamp.
         // It remains a separate opt-in until cancellation, recreation, memory and thermal gates pass.
         buildConfigField("boolean", "FULL_TIMELINE_TRACKED_PREVIEW", fullTimelineTrackedPreview)
+        // QAIRT 2.45 contexts are loaded in-process and retained in a bounded LRU only in this
+        // separately opted-in build. The validated App-UID qnn-net-run bridge remains the fallback.
+        buildConfigField("boolean", "PERSISTENT_QNN", persistentQnn)
         // Native-thinking experiments use a separate model directory and never overwrite the
         // production Instruct-2507 pack. `route` keeps constrained bind classification direct.
         buildConfigField("String", "QWEN_MODEL_PACK", "\"$qwenModelPack\"")
@@ -96,6 +112,13 @@ android {
         ndk {
             // 两台真机都是 arm64-v8a，只打这一个 ABI，包体减半
             abiFilters += "arm64-v8a"
+        }
+        if (persistentQnn == "true") {
+            externalNativeBuild {
+                cmake {
+                    cppFlags += listOf("-std=c++17", "-Wall", "-Wextra", "-Werror")
+                }
+            }
         }
     }
 
@@ -129,6 +152,15 @@ android {
         }
     }
 
+    if (persistentQnn == "true") {
+        externalNativeBuild {
+            cmake {
+                path = file("src/localTrackedPreview/cpp/CMakeLists.txt")
+                version = "3.22.1"
+            }
+        }
+    }
+
     packaging {
         jniLibs {
             // 两个 SDK 的 .so 若有同名，取第一个，避免打包冲突
@@ -152,6 +184,7 @@ tasks.configureEach {
         inputs.property("lpa.agentRuntime", agentRuntime)
         inputs.property("lpa.localTrackedPreview", localTrackedPreview)
         inputs.property("lpa.fullTimelineTrackedPreview", fullTimelineTrackedPreview)
+        inputs.property("lpa.persistentQnn", persistentQnn)
         inputs.property("lpa.qwenModelPack", qwenModelPack)
         inputs.property("lpa.qwenThinking", qwenThinking)
         inputs.property("lpa.qwenThinkingTokens", qwenThinkingTokens)

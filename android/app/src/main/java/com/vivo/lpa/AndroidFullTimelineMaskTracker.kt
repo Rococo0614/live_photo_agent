@@ -60,6 +60,10 @@ class AndroidFullTimelineMaskTracker(
         } catch (failure: Throwable) {
             root.deleteRecursively()
             throw failure
+        } finally {
+            // Full-timeline tracking is the persistence scope. Do not retain DSP contexts while a
+            // private preview is waiting for review.
+            AndroidQnnContextRunnerFactory.releasePersistentContexts()
         }
         val frames = try {
             tracked.frames.map { frame ->

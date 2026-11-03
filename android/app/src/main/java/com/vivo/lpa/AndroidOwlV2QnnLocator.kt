@@ -77,7 +77,7 @@ class AndroidOwlV2QnnLocator(
             writeFloats(pixelFile, pixelValues)
             val preprocessingMs = System.currentTimeMillis() - preprocessStarted
 
-            val runner = AndroidQnnContextProcessRunner(context, modelRoot)
+            val runner = AndroidQnnContextRunnerFactory.create(context, modelRoot)
             progress("正在运行 OWLv2 视觉编码（QAIRT 2.45）…")
             val visionContract = AndroidQnnContextContract(
                 componentId = "owlv2_vision",

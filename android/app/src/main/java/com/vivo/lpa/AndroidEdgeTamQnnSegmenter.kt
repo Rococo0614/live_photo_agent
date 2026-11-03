@@ -74,7 +74,7 @@ class AndroidEdgeTamQnnSegmenter(
             val preprocessingMs = System.currentTimeMillis() - preprocessingStarted
             check(!cancelled.get()) { "EdgeTAM segmentation cancelled after preprocessing" }
 
-            val runner = AndroidQnnContextProcessRunner(context, modelRoot)
+            val runner = AndroidQnnContextRunnerFactory.create(context, modelRoot)
             progress("正在运行 EdgeTAM 图像编码（QAIRT 2.45）…")
             val encoderContract = AndroidQnnContextContract(
                 componentId = "edgetam_encoder",
@@ -180,6 +180,7 @@ class AndroidEdgeTamQnnSegmenter(
             }
         } finally {
             work.deleteRecursively()
+            AndroidQnnContextRunnerFactory.releasePersistentContexts()
         }
     }
 
@@ -315,30 +316,48 @@ class AndroidEdgeTamQnnSegmenter(
         ): ByteArray {
             require(logits.size == sourceSize * sourceSize && width > 0 && height > 0)
             val output = ByteArray(width * height)
-            val scaleX = sourceSize.toDouble() / width
-            val scaleY = sourceSize.toDouble() / height
+            val horizontal = bilinearAxis(sourceSize, width)
+            val vertical = bilinearAxis(sourceSize, height)
             for (y in 0 until height) {
-                val sourceY = (y + 0.5) * scaleY - 0.5
-                val rawTop = floor(sourceY).toInt()
-                val top = rawTop.coerceIn(0, sourceSize - 1)
-                val bottom = (rawTop + 1).coerceIn(0, sourceSize - 1)
-                val yWeight = (sourceY - floor(sourceY)).toFloat().coerceIn(0f, 1f)
+                val topOffset = vertical.lower[y] * sourceSize
+                val bottomOffset = vertical.upper[y] * sourceSize
+                val yWeight = vertical.weight[y]
                 for (x in 0 until width) {
-                    val sourceX = (x + 0.5) * scaleX - 0.5
-                    val rawLeft = floor(sourceX).toInt()
-                    val left = rawLeft.coerceIn(0, sourceSize - 1)
-                    val right = (rawLeft + 1).coerceIn(0, sourceSize - 1)
-                    val xWeight = (sourceX - floor(sourceX)).toFloat().coerceIn(0f, 1f)
-                    val topValue = logits[top * sourceSize + left] * (1f - xWeight) +
-                        logits[top * sourceSize + right] * xWeight
-                    val bottomValue = logits[bottom * sourceSize + left] * (1f - xWeight) +
-                        logits[bottom * sourceSize + right] * xWeight
+                    val left = horizontal.lower[x]
+                    val right = horizontal.upper[x]
+                    val xWeight = horizontal.weight[x]
+                    val topValue = logits[topOffset + left] * (1f - xWeight) +
+                        logits[topOffset + right] * xWeight
+                    val bottomValue = logits[bottomOffset + left] * (1f - xWeight) +
+                        logits[bottomOffset + right] * xWeight
                     if (topValue * (1f - yWeight) + bottomValue * yWeight > 0f) {
                         output[y * width + x] = 0xff.toByte()
                     }
                 }
             }
             return output
+        }
+
+        private data class BilinearAxis(
+            val lower: IntArray,
+            val upper: IntArray,
+            val weight: FloatArray
+        )
+
+        private fun bilinearAxis(sourceSize: Int, targetSize: Int): BilinearAxis {
+            val scale = sourceSize.toDouble() / targetSize
+            val lower = IntArray(targetSize)
+            val upper = IntArray(targetSize)
+            val weight = FloatArray(targetSize)
+            for (index in 0 until targetSize) {
+                val source = (index + 0.5) * scale - 0.5
+                val floorValue = floor(source)
+                val rawLower = floorValue.toInt()
+                lower[index] = rawLower.coerceIn(0, sourceSize - 1)
+                upper[index] = (rawLower + 1).coerceIn(0, sourceSize - 1)
+                weight[index] = (source - floorValue).toFloat().coerceIn(0f, 1f)
+            }
+            return BilinearAxis(lower, upper, weight)
         }
 
         internal fun outsideExpandedBoxFraction(

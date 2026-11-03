@@ -57,18 +57,40 @@ class AndroidQnnContextRunResult internal constructor(
  *
  * The executable is the official 2.45 `qnn-net-run`, packaged as an extracted native binary in
  * experimental builds. Contexts remain external model-pack artifacts and are pinned by SHA-256.
- * This closes Android process ownership, cancellation and output-shape gates while a lower-level
- * persistent JNI wrapper is evaluated; it is not registered by the production runtime.
+ * This is the validated rollback implementation for tracked-preview builds that do not explicitly
+ * enable the persistent JNI runner. Neither implementation is registered by the production runtime.
  */
-class AndroidQnnContextProcessRunner(
-    private val context: Context,
-    private val modelRoot: File
-) {
+internal interface AndroidQnnContextRunner {
     fun execute(
         contract: AndroidQnnContextContract,
         inputFiles: Map<String, File>,
         cancelled: AtomicBoolean,
         timeoutSeconds: Long = 120
+    ): AndroidQnnContextRunResult
+}
+
+internal object AndroidQnnContextRunnerFactory {
+    fun create(context: Context, modelRoot: File): AndroidQnnContextRunner =
+        if (BuildConfig.PERSISTENT_QNN) {
+            AndroidQnnPersistentContextRunner(context, modelRoot)
+        } else {
+            AndroidQnnContextProcessRunner(context, modelRoot)
+        }
+
+    fun releasePersistentContexts() {
+        if (BuildConfig.PERSISTENT_QNN) AndroidQnnPersistentContextRunner.releaseAll()
+    }
+}
+
+internal class AndroidQnnContextProcessRunner(
+    private val context: Context,
+    private val modelRoot: File
+) : AndroidQnnContextRunner {
+    override fun execute(
+        contract: AndroidQnnContextContract,
+        inputFiles: Map<String, File>,
+        cancelled: AtomicBoolean,
+        timeoutSeconds: Long
     ): AndroidQnnContextRunResult {
         require(BuildConfig.LOCAL_TRACKED_PREVIEW) {
             "QNN context process runner is available only in local tracked-preview builds"
@@ -84,9 +106,9 @@ class AndroidQnnContextProcessRunner(
         require(backend.isFile && extension.isFile && system.isFile) {
             "QAIRT HTP runtime is incomplete"
         }
-        require(sha256Cached(backend) == HTP_BACKEND_SHA256 &&
-            sha256Cached(extension) == HTP_EXTENSION_SHA256 &&
-            sha256Cached(system) == QNN_SYSTEM_SHA256
+        require(sha256CachedForRunner(backend) == HTP_BACKEND_SHA256 &&
+            sha256CachedForRunner(extension) == HTP_EXTENSION_SHA256 &&
+            sha256CachedForRunner(system) == QNN_SYSTEM_SHA256
         ) { "packaged QAIRT runtime hash mismatch" }
 
         val canonicalModelRoot = modelRoot.canonicalFile
@@ -94,7 +116,9 @@ class AndroidQnnContextProcessRunner(
         require(contextFile.isFile && contextFile.toPath().startsWith(canonicalModelRoot.toPath())) {
             "QNN context must be inside the tracked-preview model pack"
         }
-        require(contextFile.length() > 0 && sha256Cached(contextFile) == contract.contextSha256) {
+        require(contextFile.length() > 0 &&
+            sha256CachedForRunner(contextFile) == contract.contextSha256
+        ) {
             "QNN context hash mismatch for ${contract.componentId}"
         }
         require(inputFiles.keys == contract.inputs.map { it.name }.toSet()) {
@@ -235,7 +259,7 @@ class AndroidQnnContextProcessRunner(
         """.trimIndent()
 
         @Synchronized
-        private fun sha256Cached(file: File): String {
+        internal fun sha256CachedForRunner(file: File): String {
             val key = "${file.canonicalPath}:${file.length()}:${file.lastModified()}"
             return verifiedHashes.getOrPut(key) { sha256(file) }
         }

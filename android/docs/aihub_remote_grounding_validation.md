@@ -449,11 +449,12 @@ object score之外增加确定性时序覆盖检查：raw mask面积若突然低
 | vision | 639.05ms | 616.66ms | 331,764 / 326,569KiB |
 | text/head | 6.96ms | 平均3.07ms | 144,880 / 139,577KiB |
 
-该结果关闭“可获得且能在vivo正确执行的2.45 locator张量backend”Gate。2026-11-03又增加默认关闭的
-Android App-UID context bridge：实验APK内的官方2.45 `qnn-net-run`子进程加载同一context，支持超时与
-取消；真实cover的vision/text已接入host后处理。它仍不是持久JNI context。两个context合计
-454,336,512B（433.29MiB），包体Gate明确不通过。RSS也不包含DSP allocations，不能冒充总内存；
-短时运行thermal status为0，不替代多分钟soak。
+该结果关闭“可获得且能在vivo正确执行的2.45 locator张量backend”Gate。2026-11-03先增加默认关闭的
+Android App-UID `qnn-net-run`子进程bridge，随后又在第三层`persistentQnn`开关下接入QNN core API
+2.34/System API 1.9的持久JNI runner。JNI从context反射图和tensor contract，以内容SHA为key维护最多
+4项LRU，支持QNN graph abort、取消后重载、HTP burst vote及结束释放；子进程继续作为回退。真实cover的
+vision/text已接入host后处理。两个locator context合计454,336,512B（433.29MiB），包体Gate明确不通过。
+RSS也不包含DSP allocations，不能冒充总内存；短时运行thermal status为0，不替代多分钟soak。
 
 Android Kotlin输入侧已单独闭环。`OwlV2ClipTokenizer`加载官方vocab/merges，宽泛和澄清query的16个
 token ID与Hugging Face逐个一致；`OwlV2ImagePreprocessor`复现0.5右/下补边、Gaussian antialias、
@@ -518,7 +519,7 @@ EdgeTAM grounding探针首选float模型验证语义，随后才比较W8A8；这
 ## 7. 当前门禁
 
 - OWLv2公开、Apache-2.0；QAIRT 2.45 contexts已在S26和vivo通过数值对照，Android tokenizer/图像
-  输入也已差分通过，App-UID子进程context已完成宽泛`NeedUser`和精确唯一候选；持久JNI尚未完成。
+  输入也已差分通过；App-UID持久JNI context已完成精确唯一候选，子进程回退继续覆盖宽泛`NeedUser`。
 - EdgeTAM float QAIRT 2.45 QNN/TFLite单帧mask和memory encoder通过；vivo固定计数attention图银行
   已覆盖1/1到7/16，合成/自然遮挡、快速镜头、出画重入、取消恢复与短时soak通过；
   QAIRT 2.50/2.51明确禁用。
@@ -527,21 +528,22 @@ EdgeTAM grounding探针首选float模型验证语义，随后才比较W8A8；这
   manifest均已下载；bounded图只保留失败回归样本。
 - 真实语言→OWLv2→动态PTS时间线→EdgeTAM双向传播→完整certificate→GLES区域工具已在5帧和53帧
   Live Photo上进入`WAITING_USER`；`N=53`和现有长序列基准`N=181`均来自MediaCodec EOS而非固定
-  计数，并已完成完整调色/编码/repack。持久context、总DSP峰值内存及locator 433MiB与固定图银行
-  包体方案仍未通过，任何Live Photo写回或发布节点仍不可ready。
+  计数，并已完成完整调色/编码/repack。持久JNI在`N=53`把总墙钟由220.481秒降至73.464秒、跟踪由
+  190.393秒降至45.821秒；`N=181`也由684.405秒降至185.957秒。总DSP峰值内存及locator 433MiB
+  与固定图银行包体方案仍未通过，任何Live Photo写回或发布节点仍不可ready。
 - 下游Android GLES renderer及真实App-UID逐帧`MASK_TRACK` → content-bound certificate → temporary
   artifact → confirm/undo shadow链已通过；预览优先使用Live Photo封面对应condition frame。
 - 17个既有QNN状态点decoder raw mask逐字节复现；动态Android解码连续3帧最低oracle IoU 0.9523，
   中间anchor双向5帧coverage通过。
-- PyTorch全帧oracle到私有Live Photo repack已通过；Android QNN/GLES全帧替换仍未通过。
+- PyTorch全帧oracle与Android QNN/GLES/MediaCodec私有Live Photo repack均已通过；生产写回仍未授权。
 
 ## 8. 后续Gate
 
-1. 把已通过的App-UID子进程context runner替换为持久Android QNN JNI/context生命周期；应用内
-   CLIP BPE、960图像输入及语言→box路径现已闭合。
+1. 持久Android QNN JNI/context生命周期已通过17帧固定图银行、`N=5`、`N=53`、graph abort与取消后
+   重载；继续消除JNI与Kotlin之间的大tensor文件I/O，并保留子进程回退。
 2. 在更多不同`N`、VFR和遮挡素材重复动态全序列，并增加进程重启soak和总host/DSP峰值内存观测；
-   QNN执行中取消已通过，但`N=181`单轮约684秒只关闭功能Gate，不关闭性能Gate。
-3. 增加进程终止、Activity重建和Android bridge级context重载；底层TERM取消/重载已通过。
+   持久JNI `N=181`已通过，子进程约684秒只保留为旧基线。
+3. 增加进程终止、Activity重建和Android bridge级context重载；底层QNN abort/重载已通过。
 4. 把10%时序覆盖阈值扩展到更多尺度变化fixture；不充分时返回`NeedObservation`，不能静默接受。
 5. 联合评审OWLv2 433MiB与EdgeTAM 234MiB context包体；当前单独DLC compose的weight sharing不可用。
 6. 按实际PTS的持久GLES调色、MediaCodec编码、AAC sample保留与Live Photo repack已在`N=5`、

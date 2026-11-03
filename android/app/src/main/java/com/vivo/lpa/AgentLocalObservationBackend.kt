@@ -159,6 +159,7 @@ class AndroidQnnLocalObservationBackend(
             )
         } finally {
             if (!bitmap.isRecycled) bitmap.recycle()
+            AndroidQnnContextRunnerFactory.releasePersistentContexts()
         }
     }
 
