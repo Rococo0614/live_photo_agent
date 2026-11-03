@@ -544,8 +544,9 @@ EdgeTAM grounding探针首选float模型验证语义，随后才比较W8A8；这
 3. 增加进程终止、Activity重建和Android bridge级context重载；底层TERM取消/重载已通过。
 4. 把10%时序覆盖阈值扩展到更多尺度变化fixture；不充分时返回`NeedObservation`，不能静默接受。
 5. 联合评审OWLv2 433MiB与EdgeTAM 234MiB context包体；当前单独DLC compose的weight sharing不可用。
-6. 继续完成按实际PTS的逐帧GLES渲染、编码、音频保留与Live Photo repack，并通过触屏/Activity
-   确认-undo生命周期后才考虑写回；2.50/2.51继续禁用。
+6. 按实际PTS的持久GLES调色、MediaCodec编码、AAC sample保留与Live Photo repack已在5帧素材通过；
+   继续完成53/181帧长序列、完整视频blur及触屏/Activity确认-undo生命周期后才考虑写回；2.50/2.51
+   继续禁用。
 
 本轮汇总证据：
 

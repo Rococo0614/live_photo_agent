@@ -185,9 +185,9 @@ SHA-256 438a3d13bf0de46c9730fee89199ac0a104eefdd1cdade9fcbbd917120fc3dd4
 debug/release APK都不包含`libqnn_net_run.so`；只有显式实验构建包含：
 
 ```text
-default debug APK       fd1e268c738b8c0813501281f7613c6c0f212b0746e9ae1962b55ea183ad7eaf
-default release APK     ef894037727686db2a758a6cf4769fe3209a1b0490b20295b4a3474b9b3b227e
-full-timeline debug APK 07b13282cbf3390b22d7a8864d43cc2379032ff97bfc15df8535c46489dde58c
+default debug APK       af40420f9a2a1961836ae9f61e53f803605a72d35642a4c472d81f46531ec4bb
+default release APK     633c98d73cc0085959250bed5efebe51bedc0977dbd64d2b9d300454808a2b2a
+full-timeline debug APK a44793ff3ab14165d7719fe7f371dc6e7a7545f0d8966c4715ce6a17bddffb19
 ```
 
 所有自定义Gradle属性已注册为task inputs；同一worktree按“clean默认→实验→默认”构建，前后两个默认
@@ -286,6 +286,45 @@ certificate现在把每帧mask内容SHA继续绑定到mask-track node和certific
   full-5-agent-final/evidence.json
     SHA-256 a739a22704bb39638ecef0ad36f2f9e8d7b2d2d12e4c4d6a40aafdbcf725f908
 ```
+
+### 4.3 持久GLES、MediaCodec与临时Live Photo
+
+调色时间线不再为每帧创建EGL环境。`AndroidPersistentTintRenderer`在整条时间线上复用一个context、一个
+program和固定texture/FBO；5个动态帧对CPU oracle均为mask外0变化、最大通道误差0，总渲染2.278秒：
+
+```text
+/mnt/ssd/lpa-aihub-probe/artifacts/android-dynamic-frame-timeline/persistent-gles/
+  evidence.json
+    SHA-256 710ae0da70f8824a8024b87fe090aa6dd9d2a9566fcc7f20e1e363129ad3718b
+```
+
+同一shader随后直接绘制到`MediaCodec` AVC encoder surface；encoder surface使用独立纵向纹理坐标，
+避免pbuffer readback与window surface原点差异导致的垂直翻转。5/5输出PTS与输入逐项相同，anchor帧
+编码后PSNR 37.24dB，垂直翻转对照只有11.48dB。带AAC样本的9个audio sample payload与PTS/flags/
+size时间线均逐项保持；首个负PTS priming sample没有被夹到0。LivePhotoSDK repack/decode后timestamp仍为
+66,000µs：
+
+```text
+/mnt/ssd/lpa-aihub-probe/artifacts/android-dynamic-frame-timeline/persistent-encode-audio/
+  evidence.json
+    SHA-256 9c48b48c7e142681320dfc6776029e1ebd447f65a50a9966b2da7f3c4b340c2a
+  tinted-livephoto.jpg
+    SHA-256 db4dbf7afb5d46e06a64d0c06555979141fdbee181b430b4b6da72212ee5222f
+```
+
+编码器已挂入完整Agent临时artifact：真实语言请求完成5帧双向QNN后自动生成私有动态Live Photo，再进入
+`WAITING_USER`。取消/撤销会删除artifact store拥有的完整中间目录；确认仍只接受预览，不产生发布授权：
+
+```text
+/mnt/ssd/lpa-aihub-probe/artifacts/android-dynamic-frame-timeline/full-5-agent-encoded/
+  evidence.json
+    SHA-256 e56942966da86643909bd5e9b6817910a373399c6cc6ed074c65c256dbd90d60
+  preview-livephoto.jpg
+    SHA-256 eb39cdb7cd704f901008a91416ac552f9e4f419005a05f7a309a0d27ed2bb1ba
+```
+
+当前完整视频artifact仅开放`color_tint`；`blur`仍只生成单帧review，必须完成持久双pass shader与视频
+差分后才能进入完整时间线编码。
 
 ## 5. 逐帧跟踪调色显色证据
 
@@ -391,8 +430,8 @@ certificate到临时区域工具”Gate；以下仍阻止mutation：
 
 1. App-UID QAIRT 2.45子进程已在5帧和53帧素材完成全时间线传播，但当前181帧fixture尚未由最终
    Android动态实现完整重跑；持久JNI context也未完成，因此该路径仍由二次实验开关保护；
-2. PyTorch全帧调色与私有Live Photo repack已通过；Android端目前只对certificate选中的一帧生成
-   GLES review bitmap，仍需按实际PTS逐帧渲染、编码并保留音频后再repack；
+2. Android持久GLES→MediaCodec→AAC sample copy→Live Photo repack已在5帧素材通过；仍需在53帧和
+   当前181帧fixture完成同一编码链的长序列、取消和资源峰值验证；完整视频blur尚未实现；
 3. UI已实现但尚未做触屏自动化、Activity/进程重建、会话恢复与旋转Gate；
 4. 多分钟完整pipeline soak、总host/GPU/DSP内存与温升尚未通过；
 5. 固定context银行包体仍未解决；任何确认仍只接受临时预览，不能写回。
@@ -401,7 +440,7 @@ certificate到临时区域工具”Gate；以下仍阻止mutation：
 一致，且不包含实验`qnn-net-run`：
 
 ```text
-SHA-256 fd1e268c738b8c0813501281f7613c6c0f212b0746e9ae1962b55ea183ad7eaf
+SHA-256 af40420f9a2a1961836ae9f61e53f803605a72d35642a4c472d81f46531ec4bb
 ```
 
 vivo百度输入法保持启用，ADBKeyboard为disabled-user，stay-awake为0，LPA进程已停止。

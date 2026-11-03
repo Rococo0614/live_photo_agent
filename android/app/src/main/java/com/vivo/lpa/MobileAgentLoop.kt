@@ -553,6 +553,7 @@ class MobileAgentLoop(
             AndroidLocalPreviewShadowExecutor(
                 materialization = observation.materialization,
                 sourceFrames = observation.sourceFrames,
+                timelinePreviewRenderer = observation.timelinePreviewRenderer,
                 previewStore = store,
                 currentStateFingerprint = { AgentStateFingerprint.of(state) },
                 onPreviewReady = listener::onLocalPreview

@@ -1003,7 +1003,8 @@ preparedAssets = prepared
         localPreviewPanel.removeAllViews()
         localPreviewPanel.visibility = View.VISIBLE
         val status = TextView(this).apply {
-            text = "局部${if (artifact.effectKind == "blur") "模糊" else "调色"} · " +
+            text = (if (artifact.packedLivePhotoFile != null) "完整动态" else "局部") +
+                "${if (artifact.effectKind == "blur") "模糊" else "调色"} · " +
                 "仅临时预览，尚未写回"
             textSize = 13f
             setTypeface(typeface, android.graphics.Typeface.BOLD)
@@ -1093,6 +1094,8 @@ preparedAssets = prepared
             .put("effect_kind", artifact.effectKind)
             .put("renderer_backend", artifact.rendererBackendId)
             .put("frame_index", artifact.frameIndex)
+            .put("timeline_frame_count", artifact.timelineFrameCount ?: JSONObject.NULL)
+            .put("packed_livephoto_private", artifact.packedLivePhotoFile != null)
             .put("review_state", artifact.lifecycle.state.name)
             .put("writeback", false))
     }

@@ -26,6 +26,8 @@ data class AndroidTemporaryLocalPreviewArtifact(
     val effectKind: String,
     val rendererBackendId: String,
     val certificateFingerprint: String,
+    val packedLivePhotoFile: java.io.File? = null,
+    val timelineFrameCount: Int? = null,
     val lifecycle: LocalPreviewLifecycle
 )
 
@@ -36,7 +38,8 @@ class AndroidTemporaryLocalPreviewStore(
     private data class Holder(
         val artifact: AndroidTemporaryLocalPreviewArtifact,
         var lifecycle: LocalPreviewLifecycle,
-        val ownsSourceBitmap: Boolean
+        val ownsSourceBitmap: Boolean,
+        val timelineCleanupRoot: java.io.File?
     )
 
     private val sequence = AtomicLong()
@@ -52,7 +55,8 @@ class AndroidTemporaryLocalPreviewStore(
         effectKind: String,
         rendererBackendId: String,
         certificateFingerprint: String,
-        ownsSourceBitmap: Boolean = false
+        ownsSourceBitmap: Boolean = false,
+        encodedTimeline: AndroidEncodedTimelinePreview? = null
     ): AndroidLocalPreviewInteraction {
         require(sourceAssetId.isNotBlank())
         require(frameIndex >= 0 && timestampMs >= 0)
@@ -74,9 +78,16 @@ class AndroidTemporaryLocalPreviewStore(
             effectKind,
             rendererBackendId,
             certificateFingerprint,
+            encodedTimeline?.packedLivePhoto,
+            encodedTimeline?.frameCount,
             lifecycle
         )
-        holders[artifactId] = Holder(artifact, lifecycle, ownsSourceBitmap)
+        holders[artifactId] = Holder(
+            artifact,
+            lifecycle,
+            ownsSourceBitmap,
+            encodedTimeline?.cleanupRoot
+        )
         return AndroidLocalPreviewInteraction(this, artifactId)
     }
 
@@ -117,6 +128,7 @@ class AndroidTemporaryLocalPreviewStore(
         if (holder.ownsSourceBitmap && !holder.artifact.sourceBitmap.isRecycled) {
             holder.artifact.sourceBitmap.recycle()
         }
+        holder.timelineCleanupRoot?.deleteRecursively()
     }
 
     @Synchronized
@@ -151,6 +163,7 @@ class AndroidLocalPreviewInteraction internal constructor(
 class AndroidLocalPreviewShadowExecutor(
     private val materialization: AgentShadowObservationMaterialization,
     private val sourceFrames: AndroidShadowSourceFrameProvider,
+    private val timelinePreviewRenderer: AndroidTimelinePreviewRenderer? = null,
     private val previewStore: AndroidTemporaryLocalPreviewStore,
     private val currentStateFingerprint: () -> String,
     private val onPreviewReady: (AndroidLocalPreviewInteraction) -> Unit = {}
@@ -235,6 +248,15 @@ class AndroidLocalPreviewShadowExecutor(
         } finally {
             maskBitmap.recycle()
         }
+        val encodedTimeline = try {
+            timelinePreviewRenderer?.render(materialization, change)
+        } catch (failure: Throwable) {
+            rendered.bitmap.recycle()
+            if (sourceFrame.ownedByPreview && !sourceFrame.bitmap.isRecycled) {
+                sourceFrame.bitmap.recycle()
+            }
+            throw failure
+        }
         val interaction = try {
             previewStore.create(
                 sourceAssetId = sourceAssetId,
@@ -245,10 +267,15 @@ class AndroidLocalPreviewShadowExecutor(
                 effectKind = change.effectKind,
                 rendererBackendId = rendered.backendId,
                 certificateFingerprint = certificate.evidenceFingerprint,
-                ownsSourceBitmap = sourceFrame.ownedByPreview
+                ownsSourceBitmap = sourceFrame.ownedByPreview,
+                encodedTimeline = encodedTimeline
             )
         } catch (failure: Exception) {
             rendered.bitmap.recycle()
+            encodedTimeline?.cleanupRoot?.deleteRecursively()
+            if (sourceFrame.ownedByPreview && !sourceFrame.bitmap.isRecycled) {
+                sourceFrame.bitmap.recycle()
+            }
             throw failure
         }
         try {

@@ -14,8 +14,23 @@ sealed interface AgentLocalObservationResolution {
     ) : AgentLocalObservationResolution
     data class Ready(
         val materialization: AgentShadowObservationMaterialization,
-        val sourceFrames: AndroidShadowSourceFrameProvider
+        val sourceFrames: AndroidShadowSourceFrameProvider,
+        val timelinePreviewRenderer: AndroidTimelinePreviewRenderer? = null
     ) : AgentLocalObservationResolution
+}
+
+data class AndroidEncodedTimelinePreview(
+    val packedLivePhoto: java.io.File,
+    val cleanupRoot: java.io.File,
+    val frameCount: Int,
+    val photoTimestampUs: Long
+)
+
+fun interface AndroidTimelinePreviewRenderer {
+    fun render(
+        materialization: AgentShadowObservationMaterialization,
+        change: LocalDeterministicChange
+    ): AndroidEncodedTimelinePreview?
 }
 
 /** Model/backend adapter; semantic choices remain in Goal IR and physical facts remain host-owned. */

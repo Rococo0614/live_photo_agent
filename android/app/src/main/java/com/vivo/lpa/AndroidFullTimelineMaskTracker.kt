@@ -112,7 +112,15 @@ class AndroidFullTimelineMaskTracker(
                         ownedByPreview = true
                     )
                 }
-            }
+            },
+            AndroidFullTimelinePreviewRenderer(
+                context,
+                sourceAsset,
+                timeline,
+                photoTimestampUs,
+                cancelled,
+                progress
+            )
         )
     }
 
