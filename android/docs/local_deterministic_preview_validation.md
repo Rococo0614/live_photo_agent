@@ -323,6 +323,18 @@ size时间线均逐项保持；首个负PTS priming sample没有被夹到0。Liv
     SHA-256 eb39cdb7cd704f901008a91416ac552f9e4f419005a05f7a309a0d27ed2bb1ba
 ```
 
+最终又在53帧/24fps/带音轨素材上完成同一Agent整链：53/53 mask observation、condition frame 24
+（1,000ms）预览、持久GLES逐帧调色、PTS精确保留、AAC逐sample保持、Live Photo repack和私有artifact
+清理全部通过；源文件未修改，未发布：
+
+```text
+/mnt/ssd/lpa-aihub-probe/artifacts/android-dynamic-frame-timeline/full-53-agent-encoded/
+  evidence.json
+    SHA-256 9dd0eaa023760ba22c311cc47ea11b1e3fd1fd83892017a6720b4d174335ce4d
+  preview-livephoto.jpg
+    SHA-256 d208e207de3519ad0656b33a8a60d0859edf6b116bdbcdb36e6273588b3a3cbc
+```
+
 当前完整视频artifact仅开放`color_tint`；`blur`仍只生成单帧review，必须完成持久双pass shader与视频
 差分后才能进入完整时间线编码。
 
@@ -430,8 +442,8 @@ certificate到临时区域工具”Gate；以下仍阻止mutation：
 
 1. App-UID QAIRT 2.45子进程已在5帧和53帧素材完成全时间线传播，但当前181帧fixture尚未由最终
    Android动态实现完整重跑；持久JNI context也未完成，因此该路径仍由二次实验开关保护；
-2. Android持久GLES→MediaCodec→AAC sample copy→Live Photo repack已在5帧素材通过；仍需在53帧和
-   当前181帧fixture完成同一编码链的长序列、取消和资源峰值验证；完整视频blur尚未实现；
+2. Android持久GLES→MediaCodec→AAC sample copy→Live Photo repack已在5帧和53帧素材通过；仍需在
+   当前181帧fixture完成同一编码链、取消和资源峰值验证；完整视频blur尚未实现；
 3. UI已实现但尚未做触屏自动化、Activity/进程重建、会话恢复与旋转Gate；
 4. 多分钟完整pipeline soak、总host/GPU/DSP内存与温升尚未通过；
 5. 固定context银行包体仍未解决；任何确认仍只接受临时预览，不能写回。
