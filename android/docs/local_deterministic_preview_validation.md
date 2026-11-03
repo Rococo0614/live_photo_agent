@@ -440,10 +440,12 @@ alpha变化或RGB误差大于1都会返回FAIL。
 本结果关闭“单帧renderer数值等价”“真实语言到真实关键帧mask”“动态N双向时序QNN”和“完整track
 certificate到临时区域工具”Gate；以下仍阻止mutation：
 
-1. App-UID QAIRT 2.45子进程已在5帧和53帧素材完成全时间线传播，但当前181帧fixture尚未由最终
-   Android动态实现完整重跑；持久JNI context也未完成，因此该路径仍由二次实验开关保护；
-2. Android持久GLES→MediaCodec→AAC sample copy→Live Photo repack已在5帧和53帧素材通过；仍需在
-   当前181帧fixture完成同一编码链、取消和资源峰值验证；完整视频blur尚未实现；
+1. App-UID QAIRT 2.45子进程已在实际解码`N=5`和`N=53`的素材完成全时间线传播，但现有长序列
+   基准素材（本次解码`N=181`）尚未由最终Android动态实现完整重跑；持久JNI context也未完成，因此
+   该路径仍由二次实验开关保护；
+2. Android持久GLES→MediaCodec→AAC sample copy→Live Photo repack已在`N=5`和`N=53`素材通过；
+   仍需在现有长序列基准（该文件本次`N=181`）以及更多不同`N`/VFR素材完成同一编码链、取消和资源
+   峰值验证；完整视频blur尚未实现；
 3. UI已实现但尚未做触屏自动化、Activity/进程重建、会话恢复与旋转Gate；
 4. 多分钟完整pipeline soak、总host/GPU/DSP内存与温升尚未通过；
 5. 固定context银行包体仍未解决；任何确认仍只接受临时预览，不能写回。

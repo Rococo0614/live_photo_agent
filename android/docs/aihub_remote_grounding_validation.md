@@ -526,7 +526,8 @@ EdgeTAM grounding探针首选float模型验证语义，随后才比较W8A8；这
 - 2.45 encoder、memory encoder、固定计数attention图银行、decoder、object-absent pointer常量与
   manifest均已下载；bounded图只保留失败回归样本。
 - 真实语言→OWLv2→动态PTS时间线→EdgeTAM双向传播→完整certificate→GLES区域工具已在5帧和53帧
-  Live Photo上进入`WAITING_USER`；53/53帧来自MediaCodec EOS而非固定计数。181帧最终实现重跑、
+  Live Photo上进入`WAITING_USER`；53/53帧来自MediaCodec EOS而非固定计数。现有长序列基准素材
+  （该文件本次解码`N=181`）的最终实现重跑、
   总host/DSP峰值内存及locator 433MiB与固定图银行包体方案仍未通过，任何Live Photo写回或发布节点
   仍不可ready。
 - 下游Android GLES renderer及真实App-UID逐帧`MASK_TRACK` → content-bound certificate → temporary
@@ -539,14 +540,14 @@ EdgeTAM grounding探针首选float模型验证语义，随后才比较W8A8；这
 
 1. 把已通过的App-UID子进程context runner替换为持久Android QNN JNI/context生命周期；应用内
    CLIP BPE、960图像输入及语言→box路径现已闭合。
-2. 在当前181帧fixture及更多VFR/遮挡素材重跑动态全序列，并增加多分钟重复soak和总host/DSP峰值内存
-   观测；目前53帧单轮约217秒只关闭功能Gate，不关闭性能Gate。
+2. 在现有长序列基准（本次`N=181`）以及更多不同`N`、VFR和遮挡素材重跑动态全序列，并增加多分钟
+   重复soak和总host/DSP峰值内存观测；目前`N=53`单轮约217秒只关闭功能Gate，不关闭性能Gate。
 3. 增加进程终止、Activity重建和Android bridge级context重载；底层TERM取消/重载已通过。
 4. 把10%时序覆盖阈值扩展到更多尺度变化fixture；不充分时返回`NeedObservation`，不能静默接受。
 5. 联合评审OWLv2 433MiB与EdgeTAM 234MiB context包体；当前单独DLC compose的weight sharing不可用。
-6. 按实际PTS的持久GLES调色、MediaCodec编码、AAC sample保留与Live Photo repack已在5帧和53帧
-   素材通过；继续完成181帧长序列、完整视频blur及触屏/Activity确认-undo生命周期后才考虑写回；
-   2.50/2.51继续禁用。
+6. 按实际PTS的持久GLES调色、MediaCodec编码、AAC sample保留与Live Photo repack已在`N=5`和
+   `N=53`素材通过；继续覆盖现有长序列基准和更多不同`N`/VFR输入、完整视频blur及触屏/Activity
+   确认-undo生命周期后才考虑写回；2.50/2.51继续禁用。
 
 本轮汇总证据：
 
