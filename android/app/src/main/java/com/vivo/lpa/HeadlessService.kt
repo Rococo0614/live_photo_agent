@@ -1332,6 +1332,101 @@ class HeadlessService : Service() {
                 stopSelf()
                 return
             }
+            if (operation == "agent_full_timeline_cancel_probe") {
+                require(BuildConfig.DEBUG && BuildConfig.LOCAL_TRACKED_PREVIEW) {
+                    "full timeline cancel probe requires the opt-in debug build"
+                }
+                require(inputs.size == 1 && !agentQuery.isNullOrBlank()) {
+                    "full timeline cancel probe requires one Live Photo and agent_query"
+                }
+                val asset = prepareGoalProbeAsset(
+                    inputs.single(),
+                    outputDir,
+                    "full-timeline-cancel-decoded"
+                )
+                val cancelledSignal = AtomicBoolean(false)
+                val cancellationArmed = AtomicBoolean(false)
+                var cancellationThread: Thread? = null
+                var terminalStatus: AgentRunStatus? = null
+                var terminalMessage = ""
+                var interactionProduced = false
+                var errorMessage: String? = null
+                val startedAt = android.os.SystemClock.elapsedRealtime()
+                MobileAgentLoop(
+                    this,
+                    AndroidQnnLocalObservationBackend(
+                        this,
+                        AndroidFullTimelineMaskTracker(this)
+                    )
+                ).run(
+                    query = agentQuery,
+                    uris = emptyList(),
+                    layoutContext = null,
+                    cancelled = cancelledSignal,
+                    listener = object : MobileAgentRunner.Listener {
+                        override fun onProgress(message: String) {
+                            log(message)
+                            if (message.contains("EdgeTAM frame") && message.contains("encoder") &&
+                                cancellationArmed.compareAndSet(false, true)
+                            ) {
+                                cancellationThread = Thread({
+                                    Thread.sleep(100)
+                                    cancelledSignal.set(true)
+                                }, "qnn-cancel-probe").apply { start() }
+                            }
+                        }
+                        override fun onLocalPreview(value: AndroidLocalPreviewInteraction) {
+                            interactionProduced = true
+                            releaseLocalPreviewForProbe(value)
+                        }
+                        override fun onRuntimeTerminal(state: AgentRuntimeState, message: String) {
+                            terminalStatus = state.status
+                            terminalMessage = message
+                        }
+                        override fun onPlan(plan: MobilePlan) = Unit
+                        override fun onResult(result: MobileToolResult) = Unit
+                        override fun onFinished(uri: Uri?, message: String) = Unit
+                        override fun onError(message: String) {
+                            errorMessage = message
+                        }
+                    },
+                    preparedAssets = listOf(asset),
+                    dagShadow = true
+                )
+                cancellationThread?.join(5_000)
+                val trackRoots = File(cacheDir, "edgetam-full-tracks")
+                    .listFiles().orEmpty().filter(File::exists)
+                val qnnRoots = File(cacheDir, "qnn-context-runs")
+                    .listFiles().orEmpty().filter(File::exists)
+                val passed = cancellationArmed.get() && cancelledSignal.get() &&
+                    terminalStatus == AgentRunStatus.CANCELLED && !interactionProduced &&
+                    errorMessage == null && trackRoots.isEmpty() && qnnRoots.isEmpty()
+                val evidence = JSONObject()
+                    .put("schema_version", 1)
+                    .put("status", if (passed) {
+                        "PASS_AGENT_FULL_TIMELINE_INFLIGHT_CANCEL"
+                    } else {
+                        "FAIL_AGENT_FULL_TIMELINE_INFLIGHT_CANCEL"
+                    })
+                    .put("cancellation_armed", cancellationArmed.get())
+                    .put("cancelled_signal", cancelledSignal.get())
+                    .put("terminal_status", terminalStatus?.name ?: JSONObject.NULL)
+                    .put("terminal_message", terminalMessage)
+                    .put("interaction_produced", interactionProduced)
+                    .put("error_message", errorMessage ?: JSONObject.NULL)
+                    .put("remaining_track_roots", trackRoots.size)
+                    .put("remaining_qnn_roots", qnnRoots.size)
+                    .put("wall_elapsed_ms", android.os.SystemClock.elapsedRealtime() - startedAt)
+                    .put("source_media_modified", false)
+                    .put("published", false)
+                File(outputDir, "agent-full-timeline-cancel-evidence.json")
+                    .writeText(evidence.toString(2) + "\n")
+                require(passed) { "full timeline cancellation contract failed" }
+                log("PASS full timeline in-flight cancellation")
+                log("=== NATIVE ADAPTER TEST END ===")
+                stopSelf()
+                return
+            }
             if (operation == "agent_real_keyframe_preview_probe") {
                 require(BuildConfig.DEBUG && BuildConfig.LOCAL_TRACKED_PREVIEW) {
                     "real key-frame preview probe requires the opt-in debug build"
@@ -2008,6 +2103,18 @@ class HeadlessService : Service() {
                 .put("photo_timestamp_us", decoded.photoTimestampUs),
             semantic = JSONObject().put("ready", true)
         )
+    }
+
+    private fun releaseLocalPreviewForProbe(interaction: AndroidLocalPreviewInteraction) {
+        runCatching {
+            when (interaction.snapshot().lifecycle.state) {
+                LocalPreviewReviewState.PENDING_REVIEW -> interaction.cancel()
+                LocalPreviewReviewState.ACCEPTED_FOR_REVIEW -> interaction.undo()
+                LocalPreviewReviewState.CANCELLED,
+                LocalPreviewReviewState.UNDONE -> Unit
+            }
+            interaction.release()
+        }
     }
 
     private fun videoDurationMs(video: File): Long {

@@ -185,9 +185,9 @@ SHA-256 438a3d13bf0de46c9730fee89199ac0a104eefdd1cdade9fcbbd917120fc3dd4
 debug/release APK都不包含`libqnn_net_run.so`；只有显式实验构建包含：
 
 ```text
-default debug APK       af40420f9a2a1961836ae9f61e53f803605a72d35642a4c472d81f46531ec4bb
-default release APK     633c98d73cc0085959250bed5efebe51bedc0977dbd64d2b9d300454808a2b2a
-full-timeline debug APK a44793ff3ab14165d7719fe7f371dc6e7a7545f0d8966c4715ce6a17bddffb19
+default debug APK       cc8721d6c9b51779ddb9992d6369b6cbcc918bfdee1d8e6765de5221117c51d3
+default release APK     4185c1e4cf410e0bbc5914d2602277744c64ddada80a384ecfa0f037331c3979
+full-timeline debug APK c6603f8af8e7499bed87433c19742c4064b1d4fc99a2d24bb2f6883bc901572d
 ```
 
 所有自定义Gradle属性已注册为task inputs；同一worktree按“clean默认→实验→默认”构建，前后两个默认
@@ -335,6 +335,31 @@ size时间线均逐项保持；首个负PTS priming sample没有被夹到0。Liv
     SHA-256 d208e207de3519ad0656b33a8a60d0859edf6b116bdbcdb36e6273588b3a3cbc
 ```
 
+现有长序列基准也已用同一动态实现完成：MediaCodec解码至EOS得到`N=181`，condition frame 45
+（1,500ms），181/181 mask observation通过，持久GLES、AVC编码、281个AAC sample、Live Photo repack
+和私有artifact全部成功。视频PTS/DTS/sample duration与源轨逐项一致；AAC payload SHA仍为
+`efba4de...5782`。总墙钟约684.4秒；抽样App PSS为72,868→85,668→97,445→100,403KiB，thermal
+status始终为0。该内存不含DSP总分配，且11分钟墙钟明确说明子进程context加载只关闭功能Gate，不能
+作为生产性能结果：
+
+```text
+/mnt/ssd/lpa-aihub-probe/artifacts/android-dynamic-frame-timeline/full-181-agent-encoded/
+  summary.json
+    SHA-256 46f87266c7f5737d1abfc75044bbdea93a24766bc130e4efdc7d8a7e5f38da8a
+  evidence.json
+    SHA-256 4ae1001c9dd4ea0ebbf75381702a2a76e6b86b39e61dbfa835cc9a49472def5d
+  preview-livephoto.jpg
+    SHA-256 064e5a59059d9a2218af1d03ce929e7a1805bb21e381ee9f8c56a7003f63cc10
+```
+
+QNN encoder子进程启动后100ms触发取消的真机probe也已通过：Agent终态为`CANCELLED`，未产生preview，
+partial track目录和`qnn-context-runs`均为0，源媒体未改变：
+
+```text
+/mnt/ssd/lpa-aihub-probe/artifacts/android-dynamic-frame-timeline/cancel-probe/evidence.json
+SHA-256 e6f45e11d8b32877ad42808927d84567f331ad3f8e0c5ee3f33f3e58b885a6a7
+```
+
 当前完整视频artifact仅开放`color_tint`；`blur`仍只生成单帧review，必须完成持久双pass shader与视频
 差分后才能进入完整时间线编码。
 
@@ -440,12 +465,11 @@ alpha变化或RGB误差大于1都会返回FAIL。
 本结果关闭“单帧renderer数值等价”“真实语言到真实关键帧mask”“动态N双向时序QNN”和“完整track
 certificate到临时区域工具”Gate；以下仍阻止mutation：
 
-1. App-UID QAIRT 2.45子进程已在实际解码`N=5`和`N=53`的素材完成全时间线传播，但现有长序列
-   基准素材（本次解码`N=181`）尚未由最终Android动态实现完整重跑；持久JNI context也未完成，因此
-   该路径仍由二次实验开关保护；
-2. Android持久GLES→MediaCodec→AAC sample copy→Live Photo repack已在`N=5`和`N=53`素材通过；
-   仍需在现有长序列基准（该文件本次`N=181`）以及更多不同`N`/VFR素材完成同一编码链、取消和资源
-   峰值验证；完整视频blur尚未实现；
+1. App-UID QAIRT 2.45子进程已在实际解码`N=5`、`N=53`和现有长序列基准`N=181`完成全时间线传播；
+   但持久JNI context尚未完成，当前`N=181`墙钟约684秒，因此该路径仍由二次实验开关保护；
+2. Android持久GLES→MediaCodec→AAC sample copy→Live Photo repack已在`N=5`、`N=53`和`N=181`
+   素材通过，QNN执行中取消也已通过；仍需更多不同`N`/VFR素材、重复soak和DSP资源峰值验证；完整
+   视频blur尚未实现；
 3. UI已实现但尚未做触屏自动化、Activity/进程重建、会话恢复与旋转Gate；
 4. 多分钟完整pipeline soak、总host/GPU/DSP内存与温升尚未通过；
 5. 固定context银行包体仍未解决；任何确认仍只接受临时预览，不能写回。
@@ -454,7 +478,7 @@ certificate到临时区域工具”Gate；以下仍阻止mutation：
 一致，且不包含实验`qnn-net-run`：
 
 ```text
-SHA-256 af40420f9a2a1961836ae9f61e53f803605a72d35642a4c472d81f46531ec4bb
+SHA-256 cc8721d6c9b51779ddb9992d6369b6cbcc918bfdee1d8e6765de5221117c51d3
 ```
 
 vivo百度输入法保持启用，ADBKeyboard为disabled-user，stay-awake为0，LPA进程已停止。
