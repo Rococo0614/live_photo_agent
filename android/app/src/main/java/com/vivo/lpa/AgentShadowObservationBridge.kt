@@ -63,25 +63,36 @@ class ShadowMaskFrame private constructor(
     val modelObjectPresent: Boolean,
     val candidateCount: Int,
     val protectedOverlapPixels: Int,
-    maskValues: ByteArray
+    maskValues: ByteArray?,
+    packedBinaryValues: ByteArray?,
+    val evidenceFingerprint: String
 ) {
-    private val values = maskValues.copyOf()
+    private val values = maskValues?.copyOf()
+    private val packedValues = packedBinaryValues?.copyOf()
 
-    val rawMaskPixels: Int = values.count { (it.toInt() and 0xff) > 0 }
+    val rawMaskPixels: Int = values?.count { (it.toInt() and 0xff) > 0 }
+        ?: requireNotNull(packedValues).sumOf { byte -> Integer.bitCount(byte.toInt() and 0xff) }
 
     init {
         require(frameIndex >= 0)
         require(timestampMs >= 0)
         require(width > 0 && height > 0)
-        require(width.toLong() * height.toLong() == values.size.toLong())
+        val pixelCount = width.toLong() * height.toLong()
+        require((values != null) xor (packedValues != null))
+        require(values == null || pixelCount == values.size.toLong())
+        require(packedValues == null || packedValues.size.toLong() == (pixelCount + 7L) / 8L)
         require(candidateCount >= 0)
         require(protectedOverlapPixels in 0..rawMaskPixels)
+        require(Regex("[0-9a-f]{64}").matches(evidenceFingerprint))
         require(modelObjectPresent || rawMaskPixels == 0) {
             "model-absent frames cannot carry a non-empty mask"
         }
     }
 
-    fun copyMaskValues(): ByteArray = values.copyOf()
+    fun copyMaskValues(): ByteArray = values?.copyOf() ?: ByteArray(width * height) { index ->
+        val byte = requireNotNull(packedValues)[index ushr 3].toInt() and 0xff
+        if (byte and (1 shl (index and 7)) != 0) 0xff.toByte() else 0
+    }
 
     companion object {
         fun create(
@@ -101,8 +112,99 @@ class ShadowMaskFrame private constructor(
             modelObjectPresent,
             candidateCount,
             protectedOverlapPixels,
-            maskValues
+            maskValues,
+            null,
+            fingerprint(
+                frameIndex,
+                timestampMs,
+                width,
+                height,
+                modelObjectPresent,
+                candidateCount,
+                protectedOverlapPixels,
+                maskValues
+            )
         )
+
+        fun createBinaryPacked(
+            frameIndex: Int,
+            timestampMs: Long,
+            width: Int,
+            height: Int,
+            maskValues: ByteArray,
+            modelObjectPresent: Boolean = true,
+            candidateCount: Int = 1,
+            protectedOverlapPixels: Int = 0
+        ): ShadowMaskFrame {
+            require(maskValues.size == width * height)
+            require(maskValues.all { value ->
+                val unsigned = value.toInt() and 0xff
+                unsigned == 0 || unsigned == 0xff
+            }) { "packed mask input must be binary" }
+            val packed = ByteArray((maskValues.size + 7) / 8)
+            maskValues.forEachIndexed { index, value ->
+                if ((value.toInt() and 0xff) != 0) {
+                    packed[index ushr 3] = (
+                        (packed[index ushr 3].toInt() and 0xff) or
+                            (1 shl (index and 7))
+                        ).toByte()
+                }
+            }
+            return ShadowMaskFrame(
+                frameIndex,
+                timestampMs,
+                width,
+                height,
+                modelObjectPresent,
+                candidateCount,
+                protectedOverlapPixels,
+                null,
+                packed,
+                fingerprint(
+                    frameIndex,
+                    timestampMs,
+                    width,
+                    height,
+                    modelObjectPresent,
+                    candidateCount,
+                    protectedOverlapPixels,
+                    maskValues
+                )
+            )
+        }
+
+        private fun fingerprint(
+            frameIndex: Int,
+            timestampMs: Long,
+            width: Int,
+            height: Int,
+            modelObjectPresent: Boolean,
+            candidateCount: Int,
+            protectedOverlapPixels: Int,
+            maskValues: ByteArray
+        ): String {
+            val digest = MessageDigest.getInstance("SHA-256")
+            listOf(
+                frameIndex.toString(),
+                timestampMs.toString(),
+                width.toString(),
+                height.toString(),
+                modelObjectPresent.toString(),
+                candidateCount.toString(),
+                protectedOverlapPixels.toString()
+            ).forEach { value ->
+                val bytes = value.toByteArray(StandardCharsets.UTF_8)
+                digest.update(intBytes(bytes.size))
+                digest.update(bytes)
+            }
+            digest.update(maskValues)
+            return digest.digest().joinToString("") { "%02x".format(it.toInt() and 0xff) }
+        }
+
+        private fun intBytes(value: Int): ByteArray = java.nio.ByteBuffer.allocate(Int.SIZE_BYTES)
+            .order(java.nio.ByteOrder.BIG_ENDIAN)
+            .putInt(value)
+            .array()
     }
 }
 
@@ -111,6 +213,7 @@ class ShadowMaskTrackMaterialization internal constructor(
     val objectTrack: ShadowObjectTrackMaterialization,
     val maskTrackNodeId: String,
     val expectedFrameCount: Int,
+    val preferredPreviewFrameIndex: Int?,
     frames: List<ShadowMaskFrame>,
     val observations: List<ValidatedTrackObservation>,
     val validationPolicy: TrackValidationPolicy
@@ -118,6 +221,12 @@ class ShadowMaskTrackMaterialization internal constructor(
     private val framesByIndex = frames.associateBy { it.frameIndex }
 
     val observedFrameCount: Int get() = framesByIndex.size
+
+    val evidenceFingerprint: String = MessageDigest.getInstance("SHA-256")
+        .digest(framesByIndex.values.sortedBy { it.frameIndex }
+            .joinToString(separator = "") { it.evidenceFingerprint }
+            .toByteArray(StandardCharsets.UTF_8))
+        .joinToString("") { "%02x".format(it.toInt() and 0xff) }
 
     fun frame(frameIndex: Int): ShadowMaskFrame? = framesByIndex[frameIndex]
 
@@ -244,7 +353,8 @@ object AgentShadowObservationBridge {
         objectTrack: ShadowObjectTrackMaterialization,
         expectedFrameCount: Int,
         frames: List<ShadowMaskFrame>,
-        validationPolicy: TrackValidationPolicy
+        validationPolicy: TrackValidationPolicy,
+        preferredPreviewFrameIndex: Int? = null
     ): ShadowMaskTrackMaterialization {
         require(expectedFrameCount > 0)
         require(!validationPolicy.approvedForMutation) {
@@ -254,6 +364,10 @@ object AgentShadowObservationBridge {
             "mask frame indices must be unique"
         }
         require(frames.all { it.frameIndex in 0 until expectedFrameCount })
+        require(preferredPreviewFrameIndex == null ||
+            frames.any { it.frameIndex == preferredPreviewFrameIndex }) {
+            "preferred preview frame must be one of the mask observations"
+        }
         val sorted = frames.sortedBy { it.frameIndex }
         require(sorted.zipWithNext().all { (left, right) -> left.timestampMs <= right.timestampMs }) {
             "mask timestamps must be monotonic"
@@ -290,7 +404,9 @@ object AgentShadowObservationBridge {
             "mask-track",
             graph.graphId,
             objectTrack.operationId,
-            objectTrack.objectTrackNodeId
+            objectTrack.objectTrackNodeId,
+            preferredPreviewFrameIndex?.toString() ?: "none",
+            sorted.joinToString("") { it.evidenceFingerprint }
         )
         val maskEdgeId = stableId("mask-edge", maskNodeId, objectTrack.objectTrackNodeId)
         val dimensions = sorted.firstOrNull()?.let { "${it.width}x${it.height}" } ?: "unobserved"
@@ -305,6 +421,12 @@ object AgentShadowObservationBridge {
                         "object_track_node_id" to objectTrack.objectTrackNodeId,
                         "expected_frame_count" to expectedFrameCount.toString(),
                         "observed_frame_count" to sorted.size.toString(),
+                        "preferred_preview_frame_index" to
+                            (preferredPreviewFrameIndex?.toString() ?: "none"),
+                        "mask_evidence_fingerprint" to MessageDigest.getInstance("SHA-256")
+                            .digest(sorted.joinToString("") { it.evidenceFingerprint }
+                                .toByteArray(StandardCharsets.UTF_8))
+                            .joinToString("") { "%02x".format(it.toInt() and 0xff) },
                         "dimensions" to dimensions,
                         "validation_policy_id" to validationPolicy.policyId
                     ),
@@ -331,6 +453,7 @@ object AgentShadowObservationBridge {
             objectTrack = objectTrack,
             maskTrackNodeId = maskNodeId,
             expectedFrameCount = expectedFrameCount,
+            preferredPreviewFrameIndex = preferredPreviewFrameIndex,
             frames = sorted,
             observations = observations,
             validationPolicy = validationPolicy
@@ -367,6 +490,7 @@ object AgentShadowObservationBridge {
             objectTrack.objectTrackNodeId,
             maskTrack.maskTrackNodeId,
             objectTrack.groundingEvidenceFingerprint,
+            maskTrack.evidenceFingerprint,
             goal.stateFingerprint
         )
         val certificate = AgentScopeCertificate(

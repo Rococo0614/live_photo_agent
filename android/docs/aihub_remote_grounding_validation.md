@@ -525,25 +525,27 @@ EdgeTAM grounding探针首选float模型验证语义，随后才比较W8A8；这
 - SAM3不是当前优先路径；OWLv2 box + EdgeTAM 2.45 mask已形成首个通过远程Gate的单帧backend。
 - 2.45 encoder、memory encoder、固定计数attention图银行、decoder、object-absent pointer常量与
   manifest均已下载；bounded图只保留失败回归样本。
-- 真实语言→OWLv2→EdgeTAM关键帧mask→GLES区域工具已在shadow中进入`WAITING_USER`，但证书明确仅为
-  `KEY_FRAME_ONLY`；逐帧覆盖、多分钟完整pipeline soak、总host/DSP峰值内存及locator 433MiB与固定
-  图银行包体方案仍未通过，任何Live Photo修改、填充或发布节点仍不可ready。
-- 下游Android单帧GLES renderer及supplied observations → track/certificate → temporary artifact →
-  confirm/undo shadow链已通过；但尚未接收本节locator的Android输出与真实逐帧`MASK_TRACK`，不改变
-  上述Grounding与mutation门禁。
-- 17帧设备`MASK_TRACK`已通过调色显色验证；Android QNN/GLES全帧链仍未通过。
+- 真实语言→OWLv2→动态PTS时间线→EdgeTAM双向传播→完整certificate→GLES区域工具已在5帧和53帧
+  Live Photo上进入`WAITING_USER`；53/53帧来自MediaCodec EOS而非固定计数。181帧最终实现重跑、
+  总host/DSP峰值内存及locator 433MiB与固定图银行包体方案仍未通过，任何Live Photo写回或发布节点
+  仍不可ready。
+- 下游Android GLES renderer及真实App-UID逐帧`MASK_TRACK` → content-bound certificate → temporary
+  artifact → confirm/undo shadow链已通过；预览优先使用Live Photo封面对应condition frame。
+- 17个既有QNN状态点decoder raw mask逐字节复现；动态Android解码连续3帧最低oracle IoU 0.9523，
+  中间anchor双向5帧coverage通过。
 - PyTorch全帧oracle到私有Live Photo repack已通过；Android QNN/GLES全帧替换仍未通过。
 
 ## 8. 后续Gate
 
 1. 把已通过的App-UID子进程context runner替换为持久Android QNN JNI/context生命周期；应用内
    CLIP BPE、960图像输入及语言→box路径现已闭合。
-2. 从抽样扩展到逐帧长序列，并增加多分钟完整pipeline soak和总host/DSP峰值内存观测。
+2. 在当前181帧fixture及更多VFR/遮挡素材重跑动态全序列，并增加多分钟重复soak和总host/DSP峰值内存
+   观测；目前53帧单轮约217秒只关闭功能Gate，不关闭性能Gate。
 3. 增加进程终止、Activity重建和Android bridge级context重载；底层TERM取消/重载已通过。
 4. 把10%时序覆盖阈值扩展到更多尺度变化fixture；不充分时返回`NeedObservation`，不能静默接受。
 5. 联合评审OWLv2 433MiB与EdgeTAM 234MiB context包体；当前单独DLC compose的weight sharing不可用。
-6. supplied-observation shadow bridge已通过；继续完成locator Android接入、逐帧renderer preservation、
-   触屏/Activity确认-undo生命周期后才考虑执行；2.50/2.51继续禁用。
+6. 继续完成按实际PTS的逐帧GLES渲染、编码、音频保留与Live Photo repack，并通过触屏/Activity
+   确认-undo生命周期后才考虑写回；2.50/2.51继续禁用。
 
 本轮汇总证据：
 

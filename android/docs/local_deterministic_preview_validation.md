@@ -181,13 +181,13 @@ SHA-256 438a3d13bf0de46c9730fee89199ac0a104eefdd1cdade9fcbbd917120fc3dd4
                       SHA-256 4691654241a483d9c249f5300870daa124a96effd4cd0d0d0079147f9be6cec0
 ```
 
-当前debug/release单测均为108/108，`lintDebug`、`lintRelease`及debug/release assemble通过。默认
+当前debug/release单测均为125/125，`lintDebug`、`lintRelease`及debug/release assemble通过。默认
 debug/release APK都不包含`libqnn_net_run.so`；只有显式实验构建包含：
 
 ```text
-default debug APK       0e1672e6779b500a6b08e51c9ef1c324bd8f9bc81bd7f1b595b5907b52b308be
-default release APK     3ea36f18da83f3c1df692fd549f67be32e2e8c6c4e42fed3a50d9d8a743d86f3
-experimental debug APK  f752aa9dc98d80fc1f232fa48796a627cf2c8b311bf45033846431f0ad9bc2cf
+default debug APK       fd1e268c738b8c0813501281f7613c6c0f212b0746e9ae1962b55ea183ad7eaf
+default release APK     ef894037727686db2a758a6cf4769fe3209a1b0490b20295b4a3474b9b3b227e
+full-timeline debug APK 07b13282cbf3390b22d7a8864d43cc2379032ff97bfc15df8535c46489dde58c
 ```
 
 所有自定义Gradle属性已注册为task inputs；同一worktree按“clean默认→实验→默认”构建，前后两个默认
@@ -200,12 +200,92 @@ contexts/owlv2_vision_qnn245.bin    6bd5393673e57190fa95d9af770fe470ef7b0b038f2e
 contexts/owlv2_text_qnn245.bin      831c23acd211f29189860e0a9dbb5fb5544aca068835abd5d002ffec3a00a28a
 contexts/edgetam_encoder_qnn245.bin 0edaed8a468ab003dff72fd57574b3ffc95bf2ac9fbb89fba94070b12811ddc0
 contexts/edgetam_decoder_qnn245.bin 0fbc23c5fd70760bf9aeb369f88936b112e6a54cbc03155ff7a3ee4067fd08dc
+contexts/edgetam_memory_encoder_qnn245.bin
+                                      bf13e61cbb873da162fbd9d28008b6587bc5a7fbcb6998f12ab6297feed9b3f1
+contexts/memory_attention_{1..7}_o3.bin
+contexts/memory_attention_7_{8..16}_o3.bin
+                                      SHA集合固定在AndroidEdgeTamTemporalQnnRunner
 tokenizer/vocab.json                e089ad92ba36837a0d31433e555c8f45fe601ab5c221d4f607ded32d9f7a4349
 tokenizer/merges.txt                9fd691f7c8039210e0fced15865466c65820d09b63988b0174bfe25de299051a
 runtime/dsp/libQnnHtpV81Skel.so     57330ed3f7846b94181b25b7a87bc3fe5dc71033766f2d5630520a1400477c97
+supplementary/no_obj_ptr.npy         1eaf62836fa7a7afb592bea5b2c043fee463cfd9a488c59440bded15982679fd
 ```
 
 任一文件缺失或SHA不符都返回`NeedObservation`/失败，不会切换QAIRT版本或CPU伪结果。
+
+### 4.2 动态帧时间线与时序QNN
+
+帧数不由时长或名义fps推算。`AndroidVideoFrameTimelineDecoder`使用`MediaCodec`解码到EOS，保存每个
+输出帧的真实`presentationTimeUs`；封面帧通过`photoTimestampUs`在该时间线上取最近项。相同代码在
+两份私有Live Photo上分别得到：
+
+| 素材 | 实际解码帧 | PTS范围 | 封面映射 |
+|---|---:|---:|---:|
+| 原始fixture | 181 | 0–6,000,000µs | 1,500,000µs → frame 45 |
+| 24fps / 2.2s变长验证 | 53 | 0–2,166,666µs | 1,000,000µs → frame 24 |
+
+`expectedFrameCount`直接取时间线长度。封面不在边界时，tracker以封面为condition frame分别向前、向后
+传播，再按原始frame index/PTS合并；不假设condition frame为0。
+
+Android host状态银行也已按真实处理进度实现：condition memory固定保留，最近6个非condition memory
+组成最多7个空间memory；condition pointer加最近15个pointer组成最多16个pointer。17帧fixture的16次
+状态转移与此前生成的raw输入逐字节一致，并正确选择`1/1…7/7、7/8…7/16`context。随后App UID真实
+执行全部17个QAIRT 2.45时序点，17个decoder raw mask均与此前vivo结果逐字节一致。
+
+动态Android视频解码相对OpenCV fixture输入为43.17dB，但下游首帧mask IoU为0.9962；连续3个实际
+解码帧全部通过coverage，和PyTorch oracle最低IoU为0.9523。中间frame 2作为condition的5帧双向测试
+覆盖5/5帧；因Android/OpenCV颜色转换与conditioning变化，same-anchor oracle最低IoU为0.9212，超过
+当前0.90候选门槛，但仍需更多尺度、遮挡和VFR素材后才能开放正常入口。
+
+```text
+/mnt/ssd/lpa-aihub-probe/artifacts/android-dynamic-frame-timeline/
+  timeline-181-frame.json
+    SHA-256 aee1ca7e9aa3d1fc50fe71589af796502c4bc03b6598611c96a658ac754d2894
+  timeline-53-frame.json
+    SHA-256 38e84b9f04e5c7b1cbd7a58331effdfd5d4479501e4a24c46c0bf83e5c913729
+  edgetam-temporal-state-evidence.json
+    SHA-256 5a806f440db7ac48340fef5250e30e9c6206b29d864ac2f024d7b263d166fde6
+  qnn-edgetam-temporal-17-evidence.json
+    SHA-256 bd1208064b418dd56bade2e3be14b4d4e1cc5183a4f1e29e78e476c9a28074b3
+  qnn-dynamic-frame-mask-evidence.json
+    SHA-256 af184808a6b41569aaa1e368feae2ffcd57f5b0995a5aae0b4a2d7eeef277e13
+  qnn-dynamic-temporal-prefix-evidence.json
+    SHA-256 449b93a6b2c0ce699a9b73d6d9a131ce0d90af85d9176d23aedf24e9f0f72d1a
+  qnn-dynamic-bidirectional-5-evidence.json
+    SHA-256 8b6d30d65a3210109a4a31f1d3025eeb8773ca3f720f3f97bd441b18b1e5ea3a
+```
+
+全帧mask在处理中写入应用私有临时文件，物化到shadow bridge时使用1-bit packed binary表示，避免
+1080×1440×N字节常驻内存。完整动态执行仍由独立开关保护：
+
+```bash
+./gradlew assembleDebug \
+  -PagentRuntime=dag \
+  -PlocalTrackedPreview=true \
+  -PfullTimelineTrackedPreview=true
+```
+
+随后对53帧Live Photo执行真实Agent全链：Qwen Goal IR → OWLv2 → 以frame 24为condition双向传播 →
+53/53 `MASK_TRACK` → 内容绑定certificate → DAG区域工具 → GLES preview → `WAITING_USER`。总墙钟约
+217秒（含Qwen、locator、逐context子进程加载和preview）；中途App host进程`TOTAL PSS=80,425KiB /`
+`RSS=163,988KiB`，系统thermal status为0，但该数字不含DSP总分配，不能当作完整内存Gate。
+
+certificate现在把每帧mask内容SHA继续绑定到mask-track node和certificate ID；同面积但形状不同的mask
+不能复用证书。最终代码又用5帧、condition frame 2重跑，5/5帧进入`ready`并生成预览，证明内容绑定
+没有破坏动态闭环；preview也从旧的“首个可见帧”修正为condition frame 2（66ms）。两轮都没有媒体
+写回或发布：
+
+```text
+/mnt/ssd/lpa-aihub-probe/artifacts/android-dynamic-frame-timeline/
+  full-53-agent/evidence.json
+    SHA-256 21aab8f27f535d410777f8eb24b4e645e419874f460524d11aa18056565e096b
+  full-53-agent/preview.png
+    SHA-256 b1938b99e67a2d622843a66e796457fbda19f6f30644bdcbc8a3af9332a6269e
+  full-53-agent/midrun-memory-thermal.txt
+    SHA-256 bce299603ac233684fd1e1002b4561a8b56025c16e642a08457d6976d350b8d2
+  full-5-agent-final/evidence.json
+    SHA-256 a739a22704bb39638ecef0ad36f2f9e8d7b2d2d12e4c4d6a40aafdbcf725f908
+```
 
 ## 5. 逐帧跟踪调色显色证据
 
@@ -306,14 +386,13 @@ alpha变化或RGB误差大于1都会返回FAIL。
 
 ## 7. 尚未通过的Gate
 
-本结果关闭“单帧renderer数值等价”“真实语言到真实关键帧mask”和“mask到临时区域工具”Gate；以下
-仍阻止mutation：
+本结果关闭“单帧renderer数值等价”“真实语言到真实关键帧mask”“动态N双向时序QNN”和“完整track
+certificate到临时区域工具”Gate；以下仍阻止mutation：
 
-1. App-UID QAIRT 2.45子进程context已接入，但持久JNI context及“解码至EOS的全部帧”EdgeTAM传播
-   尚未完成（当前fixture恰为181帧）；当前真实Agent证书仅覆盖关键帧，正常入口仍停在`MASK_TRACK`
-   观察门禁；
-2. PyTorch全帧调色与私有Live Photo repack已通过；仍需把输入实际帧时间线上的tracking/render替换成
-   App内QNN与持久Android EGL pipeline，不能假设固定帧数或恒定帧率；
+1. App-UID QAIRT 2.45子进程已在5帧和53帧素材完成全时间线传播，但当前181帧fixture尚未由最终
+   Android动态实现完整重跑；持久JNI context也未完成，因此该路径仍由二次实验开关保护；
+2. PyTorch全帧调色与私有Live Photo repack已通过；Android端目前只对certificate选中的一帧生成
+   GLES review bitmap，仍需按实际PTS逐帧渲染、编码并保留音频后再repack；
 3. UI已实现但尚未做触屏自动化、Activity/进程重建、会话恢复与旋转Gate；
 4. 多分钟完整pipeline soak、总host/GPU/DSP内存与温升尚未通过；
 5. 固定context银行包体仍未解决；任何确认仍只接受临时预览，不能写回。
@@ -322,7 +401,7 @@ alpha变化或RGB误差大于1都会返回FAIL。
 一致，且不包含实验`qnn-net-run`：
 
 ```text
-SHA-256 0e1672e6779b500a6b08e51c9ef1c324bd8f9bc81bd7f1b595b5907b52b308be
+SHA-256 fd1e268c738b8c0813501281f7613c6c0f212b0746e9ae1962b55ea183ad7eaf
 ```
 
 vivo百度输入法保持启用，ADBKeyboard为disabled-user，stay-awake为0，LPA进程已停止。

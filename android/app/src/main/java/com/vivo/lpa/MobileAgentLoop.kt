@@ -13,7 +13,14 @@ class MobileAgentLoop(
     private val context: Context,
     private val localObservationBackend: AgentLocalObservationBackend =
         if (BuildConfig.LOCAL_TRACKED_PREVIEW) {
-            AndroidQnnLocalObservationBackend(context)
+            AndroidQnnLocalObservationBackend(
+                context,
+                if (BuildConfig.FULL_TIMELINE_TRACKED_PREVIEW) {
+                    AndroidFullTimelineMaskTracker(context)
+                } else {
+                    UnavailableAndroidSemanticMaskTracker
+                }
+            )
         } else {
             UnavailableAgentLocalObservationBackend
         }

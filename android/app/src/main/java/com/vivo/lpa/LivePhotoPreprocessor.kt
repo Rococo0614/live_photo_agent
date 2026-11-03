@@ -54,7 +54,8 @@ class LivePhotoPreprocessor(private val context: Context) {
             progress("预处理素材 ${index + 1}/${uris.size}")
             val assetDir = File(root, "asset-${System.currentTimeMillis()}-$index").apply { mkdirs() }
             val source = copyUri(uri, File(assetDir, displayName(uri, index)))
-            val split = livePhotoSdk.unpack(source, File(assetDir, "sdk-decoded"))
+            val sdkDecoded = livePhotoSdk.decode(source, File(assetDir, "sdk-decoded"))
+            val split = sdkDecoded?.let { it.image to it.video }
                 ?: splitMotionPhoto(source, assetDir)
             val image = split.first ?: if (isImage(source)) source else extractFrame(source, File(assetDir, "cover.jpg"))
             val sidecar = if (split.second == null && isImage(source)) {
@@ -63,7 +64,9 @@ class LivePhotoPreprocessor(private val context: Context) {
                 null
             }
             val video = split.second ?: if (isVideo(source)) source else sidecar
-            val metadata = metadata(source, image, video)
+            val metadata = metadata(source, image, video).apply {
+                sdkDecoded?.let { put("photo_timestamp_us", it.photoTimestampUs) }
+            }
             val provisional = PreparedAsset(
                 assetId = assetId(uri, source),
                 sourceUri = uri,

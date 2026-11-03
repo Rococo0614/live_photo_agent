@@ -30,6 +30,15 @@ require(localTrackedPreview in setOf("true", "false")) {
 require(localTrackedPreview == "false" || agentRuntime == "dag") {
     "localTrackedPreview requires -PagentRuntime=dag"
 }
+val fullTimelineTrackedPreview = providers.gradleProperty("fullTimelineTrackedPreview")
+    .orElse("false")
+    .get()
+require(fullTimelineTrackedPreview in setOf("true", "false")) {
+    "fullTimelineTrackedPreview must be true or false"
+}
+require(fullTimelineTrackedPreview == "false" || localTrackedPreview == "true") {
+    "fullTimelineTrackedPreview requires -PlocalTrackedPreview=true"
+}
 val qwenModelPack = providers.gradleProperty("qwenModelPack")
     .orElse("instruct")
     .get()
@@ -76,6 +85,9 @@ android {
         // Experimental language-targeted local preview. Default false; even when enabled, it may
         // only run under Runtime v3 shadow and cannot register a mutation/writeback executor.
         buildConfigField("boolean", "LOCAL_TRACKED_PREVIEW", localTrackedPreview)
+        // Runs every decoded frame in both directions from the Live Photo cover timestamp.
+        // It remains a separate opt-in until cancellation, recreation, memory and thermal gates pass.
+        buildConfigField("boolean", "FULL_TIMELINE_TRACKED_PREVIEW", fullTimelineTrackedPreview)
         // Native-thinking experiments use a separate model directory and never overwrite the
         // production Instruct-2507 pack. `route` keeps constrained bind classification direct.
         buildConfigField("String", "QWEN_MODEL_PACK", "\"$qwenModelPack\"")
@@ -139,6 +151,7 @@ tasks.configureEach {
         inputs.property("lpa.plannerEvalOnly", plannerEvalOnly)
         inputs.property("lpa.agentRuntime", agentRuntime)
         inputs.property("lpa.localTrackedPreview", localTrackedPreview)
+        inputs.property("lpa.fullTimelineTrackedPreview", fullTimelineTrackedPreview)
         inputs.property("lpa.qwenModelPack", qwenModelPack)
         inputs.property("lpa.qwenThinking", qwenThinking)
         inputs.property("lpa.qwenThinkingTokens", qwenThinkingTokens)

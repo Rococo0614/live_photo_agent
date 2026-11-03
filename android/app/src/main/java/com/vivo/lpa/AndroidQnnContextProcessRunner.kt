@@ -106,7 +106,7 @@ class AndroidQnnContextProcessRunner(
                 "QNN input ${tensor.name} has ${file.length()} bytes; expected ${tensor.byteCount}"
             }
         }
-        check(!cancelled.get()) { "QNN execution was cancelled before launch" }
+        if (cancelled.get()) throw InterruptedException("QNN execution was cancelled before launch")
 
         val work = File(
             context.cacheDir,
@@ -177,7 +177,7 @@ class AndroidQnnContextProcessRunner(
                 if (cancelled.get()) {
                     activeProcess.destroy()
                     if (!activeProcess.waitFor(2, TimeUnit.SECONDS)) activeProcess.destroyForcibly()
-                    error("QNN execution cancelled")
+                    throw InterruptedException("QNN execution cancelled")
                 }
                 if (System.nanoTime() >= deadline) {
                     activeProcess.destroyForcibly()

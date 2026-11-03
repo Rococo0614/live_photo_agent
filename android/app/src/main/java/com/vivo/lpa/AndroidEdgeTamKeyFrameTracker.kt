@@ -64,7 +64,13 @@ class AndroidEdgeTamKeyFrameTracker(
                 if (assetId != objectTrack.sourceAssetId || frameIndex != 0 || timestampMs != 0L) {
                     null
                 } else {
-                    AndroidShadowSourceFrame(assetId, frameIndex, timestampMs, sourceCopy)
+                    AndroidShadowSourceFrame(
+                        assetId,
+                        frameIndex,
+                        timestampMs,
+                        sourceCopy,
+                        ownedByPreview = true
+                    )
                 }
             }
         )

@@ -266,6 +266,63 @@ class AgentShadowObservationBridgeTest {
         }
     }
 
+    @Test
+    fun binaryPackedFramePreservesPixelsWithoutFullByteStorageContractChange() {
+        val source = byteArrayOf(0, 0xff.toByte(), 0xff.toByte(), 0, 0, 0xff.toByte(), 0, 0)
+
+        val frame = ShadowMaskFrame.createBinaryPacked(0, 0, 4, 2, source)
+
+        assertEquals(3, frame.rawMaskPixels)
+        assertTrue(source.contentEquals(frame.copyMaskValues()))
+        source.fill(0)
+        assertEquals(3, frame.rawMaskPixels)
+    }
+
+    @Test
+    fun equalAreaDifferentShapeMasksCannotReuseScopeCertificate() {
+        val fixture = fixture()
+        val objectTrack = uniqueObject(fixture)
+        fun materialize(mask: ByteArray): AgentShadowObservationMaterialization {
+            val track = AgentShadowObservationBridge.materializeMaskTrack(
+                objectTrack,
+                1,
+                listOf(ShadowMaskFrame.createBinaryPacked(0, 0, 2, 1, mask)),
+                TrackValidationPolicy("shape-bound-v1", 0.10)
+            )
+            return AgentShadowObservationBridge.finalizeForCompiler(fixture.goal, track)
+        }
+
+        val left = materialize(byteArrayOf(0xff.toByte(), 0))
+        val right = materialize(byteArrayOf(0, 0xff.toByte()))
+
+        assertNotEquals(left.maskTrack.maskTrackNodeId, right.maskTrack.maskTrackNodeId)
+        assertNotEquals(left.certificate.certificateId, right.certificate.certificateId)
+        assertNotEquals(left.certificate.evidenceFingerprint, right.certificate.evidenceFingerprint)
+    }
+
+    @Test
+    fun hostObservedCoverFrameIsPreservedAsPreferredPreview() {
+        val fixture = fixture()
+        val objectTrack = uniqueObject(fixture)
+        val track = AgentShadowObservationBridge.materializeMaskTrack(
+            objectTrack,
+            expectedFrameCount = 2,
+            frames = listOf(
+                ShadowMaskFrame.createBinaryPacked(0, 0, 1, 1, byteArrayOf(0xff.toByte())),
+                ShadowMaskFrame.createBinaryPacked(1, 33, 1, 1, byteArrayOf(0xff.toByte()))
+            ),
+            validationPolicy = TrackValidationPolicy("preferred-preview-v1", 0.10),
+            preferredPreviewFrameIndex = 1
+        )
+
+        assertEquals(1, track.preferredPreviewFrameIndex)
+        assertEquals(
+            "1",
+            track.snapshot.graph.nodes[track.maskTrackNodeId]
+                ?.attributes?.get("preferred_preview_frame_index")
+        )
+    }
+
     private data class Fixture(
         val state: AgentRuntimeState,
         val fingerprint: String,

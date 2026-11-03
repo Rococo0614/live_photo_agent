@@ -164,6 +164,507 @@ class HeadlessService : Service() {
         log("操作: $operation / 布局: $layout")
         inputs.forEach { log("输入 MP4: ${it.absolutePath} (${it.length()} bytes)") }
         runCatching {
+            if (operation == "dynamic_video_timeline_probe") {
+                require(BuildConfig.DEBUG) { "dynamic timeline probe is debug-only" }
+                require(inputs.size == 1) { "dynamic timeline probe requires one Live Photo" }
+                val decoded = requireNotNull(
+                    LivePhotoSdkAdapter(this).decode(
+                        inputs.single(),
+                        File(outputDir, "dynamic-timeline-decoded")
+                    )
+                ) { "dynamic timeline input is not a decodable Live Photo" }
+                val timeline = AndroidVideoFrameTimelineDecoder.decode(
+                    decoded.video,
+                    AtomicBoolean(false)
+                )
+                val coverIndex = timeline.nearestFrameIndex(decoded.photoTimestampUs)
+                val coverPtsUs = timeline.frames[coverIndex].presentationTimeUs
+                val coverDeltaUs = kotlin.math.abs(coverPtsUs - decoded.photoTimestampUs)
+                val medianIntervalUs = timeline.medianPositiveFrameIntervalUs()
+                val allowedCoverDeltaUs = maxOf(100_000L, (medianIntervalUs ?: 0L) * 2L)
+                require(coverDeltaUs <= allowedCoverDeltaUs) {
+                    "photo timestamp is not represented by the decoded frame timeline"
+                }
+                val trackPlan = AndroidBidirectionalTrackPlan.from(
+                    timeline,
+                    decoded.photoTimestampUs
+                )
+                val evidence = JSONObject()
+                    .put("schema_version", 1)
+                    .put("status", "PASS_DYNAMIC_DECODED_FRAME_TIMELINE")
+                    .put("source", inputs.single().absolutePath)
+                    .put("mime_type", timeline.mimeType)
+                    .put("width", timeline.width)
+                    .put("height", timeline.height)
+                    .put("rotation_degrees", timeline.rotationDegrees)
+                    .put("container_duration_us", timeline.containerDurationUs)
+                    .put("nominal_frame_rate", timeline.nominalFrameRate ?: JSONObject.NULL)
+                    .put("decoded_frame_count", timeline.frameCount)
+                    .put("expected_frame_count_source", "MediaCodec output until EOS")
+                    .put("frame_count_assumed", false)
+                    .put("first_presentation_time_us", timeline.firstPresentationTimeUs)
+                    .put("last_presentation_time_us", timeline.lastPresentationTimeUs)
+                    .put("median_positive_frame_interval_us", medianIntervalUs ?: JSONObject.NULL)
+                    .put("presentation_timestamps_us", org.json.JSONArray(
+                        timeline.frames.map { it.presentationTimeUs }
+                    ))
+                    .put("photo_timestamp_us", decoded.photoTimestampUs)
+                    .put("photo_frame_index", coverIndex)
+                    .put("photo_frame_presentation_time_us", coverPtsUs)
+                    .put("photo_timestamp_delta_us", coverDeltaUs)
+                    .put("forward_sequence_frame_count", trackPlan.forward.size)
+                    .put("backward_sequence_frame_count", trackPlan.backward.size)
+                    .put("conditioning_frame_reused_between_directions", true)
+                    .put("media_modified", false)
+                    .put("published", false)
+                File(outputDir, "dynamic-video-timeline-evidence.json")
+                    .writeText(evidence.toString(2) + "\n")
+                log(
+                    "PASS dynamic timeline: frames=${timeline.frameCount} " +
+                        "pts=${timeline.firstPresentationTimeUs}..${timeline.lastPresentationTimeUs} " +
+                        "cover_frame=$coverIndex"
+                )
+                log("=== NATIVE ADAPTER TEST END ===")
+                stopSelf()
+                return
+            }
+            if (operation == "dynamic_video_frame_input_probe") {
+                require(BuildConfig.DEBUG) { "dynamic frame input probe is debug-only" }
+                require(inputs.size == 2) {
+                    "dynamic frame input probe requires Live Photo and expected float input"
+                }
+                val decoded = requireNotNull(
+                    LivePhotoSdkAdapter(this).decode(
+                        inputs[0],
+                        File(outputDir, "dynamic-frame-input-decoded")
+                    )
+                ) { "dynamic frame input is not a decodable Live Photo" }
+                val timeline = AndroidVideoFrameTimelineDecoder.decode(
+                    decoded.video,
+                    AtomicBoolean(false)
+                )
+                val frameIndex = imageParams.optInt("frame_index", 0)
+                require(frameIndex in 0 until timeline.frameCount)
+                val frame = AndroidVideoFrameBatchReader(decoded.video, timeline).use { reader ->
+                    reader.read(frameIndex, 1).single()
+                }
+                val actual = try {
+                    AndroidEdgeTamQnnSegmenter.preprocessImage(frame.bitmap)
+                } finally {
+                    frame.bitmap.recycle()
+                }
+                val expected = AndroidOwlV2QnnLocator.readFloats(inputs[1], actual.size)
+                var maximumAbsoluteError = 0.0
+                var squaredError = 0.0
+                for (index in actual.indices) {
+                    val difference = actual[index].toDouble() - expected[index]
+                    maximumAbsoluteError = maxOf(maximumAbsoluteError, kotlin.math.abs(difference))
+                    squaredError += difference * difference
+                }
+                val mse = squaredError / actual.size
+                val psnr = if (mse == 0.0) Double.POSITIVE_INFINITY
+                    else 10.0 * kotlin.math.log10(1.0 / mse)
+                val actualFile = File(outputDir, "dynamic-frame-input.raw")
+                AndroidOwlV2QnnLocator.writeFloats(actualFile, actual)
+                val evidence = JSONObject()
+                    .put("schema_version", 1)
+                    .put("status", "PASS_DYNAMIC_DECODED_FRAME_MODEL_INPUT")
+                    .put("decoded_frame_count", timeline.frameCount)
+                    .put("frame_index", frame.frameIndex)
+                    .put("presentation_time_us", frame.presentationTimeUs)
+                    .put("actual_sha256", fileSha256(actualFile))
+                    .put("expected_sha256", fileSha256(inputs[1]))
+                    .put("maximum_absolute_error", maximumAbsoluteError)
+                    .put("mse", mse)
+                    .put("psnr_db", psnr)
+                    .put("minimum_psnr_db", 40.0)
+                    .put("media_modified", false)
+                File(outputDir, "dynamic-video-frame-input-evidence.json")
+                    .writeText(evidence.toString(2) + "\n")
+                require(psnr >= 40.0) { "Android decoded frame input PSNR is too low: $psnr" }
+                log(
+                    "PASS dynamic frame model input: frame=$frameIndex " +
+                        "pts=${frame.presentationTimeUs} psnr=$psnr"
+                )
+                log("=== NATIVE ADAPTER TEST END ===")
+                stopSelf()
+                return
+            }
+            if (operation == "qnn_dynamic_frame_mask_probe") {
+                require(BuildConfig.DEBUG && BuildConfig.LOCAL_TRACKED_PREVIEW) {
+                    "dynamic frame mask probe requires the opt-in debug build"
+                }
+                require(inputs.size == 4) {
+                    "dynamic frame mask probe requires Live Photo, reference input, points and mask"
+                }
+                val decoded = requireNotNull(
+                    LivePhotoSdkAdapter(this).decode(
+                        inputs[0],
+                        File(outputDir, "dynamic-frame-mask-decoded")
+                    )
+                ) { "dynamic frame mask input is not a decodable Live Photo" }
+                val timeline = AndroidVideoFrameTimelineDecoder.decode(
+                    decoded.video,
+                    AtomicBoolean(false)
+                )
+                val frameIndex = imageParams.optInt("frame_index", 0)
+                require(frameIndex in 0 until timeline.frameCount)
+                val frame = AndroidVideoFrameBatchReader(decoded.video, timeline).use { reader ->
+                    reader.read(frameIndex, 1).single()
+                }
+                val sourceWidth = frame.bitmap.width
+                val sourceHeight = frame.bitmap.height
+                val actualInput = try {
+                    AndroidEdgeTamQnnSegmenter.preprocessImage(frame.bitmap)
+                } finally {
+                    frame.bitmap.recycle()
+                }
+                val inputFile = File(outputDir, "qnn-dynamic-frame-input.raw")
+                AndroidOwlV2QnnLocator.writeFloats(inputFile, actualInput)
+                val expectedInput = AndroidOwlV2QnnLocator.readFloats(inputs[1], actualInput.size)
+                var inputSquaredError = 0.0
+                for (index in actualInput.indices) {
+                    val difference = actualInput[index].toDouble() - expectedInput[index]
+                    inputSquaredError += difference * difference
+                }
+                val inputMse = inputSquaredError / actualInput.size
+                val inputPsnr = if (inputMse == 0.0) Double.POSITIVE_INFINITY
+                    else 10.0 * kotlin.math.log10(1.0 / inputMse)
+                val temporalRunner = AndroidEdgeTamTemporalQnnRunner(this)
+                val result = temporalRunner.processRawFrame(
+                    sequenceIndex = 0,
+                    imageInput = inputFile,
+                    sourceWidth = sourceWidth,
+                    sourceHeight = sourceHeight,
+                    initialPromptCoordinates = AndroidOwlV2QnnLocator.readFloats(inputs[2], 4),
+                    state = temporalRunner.createState(),
+                    cancelled = AtomicBoolean(false),
+                    produceMemory = false,
+                    progress = { message -> log(message) }
+                )
+                val expectedMask = BitmapFactory.decodeFile(inputs[3].absolutePath)
+                    ?: error("expected dynamic frame mask is missing")
+                require(expectedMask.width == sourceWidth && expectedMask.height == sourceHeight)
+                val expectedPixels = IntArray(sourceWidth * sourceHeight)
+                expectedMask.getPixels(
+                    expectedPixels, 0, sourceWidth, 0, 0, sourceWidth, sourceHeight
+                )
+                expectedMask.recycle()
+                var intersection = 0
+                var union = 0
+                for (index in expectedPixels.indices) {
+                    val actual = (result.maskValues[index].toInt() and 0xff) > 0
+                    val expected = (expectedPixels[index] ushr 16 and 0xff) > 0
+                    if (actual && expected) intersection += 1
+                    if (actual || expected) union += 1
+                }
+                val maskIou = if (union == 0) 1.0 else intersection.toDouble() / union
+                require(inputPsnr >= 40.0 && maskIou >= 0.95) {
+                    "dynamic decoded frame failed downstream mask gate: psnr=$inputPsnr iou=$maskIou"
+                }
+                val maskFile = File(outputDir, "qnn-dynamic-frame-mask.raw").apply {
+                    writeBytes(result.maskValues)
+                }
+                val evidence = JSONObject()
+                    .put("schema_version", 1)
+                    .put("status", "PASS_DYNAMIC_DECODE_TO_EDGETAM_MASK")
+                    .put("decoded_frame_count", timeline.frameCount)
+                    .put("frame_index", frame.frameIndex)
+                    .put("presentation_time_us", frame.presentationTimeUs)
+                    .put("input_psnr_db", inputPsnr)
+                    .put("minimum_input_psnr_db", 40.0)
+                    .put("mask_iou_vs_prior_vivo", maskIou)
+                    .put("minimum_mask_iou", 0.95)
+                    .put("mask_sha256", fileSha256(maskFile))
+                    .put("model_object_present", result.modelObjectPresent)
+                    .put("qairt_exact", AndroidQnnContextProcessRunner.QAIRT_EXACT)
+                    .put("media_modified", false)
+                File(outputDir, "qnn-dynamic-frame-mask-evidence.json")
+                    .writeText(evidence.toString(2) + "\n")
+                log(
+                    "PASS dynamic decode -> EdgeTAM mask: frame=$frameIndex " +
+                        "input_psnr=$inputPsnr mask_iou=$maskIou"
+                )
+                log("=== NATIVE ADAPTER TEST END ===")
+                stopSelf()
+                return
+            }
+            if (operation == "qnn_dynamic_temporal_prefix_probe") {
+                require(BuildConfig.DEBUG && BuildConfig.LOCAL_TRACKED_PREVIEW) {
+                    "dynamic temporal prefix probe requires the opt-in debug build"
+                }
+                require(inputs.size == 2) {
+                    "dynamic temporal prefix probe requires Live Photo and initial points"
+                }
+                val decoded = requireNotNull(
+                    LivePhotoSdkAdapter(this).decode(
+                        inputs[0],
+                        File(outputDir, "dynamic-temporal-prefix-decoded")
+                    )
+                ) { "dynamic temporal prefix input is not a decodable Live Photo" }
+                val fullTimeline = AndroidVideoFrameTimelineDecoder.decode(
+                    decoded.video,
+                    AtomicBoolean(false)
+                )
+                val requestedFrames = imageParams.optInt("frame_count", 3)
+                    .coerceIn(2, fullTimeline.frameCount)
+                val prefixTimeline = AndroidDecodedVideoTimeline(
+                    fullTimeline.mimeType,
+                    fullTimeline.width,
+                    fullTimeline.height,
+                    fullTimeline.rotationDegrees,
+                    fullTimeline.frames[requestedFrames - 1].presentationTimeUs,
+                    fullTimeline.nominalFrameRate,
+                    fullTimeline.frames.take(requestedFrames)
+                )
+                val anchorFrameIndex = imageParams.optInt("anchor_frame_index", 0)
+                    .coerceIn(0, prefixTimeline.frameCount - 1)
+                val trackDirectory = File(outputDir, "dynamic-temporal-prefix-track").apply {
+                    deleteRecursively()
+                    mkdirs()
+                }
+                val temporalRunner = AndroidEdgeTamTemporalQnnRunner(this)
+                val tracked = AndroidTimelineEdgeTamInputMaterializer(
+                    decoded.video,
+                    prefixTimeline
+                ).use { materializer ->
+                    AndroidEdgeTamBidirectionalTracker(temporalRunner).track(
+                        timeline = prefixTimeline,
+                        photoTimestampUs = prefixTimeline.frames[anchorFrameIndex].presentationTimeUs,
+                        sourceWidth = prefixTimeline.width,
+                        sourceHeight = prefixTimeline.height,
+                        initialPromptCoordinates = AndroidOwlV2QnnLocator.readFloats(inputs[1], 4),
+                        outputDirectory = trackDirectory,
+                        cancelled = AtomicBoolean(false),
+                        materializer = materializer,
+                        progress = { message -> log(message) }
+                    )
+                }
+                var previousVisiblePixels: Int? = null
+                val rows = org.json.JSONArray()
+                tracked.frames.forEach { frame ->
+                    val observation = TrackObservationValidator.validate(
+                        TrackObservationInput(
+                            frame.frameIndex,
+                            frame.presentationTimeUs / 1_000L,
+                            frame.modelObjectPresent,
+                            frame.rawMaskPixels,
+                            candidateCount = 1
+                        ),
+                        previousVisiblePixels,
+                        TrackValidationPolicy("dynamic-prefix-qnn245-v1", 0.10)
+                    )
+                    require(observation.temporallyCovered) {
+                        "dynamic temporal coverage failed at frame ${frame.frameIndex}"
+                    }
+                    if (observation.status == TrackObservationStatus.VISIBLE_VALIDATED) {
+                        previousVisiblePixels = observation.rawMaskPixels
+                    }
+                    rows.put(JSONObject()
+                        .put("frame_index", frame.frameIndex)
+                        .put("presentation_time_us", frame.presentationTimeUs)
+                        .put("status", observation.status.name)
+                        .put("raw_mask_pixels", frame.rawMaskPixels)
+                        .put("mask_sha256", fileSha256(frame.maskFile))
+                        .put("evidence_fingerprint", frame.evidenceFingerprint))
+                }
+                val evidence = JSONObject()
+                    .put("schema_version", 1)
+                    .put("status", "PASS_DYNAMIC_DECODED_TEMPORAL_QNN_PREFIX")
+                    .put("source_decoded_frame_count", fullTimeline.frameCount)
+                    .put("processed_frame_count", tracked.frames.size)
+                    .put("expected_frame_count", prefixTimeline.frameCount)
+                    .put("expected_frame_count_source", "decoded prefix timeline")
+                    .put("anchor_frame_index", tracked.anchorFrameIndex)
+                    .put("all_frames_temporally_covered", true)
+                    .put("frames", rows)
+                    .put("qairt_exact", AndroidQnnContextProcessRunner.QAIRT_EXACT)
+                    .put("media_modified", false)
+                File(outputDir, "qnn-dynamic-temporal-prefix-evidence.json")
+                    .writeText(evidence.toString(2) + "\n")
+                log(
+                    "PASS dynamic temporal QNN prefix: ${tracked.frames.size}/" +
+                        "${prefixTimeline.frameCount} frames covered"
+                )
+                log("=== NATIVE ADAPTER TEST END ===")
+                stopSelf()
+                return
+            }
+            if (operation == "edgetam_temporal_state_probe") {
+                require(BuildConfig.DEBUG) { "temporal state probe is debug-only" }
+                require(inputs.size == 1 && inputs.single().name == "manifest.json") {
+                    "temporal state probe requires the dense fixture manifest"
+                }
+                val fixtureRoot = inputs.single().parentFile?.parentFile
+                    ?: error("fixture root is missing")
+                val runsRoot = File(fixtureRoot, "runs/fixed-bank-validated")
+                val frameDirectories = runsRoot.listFiles { file ->
+                    file.isDirectory && file.name.startsWith("frame-")
+                }?.sortedBy { it.name }.orEmpty()
+                require(frameDirectories.size >= 2) { "temporal fixture has too few frames" }
+                val state = AndroidEdgeTamTemporalState(ByteArray(
+                    AndroidEdgeTamTemporalState.OBJECT_POINTER_BYTES
+                ))
+                val rows = org.json.JSONArray()
+                var comparedTransitions = 0
+                frameDirectories.forEachIndexed { sequenceIndex, frameDirectory ->
+                    if (sequenceIndex > 0) {
+                        val actual = state.inputsForNextFrame()
+                        val generated = File(frameDirectory, "generated")
+                        val expectedMemory = File(generated, "attention_maskmem_features.raw")
+                        val expectedPointers = File(generated, "attention_object_pointers.raw")
+                        require(expectedMemory.isFile && expectedPointers.isFile)
+                        require(actual.maskMemoryValues.contentEquals(expectedMemory.readBytes())) {
+                            "mask memory packing differs at $sequenceIndex"
+                        }
+                        require(actual.objectPointerValues.contentEquals(expectedPointers.readBytes())) {
+                            "object pointer packing differs at $sequenceIndex"
+                        }
+                        rows.put(JSONObject()
+                            .put("sequence_index", sequenceIndex)
+                            .put("spatial_memory_count", actual.spatialMemoryCount)
+                            .put("object_pointer_count", actual.objectPointerCount)
+                            .put("context_file", actual.contextFileName)
+                            .put("mask_memory_sha256", fileSha256(expectedMemory))
+                            .put("object_pointers_sha256", fileSha256(expectedPointers)))
+                        comparedTransitions += 1
+                    }
+                    if (sequenceIndex < frameDirectories.lastIndex) {
+                        val memory = File(
+                            frameDirectory,
+                            "memory/Result_0/maskmem_features.raw"
+                        )
+                        val pointer = File(frameDirectory, "decoder/Result_0/obj_ptr.raw")
+                        val objectLogit = File(
+                            frameDirectory,
+                            "decoder/Result_0/object_score_logits.raw"
+                        )
+                        require(memory.isFile && pointer.isFile && objectLogit.isFile) {
+                            "state outputs are missing for sequence $sequenceIndex"
+                        }
+                        val modelObjectPresent = java.nio.ByteBuffer.wrap(objectLogit.readBytes())
+                            .order(java.nio.ByteOrder.LITTLE_ENDIAN)
+                            .float > 0f
+                        state.append(
+                            sequenceIndex,
+                            memory.readBytes(),
+                            pointer.readBytes(),
+                            modelObjectPresent
+                        )
+                    }
+                }
+                val evidence = JSONObject()
+                    .put("schema_version", 1)
+                    .put("status", "PASS_ANDROID_EDGETAM_TEMPORAL_STATE_PACKING")
+                    .put("fixture_frame_count", frameDirectories.size)
+                    .put("compared_transitions", comparedTransitions)
+                    .put("all_transitions_bit_exact", true)
+                    .put("state_count_source", "processed frame outputs")
+                    .put("maximum_spatial_memories", AndroidEdgeTamTemporalState.MAX_SPATIAL_MEMORIES)
+                    .put("maximum_object_pointers", AndroidEdgeTamTemporalState.MAX_OBJECT_POINTERS)
+                    .put("transitions", rows)
+                    .put("media_modified", false)
+                File(outputDir, "edgetam-temporal-state-evidence.json")
+                    .writeText(evidence.toString(2) + "\n")
+                log(
+                    "PASS EdgeTAM temporal state: frames=${frameDirectories.size} " +
+                        "transitions=$comparedTransitions bit_exact=true"
+                )
+                log("=== NATIVE ADAPTER TEST END ===")
+                stopSelf()
+                return
+            }
+            if (operation == "qnn_edgetam_temporal_fixture_probe") {
+                require(BuildConfig.DEBUG && BuildConfig.LOCAL_TRACKED_PREVIEW) {
+                    "temporal QNN fixture probe requires the opt-in debug build"
+                }
+                require(inputs.size == 1 && inputs.single().name == "manifest.json") {
+                    "temporal QNN fixture probe requires the dense fixture manifest"
+                }
+                val fixtureRoot = inputs.single().parentFile?.parentFile
+                    ?: error("fixture root is missing")
+                val inputRoot = File(fixtureRoot, "frame-inputs")
+                val expectedRoot = File(fixtureRoot, "runs/fixed-bank-validated")
+                val inputFrames = inputRoot.listFiles { file ->
+                    file.isDirectory && file.name.startsWith("frame-")
+                }?.sortedBy { it.name }.orEmpty()
+                val requestedFrames = imageParams.optInt("max_frames", inputFrames.size)
+                    .coerceIn(2, inputFrames.size)
+                val frames = inputFrames.take(requestedFrames)
+                val temporalRunner = AndroidEdgeTamTemporalQnnRunner(this)
+                val state = temporalRunner.createState()
+                val rows = org.json.JSONArray()
+                frames.forEachIndexed { sequenceIndex, frameInput ->
+                    val source = BitmapFactory.decodeFile(
+                        File(frameInput, "source.png").absolutePath
+                    ) ?: error("fixture source frame is missing")
+                    val width = source.width
+                    val height = source.height
+                    source.recycle()
+                    val initialPoints = if (sequenceIndex == 0) {
+                        AndroidOwlV2QnnLocator.readFloats(
+                            File(frameInput, "unnorm_coords.raw"),
+                            4
+                        )
+                    } else null
+                    val result = temporalRunner.processRawFrame(
+                        sequenceIndex = sequenceIndex,
+                        imageInput = File(frameInput, "image.raw"),
+                        sourceWidth = width,
+                        sourceHeight = height,
+                        initialPromptCoordinates = initialPoints,
+                        state = state,
+                        cancelled = AtomicBoolean(false),
+                        produceMemory = sequenceIndex < frames.lastIndex,
+                        progress = { message -> log(message) }
+                    )
+                    val expectedRawMask = File(
+                        expectedRoot,
+                        "${frameInput.name}/decoder/Result_0/masks.raw"
+                    )
+                    require(expectedRawMask.isFile) { "expected decoder mask is missing" }
+                    val expectedRawSha = fileSha256(expectedRawMask)
+                    require(result.decoderMaskRawSha256 == expectedRawSha) {
+                        "decoder mask differs from prior vivo run at $sequenceIndex"
+                    }
+                    rows.put(JSONObject()
+                        .put("sequence_index", sequenceIndex)
+                        .put("fixture_frame", frameInput.name)
+                        .put("spatial_memory_count", result.spatialMemoryCount)
+                        .put("object_pointer_count", result.objectPointerCount)
+                        .put("model_object_present", result.modelObjectPresent)
+                        .put("raw_mask_pixels", result.rawMaskPixels)
+                        .put("decoder_mask_raw_sha256", result.decoderMaskRawSha256)
+                        .put("decoder_mask_bit_exact_vs_prior_vivo", true)
+                        .put("score", result.score.toDouble())
+                        .put("object_score_logit", result.objectScoreLogit.toDouble())
+                        .put("encoder_ms", result.encoderMs)
+                        .put("attention_ms", result.attentionMs ?: JSONObject.NULL)
+                        .put("decoder_ms", result.decoderMs)
+                        .put("memory_encoder_ms", result.memoryEncoderMs ?: JSONObject.NULL)
+                        .put("evidence_fingerprint", result.evidenceFingerprint))
+                }
+                val evidence = JSONObject()
+                    .put("schema_version", 1)
+                    .put("status", "PASS_ANDROID_APP_UID_EDGETAM_TEMPORAL_QNN")
+                    .put("processed_frame_count", frames.size)
+                    .put("frame_count_source", "fixture directory discovery")
+                    .put("all_decoder_masks_bit_exact_vs_prior_vivo", true)
+                    .put("qairt_exact", AndroidQnnContextProcessRunner.QAIRT_EXACT)
+                    .put("fixed_context_selected_by_state_count", true)
+                    .put("frames", rows)
+                    .put("media_modified", false)
+                    .put("published", false)
+                File(outputDir, "qnn-edgetam-temporal-fixture-evidence.json")
+                    .writeText(evidence.toString(2) + "\n")
+                log(
+                    "PASS app-UID EdgeTAM temporal QNN: frames=${frames.size} " +
+                        "decoder_masks_bit_exact=true"
+                )
+                log("=== NATIVE ADAPTER TEST END ===")
+                stopSelf()
+                return
+            }
             if (operation == "qnn_edgetam_encoder_fixture_probe") {
                 require(BuildConfig.DEBUG && BuildConfig.LOCAL_TRACKED_PREVIEW) {
                     "QNN fixture probe requires the opt-in local tracked-preview debug build"
@@ -410,6 +911,123 @@ class HeadlessService : Service() {
                 log(
                     "PASS language -> EdgeTAM mask: selected=${mask.selectedPixels} " +
                         "coverage=${mask.coverage} leakage=${mask.outsideExpandedBoxFraction}"
+                )
+                log("=== NATIVE ADAPTER TEST END ===")
+                stopSelf()
+                return
+            }
+            if (operation == "agent_real_full_timeline_preview_probe") {
+                require(BuildConfig.DEBUG && BuildConfig.LOCAL_TRACKED_PREVIEW) {
+                    "full timeline preview probe requires the opt-in debug build"
+                }
+                require(inputs.size == 1 && !agentQuery.isNullOrBlank()) {
+                    "full timeline preview probe requires one Live Photo and agent_query"
+                }
+                val asset = prepareGoalProbeAsset(
+                    inputs.single(),
+                    outputDir,
+                    "real-full-timeline-decoded"
+                )
+                val compileStatuses = mutableListOf<String>()
+                val graphActions = mutableListOf<String>()
+                var interaction: AndroidLocalPreviewInteraction? = null
+                var terminalState: AgentRuntimeState? = null
+                var finalPlan: MobilePlan? = null
+                var finalMessage = ""
+                var errorMessage: String? = null
+                var expectedFrames = 0
+                var observedFrames = 0
+                val backend = AndroidQnnLocalObservationBackend(
+                    this,
+                    AndroidFullTimelineMaskTracker(this)
+                )
+                MobileAgentLoop(this, backend).run(
+                    query = agentQuery,
+                    uris = emptyList(),
+                    layoutContext = null,
+                    cancelled = AtomicBoolean(false),
+                    listener = object : MobileAgentRunner.Listener {
+                        override fun onProgress(message: String) {
+                            log(message)
+                        }
+                        override fun onRuntimeGoal(goal: AgentGoalIr, result: AgentCompileResult) {
+                            compileStatuses += AgentCompileResultJson.toJson(result).getString("status")
+                        }
+                        override fun onRuntimeContentGraph(snapshot: AgentContentGraphSnapshot) {
+                            snapshot.graph.nodes.values.firstOrNull {
+                                it.kind == ContentNodeKind.MASK_TRACK
+                            }?.attributes?.let { attributes ->
+                                expectedFrames = attributes["expected_frame_count"]?.toIntOrNull() ?: 0
+                                observedFrames = attributes["observed_frame_count"]?.toIntOrNull() ?: 0
+                            }
+                        }
+                        override fun onRuntimeGraph(compilation: AgentDagCompilation) {
+                            graphActions += compilation.graph.nodes.values.map { it.actionId }
+                        }
+                        override fun onLocalPreview(value: AndroidLocalPreviewInteraction) {
+                            interaction = value
+                        }
+                        override fun onRuntimeTerminal(state: AgentRuntimeState, message: String) {
+                            terminalState = state
+                        }
+                        override fun onPlan(plan: MobilePlan) {
+                            finalPlan = plan
+                        }
+                        override fun onResult(result: MobileToolResult) = Unit
+                        override fun onFinished(uri: Uri?, message: String) {
+                            require(uri == null)
+                            finalMessage = message
+                        }
+                        override fun onError(message: String) {
+                            errorMessage = message
+                        }
+                    },
+                    preparedAssets = listOf(asset),
+                    dagShadow = true
+                )
+                val previewInteraction = requireNotNull(interaction)
+                val preview = previewInteraction.snapshot()
+                val previewFile = File(outputDir, "agent-real-full-timeline-preview.png")
+                FileOutputStream(previewFile).use { stream ->
+                    require(preview.previewBitmap.compress(Bitmap.CompressFormat.PNG, 100, stream))
+                }
+                val passed = terminalState?.status == AgentRunStatus.WAITING_USER &&
+                    finalPlan?.intent == "local_content_preview_review" &&
+                    compileStatuses == listOf("need_observation", "ready") &&
+                    graphActions == listOf(LocalDeterministicChangePreviewAction.ACTION_ID) &&
+                    expectedFrames > 1 && observedFrames == expectedFrames && errorMessage == null
+                val evidence = JSONObject()
+                    .put("schema_version", 1)
+                    .put("status", if (passed) {
+                        "PASS_AGENT_REAL_FULL_DYNAMIC_TIMELINE_PREVIEW"
+                    } else {
+                        "FAIL_AGENT_REAL_FULL_DYNAMIC_TIMELINE_PREVIEW"
+                    })
+                    .put("query", agentQuery)
+                    .put("expected_frame_count", expectedFrames)
+                    .put("observed_frame_count", observedFrames)
+                    .put("frame_count_source", "MediaCodec output until EOS")
+                    .put("compile_statuses", org.json.JSONArray(compileStatuses))
+                    .put("graph_actions", org.json.JSONArray(graphActions))
+                    .put("terminal_status", terminalState?.status?.name)
+                    .put("plan_intent", finalPlan?.intent)
+                    .put("final_message", finalMessage)
+                    .put("review_state", preview.lifecycle.state.name)
+                    .put("renderer_backend", preview.rendererBackendId)
+                    .put("preview_frame_index", preview.frameIndex)
+                    .put("preview_timestamp_ms", preview.timestampMs)
+                    .put("preview_sha256", fileSha256(previewFile))
+                    .put("error_message", errorMessage ?: JSONObject.NULL)
+                    .put("source_media_modified", false)
+                    .put("published", false)
+                File(outputDir, "agent-real-full-timeline-preview-evidence.json")
+                    .writeText(evidence.toString(2) + "\n")
+                previewInteraction.cancel()
+                previewInteraction.release()
+                require(passed) { "full dynamic timeline preview contract failed" }
+                log(
+                    "PASS Agent full dynamic timeline preview: $observedFrames/$expectedFrames " +
+                        "backend=${preview.rendererBackendId}"
                 )
                 log("=== NATIVE ADAPTER TEST END ===")
                 stopSelf()
@@ -1087,7 +1705,8 @@ class HeadlessService : Service() {
             videoFile = decoded.video,
             metadata = JSONObject()
                 .put("media_format", "livephoto")
-                .put("duration_ms", videoDurationMs(decoded.video)),
+                .put("duration_ms", videoDurationMs(decoded.video))
+                .put("photo_timestamp_us", decoded.photoTimestampUs),
             semantic = JSONObject().put("ready", true)
         )
     }

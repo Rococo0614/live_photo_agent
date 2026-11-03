@@ -8,7 +8,8 @@ data class AndroidShadowSourceFrame(
     val assetId: String,
     val frameIndex: Int,
     val timestampMs: Long,
-    val bitmap: Bitmap
+    val bitmap: Bitmap,
+    val ownedByPreview: Boolean = false
 )
 
 fun interface AndroidShadowSourceFrameProvider {
@@ -34,7 +35,8 @@ class AndroidTemporaryLocalPreviewStore(
 ) {
     private data class Holder(
         val artifact: AndroidTemporaryLocalPreviewArtifact,
-        var lifecycle: LocalPreviewLifecycle
+        var lifecycle: LocalPreviewLifecycle,
+        val ownsSourceBitmap: Boolean
     )
 
     private val sequence = AtomicLong()
@@ -49,7 +51,8 @@ class AndroidTemporaryLocalPreviewStore(
         previewBitmap: Bitmap,
         effectKind: String,
         rendererBackendId: String,
-        certificateFingerprint: String
+        certificateFingerprint: String,
+        ownsSourceBitmap: Boolean = false
     ): AndroidLocalPreviewInteraction {
         require(sourceAssetId.isNotBlank())
         require(frameIndex >= 0 && timestampMs >= 0)
@@ -73,7 +76,7 @@ class AndroidTemporaryLocalPreviewStore(
             certificateFingerprint,
             lifecycle
         )
-        holders[artifactId] = Holder(artifact, lifecycle)
+        holders[artifactId] = Holder(artifact, lifecycle, ownsSourceBitmap)
         return AndroidLocalPreviewInteraction(this, artifactId)
     }
 
@@ -111,6 +114,9 @@ class AndroidTemporaryLocalPreviewStore(
         )) { "only cancelled or undone previews can be released" }
         holders.remove(artifactId)
         if (!holder.artifact.previewBitmap.isRecycled) holder.artifact.previewBitmap.recycle()
+        if (holder.ownsSourceBitmap && !holder.artifact.sourceBitmap.isRecycled) {
+            holder.artifact.sourceBitmap.recycle()
+        }
     }
 
     @Synchronized
@@ -198,7 +204,13 @@ class AndroidLocalPreviewShadowExecutor(
             "shadow preview executor refuses mutation-approved certificates"
         }
 
-        val observation = certificate.observations.firstOrNull {
+        val preferredFrame = materialization.maskTrack.preferredPreviewFrameIndex
+        val observation = preferredFrame?.let { preferred ->
+            certificate.observations.firstOrNull {
+                it.frameIndex == preferred &&
+                    it.status == TrackObservationStatus.VISIBLE_VALIDATED
+            }
+        } ?: certificate.observations.firstOrNull {
             it.status == TrackObservationStatus.VISIBLE_VALIDATED
         } ?: throw IllegalStateException("mask track has no visible validated frame to preview")
         val maskFrame = requireNotNull(materialization.maskTrack.frame(observation.frameIndex)) {
@@ -232,7 +244,8 @@ class AndroidLocalPreviewShadowExecutor(
                 previewBitmap = rendered.bitmap,
                 effectKind = change.effectKind,
                 rendererBackendId = rendered.backendId,
-                certificateFingerprint = certificate.evidenceFingerprint
+                certificateFingerprint = certificate.evidenceFingerprint,
+                ownsSourceBitmap = sourceFrame.ownedByPreview
             )
         } catch (failure: Exception) {
             rendered.bitmap.recycle()
