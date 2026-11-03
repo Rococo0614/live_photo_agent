@@ -6,6 +6,7 @@ import org.json.JSONObject
 enum class AgentRunStatus {
     RUNNING,
     WAITING_USER,
+    WAITING_OBSERVATION,
     FINISHED,
     FAILED,
     CANCELLED

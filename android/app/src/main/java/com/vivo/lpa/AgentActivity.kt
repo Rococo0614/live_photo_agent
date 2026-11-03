@@ -851,7 +851,11 @@ preparedAssets = prepared
                         .put("published_uris", JSONArray(runtimeState.publishedUris.map(Uri::toString)))
                         .put("executed_count", runtimeState.executedCount)
                         .put("replan_count", runtimeState.replanCount)
-                    uiFor(generation) { logAudit("TERMINAL", payload) }
+                    uiFor(generation) {
+                        taskStatus = runtimeState.status.name.lowercase()
+                        persistSessionState(message)
+                        logAudit("TERMINAL", payload)
+                    }
                 }
                 override fun onPlan(plan: MobilePlan) = uiFor(generation) {
                     lastPlan = plan.toJson()
@@ -956,8 +960,12 @@ preparedAssets = prepared
                     resetProgressBar()
                     lastResult = uri
                     lastResultMessage = message
-                    taskStatus = if (uri == null && message == "用户已取消") "cancelled" else
-                        if (uri == null) "completed_without_output" else "completed"
+                    taskStatus = when {
+                        taskStatus in setOf("waiting_user", "waiting_observation") -> taskStatus
+                        uri == null && message == "用户已取消" -> "cancelled"
+                        uri == null -> "completed_without_output"
+                        else -> "completed"
+                    }
                     persistSessionState()
                     state.text = if (uri == null) message else "完成 | 已写入系统相册"
                     if (uri == null) append(message) else appendResult(uri, message)

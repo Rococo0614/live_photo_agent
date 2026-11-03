@@ -1,6 +1,6 @@
 # 随仓入库的二进制：来源、用途与校验
 
-本工程刻意把 SDK 的 AAR 和两个 `.so` 提交进 git。原因是这些制品在任何公共
+本工程刻意把 SDK 的 AAR 和所需native制品提交进 git。原因是这些制品在任何公共
 Maven 仓库都取不到，不入库则 clone 后无法构建。代价是仓库多约 22M 二进制。
 
 修改任何一项后，请同步更新下表的 md5。
@@ -59,6 +59,9 @@ i/w/e (String, String, Throwable) -> int
 |---|---|---|---|
 | `libmediacore4g_vivo_public.so` | 8.9M | `0693c8f3c6bf6e25a9f7173803b17432` | 从测试机 `/system/lib64/` 拉取，**与设备上的文件逐字节相同** |
 | `libvivolog.so` | 8.0K | `bc511b94b1ba30c4f39c7fb5504284be` | **来源未确认**，设备 `/system/lib64`、`/vendor/lib64`、`/system_ext/lib64` 下均无同名文件，也不来自两个 AAR |
+| `libQnnHtp.so` | 2,952,008B | `fb64c7a577efeb88f440ec97b315b29d` | QAIRT 2.45 runtime；tracked-preview runner额外校验SHA-256 |
+| `libQnnHtpNetRunExtensions.so` | 957,864B | `886abfd5b8f7d95b1b3789777aa1ab18` | QAIRT 2.45 HTP配置扩展 |
+| `libQnnSystem.so` | 3,635,400B | `e5159b3a7c5f7ca3bf35d4b2d0f08b29` | QAIRT 2.45 context system library |
 
 两个 AAR 自带的 native 库（`libVideoEditorSDK_jni.so`、`libmediaeffectsdk.so`
 等）由 AAR 的 `jni/` 目录自动打包，**不在** `jniLibs/` 下，无需手工管理。
@@ -85,3 +88,17 @@ nativeLibraryDirectories=[
 
 注意这个结论只对**该测试机**成立。若换成没有预置这个库的机型，仍需随包携带，
 删除前应先确认目标机型覆盖范围。
+
+## 4. 实验source set中的QAIRT runner
+
+`app/src/localTrackedPreview/jniLibs/arm64-v8a/libqnn_net_run.so`是官方QAIRT
+`2.45.0.260326154327` Android ARM64 `qnn-net-run`可执行文件，为满足APK native extraction而使用
+`.so`文件名；它仍是PIE executable，不是JNI库。
+
+| 文件 | 字节 | md5 | SHA-256 | 来源 |
+|---|---:|---|---|---|
+| `libqnn_net_run.so` | 5,051,616 | `6f10a0e2d0a12cc1da1850c668bfb4da` | `812a0f98f8bcd2ecc39c8a2462e39ad0f031dfaa565b3d095e4475b5484ecba3` | Qualcomm QAIRT SDK 2.45.0.260326154327 |
+
+Gradle只在同时传入`-PagentRuntime=dag -PlocalTrackedPreview=true`时把该source set加入APK；普通debug、
+release及生产`loop` APK均不包含它。运行时再次校验SHA及stdout中的完整QAIRT版本，并且只接受外部
+模型包内通过SHA固定的context。该制品受Qualcomm SDK许可约束，不得当作开源模型文件重新分发。

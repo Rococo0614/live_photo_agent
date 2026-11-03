@@ -6,6 +6,8 @@ import android.app.NotificationManager
 import android.app.Service
 import android.content.ContentValues
 import android.content.Intent
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
 import android.net.Uri
 import android.os.Build
 import android.os.Handler
@@ -26,8 +28,11 @@ import com.vivo.videoeditorsdk.videoeditor.VideoConverter
 import com.vivo.videoeditorsdk.videoeditor.VideoExportEngine
 import java.io.File
 import java.io.FileInputStream
+import java.io.FileOutputStream
+import java.security.MessageDigest
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicBoolean
 import org.json.JSONObject
 
 /**
@@ -45,6 +50,16 @@ class HeadlessService : Service() {
         private const val TAG = "LPA_HEADLESS"
         /** SDK 转码等待上限。真机上 3s 视频通常几秒内完成，给足余量 */
         private const val TIMEOUT_SEC = 120L
+        private const val EDGETAM_ENCODER_CONTEXT_SHA256 =
+            "0edaed8a468ab003dff72fd57574b3ffc95bf2ac9fbb89fba94070b12811ddc0"
+        private const val EDGETAM_ENCODER_IMAGE_SHA256 =
+            "ee8ff74682e984efdc4bd60b190df8533efd36fdd6eeb93a2a6fbd3d64cff7a8"
+        private const val EDGETAM_ENCODER_COORDINATES_SHA256 =
+            "d7b6b3765bbae50df879cc75830861d01c6de4af5bf2f5be4a21ce9c35753abb"
+        private const val EDGETAM_ENCODER_LABELS_SHA256 =
+            "80b8fd6d60fa85fd14a38b5295cb92abd80dfec5ca406c9f969609a79d36809d"
+        private const val QAIRT_245_V81_SKEL_SHA256 =
+            "57330ed3f7846b94181b25b7a87bc3fe5dc71033766f2d5630520a1400477c97"
     }
 
     override fun onBind(intent: Intent?): IBinder? = null
@@ -69,6 +84,7 @@ class HeadlessService : Service() {
             ?: 1_500_000L
         val outputName = intent?.getStringExtra("output_name")
         val userAuthorizedPublish = intent?.getBooleanExtra("user_authorized_publish", false) == true
+        val agentQuery = intent?.getStringExtra("agent_query")
         Thread({
             if (inputPaths.isEmpty()) runAll()
             else runNativeAdapter(
@@ -79,7 +95,8 @@ class HeadlessService : Service() {
                 imageParams,
                 photoTimestampUs,
                 outputName,
-                userAuthorizedPublish
+                userAuthorizedPublish,
+                agentQuery
             )
         }, "lpa-headless").start()
         return START_NOT_STICKY
@@ -131,7 +148,8 @@ class HeadlessService : Service() {
         imageParams: JSONObject,
         photoTimestampUs: Long,
         outputName: String?,
-        userAuthorizedPublish: Boolean
+        userAuthorizedPublish: Boolean,
+        agentQuery: String?
     ) {
         val inputs = inputPaths.map(::File)
         val missing = inputs.firstOrNull { !it.isFile }
@@ -145,6 +163,835 @@ class HeadlessService : Service() {
         log("操作: $operation / 布局: $layout")
         inputs.forEach { log("输入 MP4: ${it.absolutePath} (${it.length()} bytes)") }
         runCatching {
+            if (operation == "qnn_edgetam_encoder_fixture_probe") {
+                require(BuildConfig.DEBUG && BuildConfig.LOCAL_TRACKED_PREVIEW) {
+                    "QNN fixture probe requires the opt-in local tracked-preview debug build"
+                }
+                require(inputs.size == 5) {
+                    "QNN fixture probe requires context, image, coordinates, labels and DSP skel"
+                }
+                val contextSource = inputs[0]
+                val image = inputs[1]
+                val coordinates = inputs[2]
+                val labels = inputs[3]
+                val skelSource = inputs[4]
+                require(fileSha256(contextSource) == EDGETAM_ENCODER_CONTEXT_SHA256)
+                require(fileSha256(image) == EDGETAM_ENCODER_IMAGE_SHA256)
+                require(fileSha256(coordinates) == EDGETAM_ENCODER_COORDINATES_SHA256)
+                require(fileSha256(labels) == EDGETAM_ENCODER_LABELS_SHA256)
+                require(fileSha256(skelSource) == QAIRT_245_V81_SKEL_SHA256)
+                val modelRoot = File(filesDir, "qnn-edgetam-encoder-fixture-pack")
+                modelRoot.deleteRecursively()
+                val contextFile = File(modelRoot, "contexts/encoder_o3.bin")
+                val skelFile = File(modelRoot, "runtime/dsp/libQnnHtpV81Skel.so")
+                copyProbeFile(contextSource, contextFile)
+                copyProbeFile(skelSource, skelFile)
+                val contract = AndroidQnnContextContract(
+                    componentId = "edgetam_encoder_fixture",
+                    contextFile = contextFile,
+                    contextSha256 = EDGETAM_ENCODER_CONTEXT_SHA256,
+                    inputs = listOf(
+                        AndroidQnnTensorContract("image", 12_582_912),
+                        AndroidQnnTensorContract("unnorm_coords", 16),
+                        AndroidQnnTensorContract("labels", 8)
+                    ),
+                    outputs = listOf(
+                        AndroidQnnTensorContract("high_res_features1", 8_388_608),
+                        AndroidQnnTensorContract("high_res_features2", 4_194_304),
+                        AndroidQnnTensorContract("sparse_embedding", 3_072),
+                        AndroidQnnTensorContract("pix_feat", 4_194_304),
+                        AndroidQnnTensorContract("image_embeddings", 4_194_304)
+                    )
+                )
+                AndroidQnnContextProcessRunner(this, modelRoot).execute(
+                    contract,
+                    mapOf(
+                        "image" to image,
+                        "unnorm_coords" to coordinates,
+                        "labels" to labels
+                    ),
+                    AtomicBoolean(false)
+                ).use { result ->
+                    val actualHashes = result.outputs.mapValues { fileSha256(it.value) }
+                    val expectedHashes = mapOf(
+                        "high_res_features1" to
+                            "95d32f904faf3380a5478082e84ad7b0cebb0a920889061c0f475687eb77619c",
+                        "high_res_features2" to
+                            "9610fdc645d7b75583fb6cd6259dff757df474463e09882e893034c4850720a1",
+                        "sparse_embedding" to
+                            "5bbbcb641acb7968fbe77028d12fbdb29813eda6a2faaa91de3c8ad8a8d29b2d",
+                        "pix_feat" to
+                            "4a4585aa393663b2d4f5f673fd08ff9e3bf74d61083b54ecd65e539a5867850a",
+                        "image_embeddings" to
+                            "36f2b47be05b2c808055978485345232f0c4c67f8e25ed1d9b4d446a2f3e041d"
+                    )
+                    require(actualHashes == expectedHashes) {
+                        "app-owned QNN outputs differ from validated vivo tensors"
+                    }
+                    val evidence = JSONObject()
+                        .put("schema_version", 1)
+                        .put("status", "PASS_ANDROID_APP_UID_QNN245_CONTEXT")
+                        .put("component", result.componentId)
+                        .put("execution_bridge", "packaged-qnn-net-run-child-process")
+                        .put("qairt_exact", AndroidQnnContextProcessRunner.QAIRT_EXACT)
+                        .put("context_sha256", EDGETAM_ENCODER_CONTEXT_SHA256)
+                        .put("dsp_skel_sha256", QAIRT_245_V81_SKEL_SHA256)
+                        .put("elapsed_ms", result.elapsedMs)
+                        .put("output_sha256", JSONObject(actualHashes))
+                        .put("outputs_bit_exact_vs_validated_vivo", true)
+                        .put("app_uid_owned", true)
+                        .put("persistent_jni_context", false)
+                        .put("media_modified", false)
+                        .put("published", false)
+                    File(outputDir, "qnn-edgetam-encoder-fixture-evidence.json")
+                        .writeText(evidence.toString(2) + "\n")
+                    log(
+                        "PASS app-UID QNN 2.45 context: component=${result.componentId} " +
+                            "elapsed=${result.elapsedMs}ms bit_exact=true"
+                    )
+                }
+                modelRoot.deleteRecursively()
+                log("=== NATIVE ADAPTER TEST END ===")
+                stopSelf()
+                return
+            }
+            if (operation == "qnn_owlv2_locator_probe") {
+                require(BuildConfig.DEBUG && BuildConfig.LOCAL_TRACKED_PREVIEW) {
+                    "OWLv2 locator probe requires the opt-in local tracked-preview debug build"
+                }
+                require(inputs.size == 1 && !agentQuery.isNullOrBlank()) {
+                    "OWLv2 locator probe requires one Live Photo and an ASCII canonical query"
+                }
+                val asset = prepareGoalProbeAsset(inputs.single(), outputDir, "owlv2-locator-decoded")
+                val bitmap = requireNotNull(BitmapFactory.decodeFile(asset.imageFile!!.absolutePath))
+                val run = try {
+                    AndroidOwlV2QnnLocator(this).locate(
+                        canonicalQuery = agentQuery,
+                        sourceText = null,
+                        stateFingerprint = AgentStateFingerprint.of(AgentRuntimeState(
+                            sessionId = null,
+                            turnId = "turn-owlv2-locator-probe",
+                            originalQuery = agentQuery,
+                            sourceAssets = listOf(asset)
+                        )),
+                        bitmap = bitmap,
+                        cancelled = AtomicBoolean(false),
+                        progress = { message -> log(message) }
+                    )
+                } finally {
+                    bitmap.recycle()
+                }
+                val result = run.result
+                val evidence = JSONObject()
+                    .put("schema_version", 1)
+                    .put("status", "PASS_ANDROID_APP_UID_OWLV2_LOCATOR")
+                    .put("canonical_query", result.canonicalQuery)
+                    .put("disposition", result.disposition.name)
+                    .put("candidate_count", result.candidates.size)
+                    .put("candidate_scores", org.json.JSONArray(
+                        result.candidates.map { it.score.toDouble() }
+                    ))
+                    .put("internal_candidates", org.json.JSONArray(
+                        result.candidates.map { candidate ->
+                            JSONObject()
+                                .put("raw_index", candidate.rawIndex)
+                                .put("label", candidate.label)
+                                .put("score", candidate.score.toDouble())
+                                .put("box_xyxy", org.json.JSONArray(listOf(
+                                    candidate.box.left,
+                                    candidate.box.top,
+                                    candidate.box.right,
+                                    candidate.box.bottom
+                                )))
+                        }
+                    ))
+                    .put("evidence_fingerprint", result.evidenceFingerprint)
+                    .put("preprocessing_ms", run.preprocessingMs)
+                    .put("vision_execution_ms", run.visionExecutionMs)
+                    .put("text_execution_ms", run.textExecutionMs)
+                    .put("qairt_exact", AndroidQnnContextProcessRunner.QAIRT_EXACT)
+                    .put("internal_boxes_diagnostic_only", true)
+                    .put("boxes_model_visible", false)
+                    .put("content_mutation_allowed", false)
+                    .put("media_modified", false)
+                    .put("published", false)
+                File(outputDir, "qnn-owlv2-locator-evidence.json")
+                    .writeText(evidence.toString(2) + "\n")
+                log(
+                    "PASS app-UID OWLv2 locator: disposition=${result.disposition} " +
+                        "candidates=${result.candidates.size} " +
+                        "vision=${run.visionExecutionMs}ms text=${run.textExecutionMs}ms"
+                )
+                log("=== NATIVE ADAPTER TEST END ===")
+                stopSelf()
+                return
+            }
+            if (operation == "qnn_language_mask_probe") {
+                require(BuildConfig.DEBUG && BuildConfig.LOCAL_TRACKED_PREVIEW) {
+                    "language mask probe requires the opt-in local tracked-preview debug build"
+                }
+                require(inputs.size == 1 && !agentQuery.isNullOrBlank()) {
+                    "language mask probe requires one Live Photo and an ASCII canonical query"
+                }
+                val asset = prepareGoalProbeAsset(inputs.single(), outputDir, "language-mask-decoded")
+                val bitmap = requireNotNull(BitmapFactory.decodeFile(asset.imageFile!!.absolutePath))
+                val locatorRun = AndroidOwlV2QnnLocator(this).locate(
+                    canonicalQuery = agentQuery,
+                    sourceText = null,
+                    stateFingerprint = AgentStateFingerprint.of(AgentRuntimeState(
+                        sessionId = null,
+                        turnId = "turn-language-mask-probe",
+                        originalQuery = agentQuery,
+                        sourceAssets = listOf(asset)
+                    )),
+                    bitmap = bitmap,
+                    cancelled = AtomicBoolean(false),
+                    progress = { message -> log(message) }
+                )
+                require(locatorRun.result.disposition ==
+                    OwlV2GroundingDisposition.CANDIDATE_SET_READY) {
+                    "language target is not unique: ${locatorRun.result.disposition} " +
+                        "(${locatorRun.result.candidates.size} candidates)"
+                }
+                val mask = try {
+                    AndroidEdgeTamQnnSegmenter(this).segment(
+                        bitmap,
+                        locatorRun.result,
+                        AtomicBoolean(false),
+                        progress = { message -> log(message) },
+                        diagnosticImageInputCopy = File(
+                            outputDir,
+                            "qnn-language-mask-image-input.raw"
+                        )
+                    )
+                } finally {
+                    bitmap.recycle()
+                }
+                require(mask.qualityAccepted) {
+                    "EdgeTAM mask failed coverage/leakage gate"
+                }
+                val maskFile = File(outputDir, "qnn-language-mask.raw")
+                maskFile.writeBytes(mask.maskValues)
+                val evidence = JSONObject()
+                    .put("schema_version", 1)
+                    .put("status", "PASS_ANDROID_LANGUAGE_TO_EDGETAM_MASK")
+                    .put("canonical_query", locatorRun.result.canonicalQuery)
+                    .put("locator_candidate_count", locatorRun.result.candidates.size)
+                    .put("locator_evidence_fingerprint", locatorRun.result.evidenceFingerprint)
+                    .put("mask_evidence_fingerprint", mask.evidenceFingerprint)
+                    .put("mask_raw_sha256", fileSha256(maskFile))
+                    .put("image_input_sha256", fileSha256(File(
+                        outputDir,
+                        "qnn-language-mask-image-input.raw"
+                    )))
+                    .put("mask_width", mask.width)
+                    .put("mask_height", mask.height)
+                    .put("selected_pixels", mask.selectedPixels)
+                    .put("coverage", mask.coverage)
+                    .put("outside_expanded_box_fraction", mask.outsideExpandedBoxFraction)
+                    .put("score", mask.score.toDouble())
+                    .put("object_score_logit", mask.objectScoreLogit.toDouble())
+                    .put("quality_accepted", mask.qualityAccepted)
+                    .put("timing_ms", JSONObject()
+                        .put("owlv2_preprocess", locatorRun.preprocessingMs)
+                        .put("owlv2_vision", locatorRun.visionExecutionMs)
+                        .put("owlv2_text", locatorRun.textExecutionMs)
+                        .put("edgetam_preprocess", mask.preprocessingMs)
+                        .put("edgetam_encoder", mask.encoderExecutionMs)
+                        .put("edgetam_decoder", mask.decoderExecutionMs))
+                    .put("qairt_exact", AndroidQnnContextProcessRunner.QAIRT_EXACT)
+                    .put("mask_track_materialized", false)
+                    .put("next_gate", "EdgeTAM temporal propagation")
+                    .put("media_modified", false)
+                    .put("published", false)
+                File(outputDir, "qnn-language-mask-evidence.json")
+                    .writeText(evidence.toString(2) + "\n")
+                log(
+                    "PASS language -> EdgeTAM mask: selected=${mask.selectedPixels} " +
+                        "coverage=${mask.coverage} leakage=${mask.outsideExpandedBoxFraction}"
+                )
+                log("=== NATIVE ADAPTER TEST END ===")
+                stopSelf()
+                return
+            }
+            if (operation == "agent_real_keyframe_preview_probe") {
+                require(BuildConfig.DEBUG && BuildConfig.LOCAL_TRACKED_PREVIEW) {
+                    "real key-frame preview probe requires the opt-in debug build"
+                }
+                require(inputs.size == 1 && !agentQuery.isNullOrBlank()) {
+                    "real key-frame preview probe requires one Live Photo and agent_query"
+                }
+                val asset = prepareGoalProbeAsset(inputs.single(), outputDir, "real-keyframe-decoded")
+                var observedMask: AndroidEdgeTamInitialMask? = null
+                val backend = AndroidQnnLocalObservationBackend(
+                    this,
+                    AndroidEdgeTamKeyFrameTracker(this) { mask -> observedMask = mask }
+                )
+                val compileStatuses = mutableListOf<String>()
+                val graphActions = mutableListOf<String>()
+                var interaction: AndroidLocalPreviewInteraction? = null
+                var terminalState: AgentRuntimeState? = null
+                var finalPlan: MobilePlan? = null
+                var finalMessage = ""
+                var errorMessage: String? = null
+                MobileAgentLoop(this, backend).run(
+                    query = agentQuery,
+                    uris = emptyList(),
+                    layoutContext = null,
+                    cancelled = AtomicBoolean(false),
+                    listener = object : MobileAgentRunner.Listener {
+                        override fun onProgress(message: String) {
+                            log(message)
+                        }
+                        override fun onRuntimeGoal(goal: AgentGoalIr, result: AgentCompileResult) {
+                            compileStatuses += AgentCompileResultJson.toJson(result).getString("status")
+                        }
+                        override fun onRuntimeGraph(compilation: AgentDagCompilation) {
+                            graphActions += compilation.graph.nodes.values.map { it.actionId }
+                        }
+                        override fun onLocalPreview(value: AndroidLocalPreviewInteraction) {
+                            interaction = value
+                        }
+                        override fun onRuntimeTerminal(state: AgentRuntimeState, message: String) {
+                            terminalState = state
+                        }
+                        override fun onPlan(plan: MobilePlan) {
+                            finalPlan = plan
+                        }
+                        override fun onResult(result: MobileToolResult) = Unit
+                        override fun onFinished(uri: Uri?, message: String) {
+                            require(uri == null)
+                            finalMessage = message
+                        }
+                        override fun onError(message: String) {
+                            errorMessage = message
+                        }
+                    },
+                    preparedAssets = listOf(asset),
+                    dagShadow = true
+                )
+                val mask = requireNotNull(observedMask)
+                val previewInteraction = requireNotNull(interaction)
+                val preview = previewInteraction.snapshot()
+                val sourcePixels = IntArray(mask.width * mask.height)
+                val previewPixels = IntArray(sourcePixels.size)
+                preview.sourceBitmap.getPixels(sourcePixels, 0, mask.width, 0, 0,
+                    mask.width, mask.height)
+                preview.previewBitmap.getPixels(previewPixels, 0, mask.width, 0, 0,
+                    mask.width, mask.height)
+                var outsideChanged = 0
+                var insideChanged = 0
+                for (index in sourcePixels.indices) {
+                    if ((mask.maskValues[index].toInt() and 0xff) == 0) {
+                        if (sourcePixels[index] != previewPixels[index]) outsideChanged += 1
+                    } else if (sourcePixels[index] != previewPixels[index]) {
+                        insideChanged += 1
+                    }
+                }
+                val previewFile = File(outputDir, "agent-real-keyframe-preview.png")
+                FileOutputStream(previewFile).use { stream ->
+                    require(preview.previewBitmap.compress(Bitmap.CompressFormat.PNG, 100, stream))
+                }
+                val passed = terminalState?.status == AgentRunStatus.WAITING_USER &&
+                    finalPlan?.intent == "local_content_preview_review" &&
+                    compileStatuses == listOf("need_observation", "ready") &&
+                    graphActions == listOf(LocalDeterministicChangePreviewAction.ACTION_ID) &&
+                    mask.qualityAccepted && outsideChanged == 0 && insideChanged > 0 &&
+                    errorMessage == null
+                val evidence = JSONObject()
+                    .put("schema_version", 1)
+                    .put("status", if (passed) {
+                        "PASS_AGENT_REAL_QNN_KEYFRAME_PREVIEW"
+                    } else {
+                        "FAIL_AGENT_REAL_QNN_KEYFRAME_PREVIEW"
+                    })
+                    .put("query", agentQuery)
+                    .put("observation_backend", "owlv2-edgetam-qairt245-app-uid")
+                    .put("scope", "KEY_FRAME_ONLY")
+                    .put("temporal_mask_track_complete", false)
+                    .put("compile_statuses", org.json.JSONArray(compileStatuses))
+                    .put("graph_actions", org.json.JSONArray(graphActions))
+                    .put("terminal_status", terminalState?.status?.name)
+                    .put("plan_intent", finalPlan?.intent)
+                    .put("final_message", finalMessage)
+                    .put("review_state", preview.lifecycle.state.name)
+                    .put("renderer_backend", preview.rendererBackendId)
+                    .put("mask_evidence_fingerprint", mask.evidenceFingerprint)
+                    .put("mask_selected_pixels", mask.selectedPixels)
+                    .put("mask_coverage", mask.coverage)
+                    .put("mask_outside_box_fraction", mask.outsideExpandedBoxFraction)
+                    .put("outside_mask_changed_pixels", outsideChanged)
+                    .put("inside_mask_changed_pixels", insideChanged)
+                    .put("preview_sha256", fileSha256(previewFile))
+                    .put("error_message", errorMessage ?: JSONObject.NULL)
+                    .put("source_media_modified", false)
+                    .put("published", false)
+                    .put("next_gate", "all-frame EdgeTAM temporal propagation")
+                File(outputDir, "agent-real-keyframe-preview-evidence.json")
+                    .writeText(evidence.toString(2) + "\n")
+                previewInteraction.cancel()
+                previewInteraction.release()
+                if (!preview.sourceBitmap.isRecycled) preview.sourceBitmap.recycle()
+                require(passed) { "real QNN key-frame preview contract failed" }
+                log(
+                    "PASS Agent real QNN key-frame preview: backend=${preview.rendererBackendId} " +
+                        "outside_changed=$outsideChanged inside_changed=$insideChanged"
+                )
+                log("=== NATIVE ADAPTER TEST END ===")
+                stopSelf()
+                return
+            }
+            if (operation == "agent_local_fixture_preview_probe") {
+                require(BuildConfig.DEBUG && BuildConfig.LOCAL_TRACKED_PREVIEW) {
+                    "agent_local_fixture_preview_probe requires the opt-in debug build"
+                }
+                require(inputs.size == 2 && !agentQuery.isNullOrBlank()) {
+                    "fixture preview probe requires Live Photo, mask and agent_query"
+                }
+                val asset = prepareGoalProbeAsset(inputs[0], outputDir, "fixture-loop-decoded")
+                val sourceBitmap = requireNotNull(BitmapFactory.decodeFile(asset.imageFile!!.absolutePath))
+                val maskBitmap = requireNotNull(BitmapFactory.decodeFile(inputs[1].absolutePath))
+                require(sourceBitmap.width == maskBitmap.width && sourceBitmap.height == maskBitmap.height)
+                val maskPixels = IntArray(maskBitmap.width * maskBitmap.height)
+                maskBitmap.getPixels(
+                    maskPixels, 0, maskBitmap.width, 0, 0, maskBitmap.width, maskBitmap.height
+                )
+                val maskValues = ByteArray(maskPixels.size) { index ->
+                    (maskPixels[index] ushr 16 and 0xff).toByte()
+                }
+                maskBitmap.recycle()
+                val fixtureBackend = AgentLocalObservationBackend {
+                        goal, state, content, _, _ ->
+                    val operationRow = goal.operations.single()
+                    val semantic = operationRow.target as AgentGoalTarget.Semantic
+                    val sourceAsset = state.sourceAssets.single()
+                    val objectTrack = when (val grounded =
+                        AgentShadowObservationBridge.materializeObjectTrack(
+                            content,
+                            ShadowTargetGroundingObservation(
+                                operationId = operationRow.operationId,
+                                semanticTarget = semantic.description,
+                                sourceAssetId = sourceAsset.assetId,
+                                candidateCount = 1,
+                                observedAtMs = 0,
+                                locatorEvidenceFingerprint = fileSha256(inputs[1])
+                            )
+                        )) {
+                        is ShadowObjectTrackResult.Materialized -> grounded.track
+                        is ShadowObjectTrackResult.NeedUser ->
+                            return@AgentLocalObservationBackend AgentLocalObservationResolution.NeedUser(
+                                "fixture unexpectedly ambiguous"
+                            )
+                        is ShadowObjectTrackResult.NeedObservation ->
+                            return@AgentLocalObservationBackend AgentLocalObservationResolution.Pending(
+                                emptyList(),
+                                grounded.reason
+                            )
+                    }
+                    val maskTrack = AgentShadowObservationBridge.materializeMaskTrack(
+                        objectTrack,
+                        expectedFrameCount = 1,
+                        frames = listOf(ShadowMaskFrame.create(
+                            frameIndex = 0,
+                            timestampMs = 0,
+                            width = sourceBitmap.width,
+                            height = sourceBitmap.height,
+                            maskValues = maskValues
+                        )),
+                        validationPolicy = TrackValidationPolicy("fixture-candidate-v1", 0.10)
+                    )
+                    val materialization = AgentShadowObservationBridge.finalizeForCompiler(
+                        goal,
+                        maskTrack
+                    )
+                    AgentLocalObservationResolution.Ready(
+                        materialization,
+                        AndroidShadowSourceFrameProvider { assetId, frameIndex, timestampMs ->
+                            AndroidShadowSourceFrame(
+                                assetId,
+                                frameIndex,
+                                timestampMs,
+                                sourceBitmap
+                            )
+                        }
+                    )
+                }
+                val compileStatuses = mutableListOf<String>()
+                val graphActions = mutableListOf<String>()
+                var interaction: AndroidLocalPreviewInteraction? = null
+                var terminalState: AgentRuntimeState? = null
+                var finalPlan: MobilePlan? = null
+                var finalMessage = ""
+                var errorMessage: String? = null
+                MobileAgentLoop(this, fixtureBackend).run(
+                    query = agentQuery,
+                    uris = emptyList(),
+                    layoutContext = null,
+                    cancelled = AtomicBoolean(false),
+                    listener = object : MobileAgentRunner.Listener {
+                        override fun onProgress(message: String) = Unit
+                        override fun onRuntimeGoal(goal: AgentGoalIr, result: AgentCompileResult) {
+                            compileStatuses += AgentCompileResultJson.toJson(result).getString("status")
+                        }
+                        override fun onRuntimeGraph(compilation: AgentDagCompilation) {
+                            graphActions += compilation.graph.nodes.values.map { it.actionId }
+                        }
+                        override fun onLocalPreview(value: AndroidLocalPreviewInteraction) {
+                            interaction = value
+                        }
+                        override fun onRuntimeTerminal(state: AgentRuntimeState, message: String) {
+                            terminalState = state
+                        }
+                        override fun onPlan(plan: MobilePlan) {
+                            finalPlan = plan
+                        }
+                        override fun onResult(result: MobileToolResult) = Unit
+                        override fun onFinished(uri: Uri?, message: String) {
+                            require(uri == null)
+                            finalMessage = message
+                        }
+                        override fun onError(message: String) {
+                            errorMessage = message
+                        }
+                    },
+                    preparedAssets = listOf(asset),
+                    dagShadow = true
+                )
+                val previewInteraction = requireNotNull(interaction)
+                val preview = previewInteraction.snapshot()
+                val source = IntArray(sourceBitmap.width * sourceBitmap.height)
+                val rendered = IntArray(source.size)
+                sourceBitmap.getPixels(source, 0, sourceBitmap.width, 0, 0,
+                    sourceBitmap.width, sourceBitmap.height)
+                preview.previewBitmap.getPixels(rendered, 0, sourceBitmap.width, 0, 0,
+                    sourceBitmap.width, sourceBitmap.height)
+                var outsideChanged = 0
+                var insideChanged = 0
+                for (index in source.indices) {
+                    if ((maskValues[index].toInt() and 0xff) == 0) {
+                        if (source[index] != rendered[index]) outsideChanged += 1
+                    } else if (source[index] != rendered[index]) {
+                        insideChanged += 1
+                    }
+                }
+                val passed = terminalState?.status == AgentRunStatus.WAITING_USER &&
+                    finalPlan?.intent == "local_content_preview_review" &&
+                    compileStatuses == listOf("need_observation", "ready") &&
+                    graphActions == listOf(LocalDeterministicChangePreviewAction.ACTION_ID) &&
+                    outsideChanged == 0 && insideChanged > 0 && errorMessage == null
+                val evidence = JSONObject()
+                    .put("schema_version", 1)
+                    .put("status", if (passed) {
+                        "PASS_AGENT_LOCAL_FIXTURE_PREVIEW"
+                    } else {
+                        "FAIL_AGENT_LOCAL_FIXTURE_PREVIEW"
+                    })
+                    .put("query", agentQuery)
+                    .put("observation_backend", "validated-mask-debug-fixture")
+                    .put("compile_statuses", org.json.JSONArray(compileStatuses))
+                    .put("graph_actions", org.json.JSONArray(graphActions))
+                    .put("terminal_status", terminalState?.status?.name)
+                    .put("plan_intent", finalPlan?.intent)
+                    .put("final_message", finalMessage)
+                    .put("review_state", preview.lifecycle.state.name)
+                    .put("renderer_backend", preview.rendererBackendId)
+                    .put("outside_mask_changed_pixels", outsideChanged)
+                    .put("inside_mask_changed_pixels", insideChanged)
+                    .put("error_message", errorMessage ?: JSONObject.NULL)
+                    .put("source_media_modified", false)
+                    .put("published", false)
+                File(outputDir, "agent-local-fixture-preview-evidence.json")
+                    .writeText(evidence.toString(2) + "\n")
+                previewInteraction.cancel()
+                previewInteraction.release()
+                sourceBitmap.recycle()
+                require(passed) { "agent local fixture preview contract failed" }
+                log(
+                    "PASS Agent fixture preview: actions=$graphActions backend=${preview.rendererBackendId} " +
+                        "outside_changed=$outsideChanged"
+                )
+                log("=== NATIVE ADAPTER TEST END ===")
+                stopSelf()
+                return
+            }
+            if (operation == "agent_local_loop_probe" ||
+                operation == "agent_nonlocal_fallthrough_probe"
+            ) {
+                require(BuildConfig.DEBUG && BuildConfig.LOCAL_TRACKED_PREVIEW) {
+                    "agent_local_loop_probe requires the opt-in local tracked-preview debug build"
+                }
+                require(inputs.size == 1 && !agentQuery.isNullOrBlank()) {
+                    "agent_local_loop_probe requires one Live Photo and agent_query"
+                }
+                val asset = prepareGoalProbeAsset(inputs.single(), outputDir, "agent-loop-decoded")
+                var goalPayload: JSONObject? = null
+                var terminalState: AgentRuntimeState? = null
+                var terminalMessage = ""
+                var finalMessage = ""
+                var finalUri: Uri? = null
+                var errorMessage: String? = null
+                var toolCallCount = 0
+                var toolResultCount = 0
+                val progressRows = mutableListOf<String>()
+                val brainRows = mutableListOf<JSONObject>()
+                var finalPlan: MobilePlan? = null
+                MobileAgentLoop(this).run(
+                    query = agentQuery,
+                    uris = emptyList(),
+                    layoutContext = null,
+                    cancelled = AtomicBoolean(false),
+                    listener = object : MobileAgentRunner.Listener {
+                        override fun onProgress(message: String) {
+                            progressRows += message
+                        }
+
+                        override fun onRuntimeGoal(goal: AgentGoalIr, result: AgentCompileResult) {
+                            goalPayload = AgentCompileResultJson.toJson(result)
+                                .put("operation_kinds", org.json.JSONArray(
+                                    goal.operations.map { it.kind.name }
+                                ))
+                        }
+
+                        override fun onRuntimeBrainTrace(stage: String, trace: BrainTrace) {
+                            brainRows += JSONObject()
+                                .put("stage", stage)
+                                .put("parsed", trace.parsed)
+                                .put("raw_output", trace.rawOutput)
+                        }
+
+                        override fun onRuntimeTerminal(
+                            runtimeState: AgentRuntimeState,
+                            message: String
+                        ) {
+                            terminalState = runtimeState
+                            terminalMessage = message
+                        }
+
+                        override fun onToolCall(
+                            index: Int,
+                            total: Int,
+                            call: MobileToolCall
+                        ) {
+                            toolCallCount += 1
+                        }
+
+                        override fun onResult(result: MobileToolResult) {
+                            toolResultCount += 1
+                        }
+
+                        override fun onPlan(plan: MobilePlan) {
+                            finalPlan = plan
+                        }
+
+                        override fun onFinished(uri: Uri?, message: String) {
+                            finalUri = uri
+                            finalMessage = message
+                        }
+
+                        override fun onError(message: String) {
+                            errorMessage = message
+                        }
+                    },
+                    preparedAssets = listOf(asset),
+                    sessionId = null,
+                    selectedAssetIds = emptyList(),
+                    dagShadow = true
+                )
+                val terminal = requireNotNull(terminalState) { "agent loop emitted no terminal state" }
+                val nonLocalProbe = operation == "agent_nonlocal_fallthrough_probe"
+                val passed = if (nonLocalProbe) {
+                    terminal.status == AgentRunStatus.FINISHED &&
+                        goalPayload == null && toolCallCount == 0 && toolResultCount == 0 &&
+                        finalUri == null && errorMessage == null && finalPlan?.intent == "chat" &&
+                        finalMessage.isNotBlank()
+                } else {
+                    terminal.status == AgentRunStatus.WAITING_OBSERVATION &&
+                        goalPayload?.optString("status") == "need_observation" &&
+                        toolCallCount == 0 && toolResultCount == 0 &&
+                        finalUri == null && errorMessage == null &&
+                        finalPlan?.intent == "local_content_observation"
+                }
+                val evidence = JSONObject()
+                    .put("schema_version", 1)
+                    .put("status", if (passed) {
+                        if (nonLocalProbe) "PASS_AGENT_NONLOCAL_FALLTHROUGH"
+                        else "PASS_AGENT_LOCAL_INTERACTION_SUSPEND"
+                    } else {
+                        if (nonLocalProbe) "FAIL_AGENT_NONLOCAL_FALLTHROUGH"
+                        else "FAIL_AGENT_LOCAL_INTERACTION_SUSPEND"
+                    })
+                    .put("query", agentQuery)
+                    .put("goal", goalPayload)
+                    .put("terminal_status", terminal.status.name)
+                    .put("terminal_message", terminalMessage)
+                    .put("final_message", finalMessage)
+                    .put("plan_intent", finalPlan?.intent)
+                    .put("tool_call_count", toolCallCount)
+                    .put("tool_result_count", toolResultCount)
+                    .put("error_message", errorMessage ?: JSONObject.NULL)
+                    .put("progress", org.json.JSONArray(progressRows))
+                    .put("brain_traces", org.json.JSONArray(brainRows))
+                    .put("global_style_fallback", false)
+                    .put("media_modified", false)
+                    .put("published", false)
+                File(outputDir, if (nonLocalProbe) {
+                    "agent-nonlocal-fallthrough-evidence.json"
+                } else {
+                    "agent-local-loop-evidence.json"
+                })
+                    .writeText(evidence.toString(2) + "\n")
+                require(passed) {
+                    if (nonLocalProbe) "agent loop non-local fallthrough contract failed"
+                    else "agent loop local suspension contract failed"
+                }
+                log(
+                    "PASS Agent ${if (nonLocalProbe) "non-local fallthrough" else "local loop"}: " +
+                        "status=${terminal.status} " +
+                        "next=${goalPayload?.optJSONArray("requirements")?.optJSONObject(0)?.optString("kind")} " +
+                        "tool_calls=$toolCallCount"
+                )
+                log("=== NATIVE ADAPTER TEST END ===")
+                stopSelf()
+                return
+            }
+            if (operation == "goal_ir_probe") {
+                require(BuildConfig.DEBUG && BuildConfig.LOCAL_TRACKED_PREVIEW) {
+                    "goal_ir_probe requires the opt-in local tracked-preview debug build"
+                }
+                require(inputs.size == 1 && !agentQuery.isNullOrBlank()) {
+                    "goal_ir_probe requires one Live Photo and agent_query"
+                }
+                val asset = prepareGoalProbeAsset(inputs.single(), outputDir, "goal-ir-decoded")
+                val state = AgentRuntimeState(
+                    sessionId = null,
+                    turnId = "turn-goal-ir-probe",
+                    originalQuery = agentQuery,
+                    sourceAssets = listOf(asset)
+                )
+                val planner = GenieTextPlanner(this)
+                var planning = planner.tryGoalIr(agentQuery, state)?.let { result ->
+                    if (!result.localPreviewApplicable) result else {
+                        val validated = AgentLocalGoalValidator.apply(result.codecResult)
+                        result.copy(
+                            codecResult = validated,
+                            trace = result.trace.copy(parsed = validated.valid)
+                        )
+                    }
+                }
+                if (planning == null ||
+                    (planning.localPreviewApplicable && !planning.codecResult.valid)
+                ) {
+                    val correction = planning?.codecResult?.diagnostics.orEmpty()
+                        .joinToString("; ") { "${it.path}: ${it.message}" }
+                        .ifBlank { "上一输出不是可解析的plan_live_edit JSON" }
+                    planning = planner.tryGoalIr(agentQuery, state, correction)?.let { result ->
+                        if (!result.localPreviewApplicable) result else {
+                            val validated = AgentLocalGoalValidator.apply(result.codecResult)
+                            result.copy(
+                                codecResult = validated,
+                                trace = result.trace.copy(parsed = validated.valid)
+                            )
+                        }
+                    }
+                }
+                if (planning == null) {
+                    val trace = planner.lastTrace
+                    val failureEvidence = JSONObject()
+                        .put("schema_version", 1)
+                        .put("status", "FAIL_QWEN_LOCAL_CHANGE_GOAL_IR")
+                        .put("query", agentQuery)
+                        .put("raw_output", trace?.rawOutput.orEmpty())
+                        .put("diagnostics", org.json.JSONArray().put(JSONObject()
+                            .put("code", "missing_json")
+                            .put("path", "$")
+                            .put("message", "Qwen did not return a JSON object")))
+                        .put("media_modified", false)
+                        .put("published", false)
+                    File(outputDir, "goal-ir-evidence.json")
+                        .writeText(failureEvidence.toString(2) + "\n")
+                    log("FAIL Goal IR raw=${trace?.rawOutput.orEmpty().takeLast(2000)}")
+                    error("Qwen did not return Goal IR")
+                }
+                val completed = requireNotNull(planning)
+                if (!completed.localPreviewApplicable) {
+                    val evidence = JSONObject()
+                        .put("schema_version", 1)
+                        .put("status", "PASS_SKIP_LOCAL_PREVIEW")
+                        .put("query", agentQuery)
+                        .put("raw_output", completed.trace.rawOutput)
+                        .put("parsed", completed.trace.parsed)
+                        .put("media_modified", false)
+                        .put("published", false)
+                    File(outputDir, "goal-ir-evidence.json")
+                        .writeText(evidence.toString(2) + "\n")
+                    log("PASS Goal IR eligibility: skip_local_preview")
+                    log("=== NATIVE ADAPTER TEST END ===")
+                    stopSelf()
+                    return
+                }
+                if (!completed.codecResult.valid || completed.codecResult.goal == null) {
+                    val failureEvidence = JSONObject()
+                        .put("schema_version", 1)
+                        .put("status", "FAIL_QWEN_LOCAL_CHANGE_GOAL_IR")
+                        .put("query", agentQuery)
+                        .put("raw_output", completed.trace.rawOutput)
+                        .put("diagnostics", org.json.JSONArray(
+                            completed.codecResult.diagnostics.map { diagnostic ->
+                                JSONObject()
+                                    .put("code", diagnostic.code)
+                                    .put("path", diagnostic.path)
+                                    .put("message", diagnostic.message)
+                            }
+                        ))
+                        .put("media_modified", false)
+                        .put("published", false)
+                    File(outputDir, "goal-ir-evidence.json")
+                        .writeText(failureEvidence.toString(2) + "\n")
+                    log("FAIL Goal IR raw=${completed.trace.rawOutput.takeLast(2000)}")
+                    error(completed.codecResult.diagnostics.joinToString("; ") { it.message })
+                }
+                val goal = requireNotNull(completed.codecResult.goal)
+                val operationRow = goal.operations.single()
+                require(operationRow.kind == AgentGoalOperationKind.CHANGE_CONTENT)
+                val target = operationRow.target as? AgentGoalTarget.Semantic
+                    ?: error("Goal IR did not preserve a semantic target")
+                require(target.description.all { it.isWhitespace() || it.code in 0x20..0x7e }) {
+                    "canonical target is not ASCII"
+                }
+                val change = requireNotNull(LocalDeterministicChange.fromOperation(operationRow)) {
+                    "Goal IR did not produce a supported typed local effect"
+                }
+                val content = AgentContentGraphFactory.fromState(state)
+                val preflight = AgentGoalCompiler.preflight(goal, state, content)
+                require(preflight is AgentCompileResult.NeedObservation)
+                require(preflight.requirements.single().kind == AgentDataKind.OBJECT_TRACK)
+                val evidence = JSONObject()
+                    .put("schema_version", 1)
+                    .put("status", "PASS_QWEN_LOCAL_CHANGE_GOAL_IR")
+                    .put("query", agentQuery)
+                    .put("model_trace", JSONObject()
+                        .put("source", completed.trace.source)
+                        .put("elapsed_ms", completed.trace.elapsedMs)
+                        .put("parsed", completed.trace.parsed)
+                        .put("raw_output", completed.trace.rawOutput))
+                    .put("goal_id", goal.goalId)
+                    .put("operation_kind", operationRow.kind.name)
+                    .put("canonical_target", target.description)
+                    .put("target_source_text", target.sourceText ?: JSONObject.NULL)
+                    .put("effect", change.parameters())
+                    .put("preflight", AgentCompileResultJson.toJson(preflight))
+                    .put("media_modified", false)
+                    .put("published", false)
+                val targetFile = File(outputDir, "goal-ir-evidence.json")
+                targetFile.writeText(evidence.toString(2) + "\n")
+                log(
+                    "PASS Goal IR: kind=${operationRow.kind} target=${target.description} " +
+                        "effect=${change.effectKind} next=OBJECT_TRACK"
+                )
+                log("=== NATIVE ADAPTER TEST END ===")
+                stopSelf()
+                return
+            }
             if (operation == "publish_livephoto") {
                 require(BuildConfig.DEBUG && userAuthorizedPublish) {
                     "diagnostic gallery publishing requires a debug build and explicit user authorization"
@@ -223,6 +1070,27 @@ class HeadlessService : Service() {
         stopSelf()
     }
 
+    private fun prepareGoalProbeAsset(
+        packed: File,
+        outputDir: File,
+        directoryName: String
+    ): PreparedAsset {
+        val decoded = requireNotNull(
+            LivePhotoSdkAdapter(this).decode(packed, File(outputDir, directoryName))
+        ) { "input is not a decodable Live Photo" }
+        return PreparedAsset(
+            assetId = "goal-ir-probe-live",
+            sourceUri = Uri.parse("content://com.vivo.lpa/goal-ir-probe"),
+            sourceFile = packed,
+            imageFile = decoded.image,
+            videoFile = decoded.video,
+            metadata = JSONObject()
+                .put("media_format", "livephoto")
+                .put("duration_ms", 6034),
+            semantic = JSONObject().put("ready", true)
+        )
+    }
+
     private fun publishLivePhoto(source: File, displayName: String): Uri {
         require(Regex("[A-Za-z0-9._-]+\\.(jpg|jpeg)", RegexOption.IGNORE_CASE).matches(displayName)) {
             "unsafe output name"
@@ -282,6 +1150,27 @@ class HeadlessService : Service() {
             throw error
         }
     }
+
+    private fun fileSha256(file: File): String {
+        val digest = MessageDigest.getInstance("SHA-256")
+        file.inputStream().use { input ->
+            val buffer = ByteArray(1024 * 1024)
+            while (true) {
+                val count = input.read(buffer)
+                if (count < 0) break
+                digest.update(buffer, 0, count)
+            }
+        }
+        return digest.digest().joinToString("") { "%02x".format(it.toInt() and 0xff) }
+    }
+
+    private fun copyProbeFile(source: File, target: File) {
+        target.parentFile?.mkdirs()
+        source.inputStream().use { input ->
+            target.outputStream().use { output -> input.copyTo(output, 1024 * 1024) }
+        }
+    }
+
 
     /**
      * 从相册取一张 live photo，拆出其中的 MP4 段作为测试输入。

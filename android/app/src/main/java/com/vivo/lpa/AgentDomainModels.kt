@@ -259,6 +259,12 @@ data class AgentGoalIr(
     }
 }
 
+data class AgentGoalPlanningResult(
+    val codecResult: AgentGoalCodecResult,
+    val trace: BrainTrace,
+    val localPreviewApplicable: Boolean = true
+)
+
 object AgentGoalIrAdapter {
     fun from(route: SemanticRoute, state: AgentRuntimeState, stateFingerprint: String): AgentGoalIr {
         val operations = route.steps.mapIndexed { index, step ->

@@ -2,7 +2,7 @@
 
 > 验证日期：2026-11-02  
 > 设备：vivo V2547A / PD2547，SM8850，Android 16（SDK 36）  
-> 状态：**单帧GLES renderer与Android shadow bridge通过；不授权写回或发布**
+> 状态：**真实语言→OWLv2→EdgeTAM关键帧mask→GLES区域工具已通过；全时序与写回仍禁用**
 
 ## 1. 边界
 
@@ -114,6 +114,99 @@ SHA-256 89e93a44495e7f02bcbc9b75f057be755322398b9efde7a6c98dbec83299e99a
 debug/release单测均为87/87，`lintDebug`、debug/release assemble通过。headless probe验证了与UI相同的
 interaction/store状态机，但尚未做触屏自动化或Activity重建测试。
 
+### 4.1 真实Agent语言到关键帧区域工具
+
+2026-11-03新增默认关闭的`localTrackedPreview`实验入口；它强制要求
+`-PagentRuntime=dag -PlocalTrackedPreview=true`，默认生产仍为`agentRuntime=loop`。Qwen只生成严格
+`CHANGE_CONTENT` Goal IR和ASCII canonical target，box、points、mask、context及DAG连线仍由host持有。
+任何Goal格式、唯一性或观察门禁失败都会停止，不回退为全局`apply_style`。
+
+QAIRT执行层使用随实验APK提取的官方2.45 `qnn-net-run`，由App UID启动可取消子进程；context和DSP
+skel来自外部模型包并逐个校验SHA-256。它已关闭“应用进程能否拥有并取消2.45 context执行”的Gate，
+但不是持久JNI context，不能写成JNI生命周期已经完成。EdgeTAM encoder固定fixture的五个输出与此前
+vivo张量逐字节一致，App-UID执行总时长703ms：
+
+```text
+/mnt/ssd/lpa-aihub-probe/artifacts/android-app-qnn245-context/
+  edgetam-encoder-evidence.json
+SHA-256 d8c8dc3fe96b86d1a4e0118ef7131d6202536f3b7690da440c5f5719a19adc78
+```
+
+真实Live Photo cover随后完成：
+
+```text
+中文请求
+  → Qwen CHANGE_CONTENT（orange cat walking on green grass）
+  → OWLv2 vision/text QAIRT 2.45（唯一候选）
+  → EdgeTAM encoder/decoder QAIRT 2.45（关键帧mask）
+  → OBJECT_TRACK + 单关键帧preview certificate
+  → local_mask_change_preview_shadow
+  → gles_mask_color_tint
+  → WAITING_USER
+```
+
+Android EdgeTAM预处理复现Pillow UINT8双线性两阶段卷积；对同一1080×1440 cover的Python
+`Image.resize(..., BILINEAR)`输入达到58.51dB、最大绝对误差1/255，高于50dB门槛。真实mask通过覆盖率
+与扩框外泄漏门禁；区域工具改变mask内像素且mask外严格0变化。该证书明确标记`KEY_FRAME_ONLY`，
+`temporal_mask_track_complete=false`，不能用于Live Photo写回或发布。
+
+```text
+/mnt/ssd/lpa-aihub-probe/artifacts/android-app-qnn245-context/
+  agent-language-to-mask-gate.json
+SHA-256 3436d65d906745620c7deee4ba1be84632076d072bee88dce214c6a4ce7c9723
+
+  language-mask/android-input-differential.json
+SHA-256 218887a9bb164fdfeada8f7154b1b8b75c1a1d6db05ad83f2e2f273ebc513399
+
+  agent-real-keyframe-preview/evidence.json
+SHA-256 a89b6adfdfc0409ba058b8a0db916bbdd4afd282fcdea14ea81d8702fb37d038
+
+  agent-real-keyframe-preview/preview.png
+SHA-256 438a3d13bf0de46c9730fee89199ac0a104eefdd1cdade9fcbbd917120fc3dd4
+```
+
+宽泛`a cat`在同一cover返回多个候选并进入`NeedUser`；host未按score、面积或位置擅自挑选。目标颜色、
+动作和场景限定由Qwen保留，目的颜色不得污染编辑前主体词；场景中的同色背景可保留，例如
+`orange cat ... on green grass`不会被误判为`green cat`。
+
+实验入口还必须先输出`plan_live_edit`或`skip_local_preview`二选一。真实Qwen对能力问答和拼图请求均
+输出严格`skip_local_preview`，随后仍由原Runtime v2 loop处理，局部实验分支不劫持无关请求：
+
+```text
+/mnt/ssd/lpa-aihub-probe/artifacts/android-app-qnn245-context/eligibility/
+  local-goal.json     SHA-256 a7abdf6d8950aa0a64afb853b96c126e785c5385a8aecc9ae51adf93f2535c8e
+  chat-skip.json      SHA-256 35f83cb5cc3e1fe212b2d47cd65ba43a9ed553bab9a1c42761b03d5baf8c9a67
+  collage-skip.json   SHA-256 aac516243fd5652c5f33b99bf013a88bc50fff1caf651b5ca563d5c9504f6c3a
+  chat-loop-fallthrough.json
+                      SHA-256 4691654241a483d9c249f5300870daa124a96effd4cd0d0d0079147f9be6cec0
+```
+
+当前debug/release单测均为108/108，`lintDebug`、`lintRelease`及debug/release assemble通过。默认
+debug/release APK都不包含`libqnn_net_run.so`；只有显式实验构建包含：
+
+```text
+default debug APK       4b133505e32910bb207e580cdb5c8c0b64290abac4359077cc078ac7478e322e
+default release APK     731aed2e7b167be037aca8ffed3e6b3da5c84e7f7dcc307ac24cc1ba5659f83b
+experimental debug APK  e94bf85438dcbd997120a552689a442f90d28068ae1d7275cb0b6bad92d2eaf3
+```
+
+所有自定义Gradle属性已注册为task inputs；同一worktree按“clean默认→实验→默认”构建，前后两个默认
+APK逐字节相同，避免实验BuildConfig或native source set被增量缓存带入生产包。
+
+实验模型包固定在应用私有`files/models/local-tracked-preview/`，不进入APK；必需布局与SHA如下：
+
+```text
+contexts/owlv2_vision_qnn245.bin    6bd5393673e57190fa95d9af770fe470ef7b0b038f2edf42da4c6dae0e4bb006
+contexts/owlv2_text_qnn245.bin      831c23acd211f29189860e0a9dbb5fb5544aca068835abd5d002ffec3a00a28a
+contexts/edgetam_encoder_qnn245.bin 0edaed8a468ab003dff72fd57574b3ffc95bf2ac9fbb89fba94070b12811ddc0
+contexts/edgetam_decoder_qnn245.bin 0fbc23c5fd70760bf9aeb369f88936b112e6a54cbc03155ff7a3ee4067fd08dc
+tokenizer/vocab.json                e089ad92ba36837a0d31433e555c8f45fe601ab5c221d4f607ded32d9f7a4349
+tokenizer/merges.txt                9fd691f7c8039210e0fced15865466c65820d09b63988b0174bfe25de299051a
+runtime/dsp/libQnnHtpV81Skel.so     57330ed3f7846b94181b25b7a87bc3fe5dc71033766f2d5630520a1400477c97
+```
+
+任一文件缺失或SHA不符都返回`NeedObservation`/失败，不会切换QAIRT版本或CPU伪结果。
+
 ## 5. 逐帧跟踪调色显色证据
 
 在已经通过vivo QAIRT 2.45 Gate的17帧固定图跟踪链上，使用每帧`device-mask.png`对中间面板目标猫
@@ -213,20 +306,22 @@ alpha变化或RGB误差大于1都会返回FAIL。
 
 ## 7. 尚未通过的Gate
 
-本结果关闭“单帧renderer数值等价”和“supplied observation到临时artifact”Gate；以下仍阻止mutation：
+本结果关闭“单帧renderer数值等价”“真实语言到真实关键帧mask”和“mask到临时区域工具”Gate；以下
+仍阻止mutation：
 
-1. OWLv2 QAIRT 2.45张量backend与Android输入均已通过，但Android QNN JNI尚未接入bridge；当前真机
-   target/mask仍是已验证fixture，不是完整用户请求；
-2. PyTorch全帧调色与私有Live Photo repack已通过；仍需把181帧tracking/render替换成vivo QNN与
+1. App-UID QAIRT 2.45子进程context已接入，但持久JNI context及181帧EdgeTAM传播尚未完成；当前真实
+   Agent证书仅覆盖关键帧，正常入口仍停在`MASK_TRACK`观察门禁；
+2. PyTorch全帧调色与私有Live Photo repack已通过；仍需把181帧tracking/render替换成App内QNN与
    持久Android EGL pipeline；
 3. UI已实现但尚未做触屏自动化、Activity/进程重建、会话恢复与旋转Gate；
 4. 多分钟完整pipeline soak、总host/GPU/DSP内存与温升尚未通过；
 5. 固定context银行包体仍未解决；任何确认仍只接受临时预览，不能写回。
 
-测试后已恢复冻结的Runtime v2 loop APK，并确认设备安装包SHA一致：
+本轮测试后已恢复当前默认`agentRuntime=loop / localTrackedPreview=false` APK；设备base.apk与host逐字节
+一致，且不包含实验`qnn-net-run`：
 
 ```text
-SHA-256 5e5d012c317c8e5f8e052058b1c1f1e168b99a1a4bd0378e79b818b71bb6a6f9
+SHA-256 4b133505e32910bb207e580cdb5c8c0b64290abac4359077cc078ac7478e322e
 ```
 
 vivo百度输入法保持启用，ADBKeyboard为disabled-user，stay-awake为0，LPA进程已停止。

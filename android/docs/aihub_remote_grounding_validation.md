@@ -449,9 +449,10 @@ object score之外增加确定性时序覆盖检查：raw mask面积若突然低
 | vision | 639.05ms | 616.66ms | 331,764 / 326,569KiB |
 | text/head | 6.96ms | 平均3.07ms | 144,880 / 139,577KiB |
 
-该结果关闭“可获得且能在vivo正确执行的2.45 locator张量backend”Gate，但**没有**关闭Android产品
-集成：context仍由`qnn-net-run`探针加载，尚无Android QNN JNI/context生命周期。两个context合计
-454,336,512B（433.29MiB），包体Gate明确不通过。RSS也不包含DSP allocations，不能冒充总内存。
+该结果关闭“可获得且能在vivo正确执行的2.45 locator张量backend”Gate。2026-11-03又增加默认关闭的
+Android App-UID context bridge：实验APK内的官方2.45 `qnn-net-run`子进程加载同一context，支持超时与
+取消；真实cover的vision/text已接入host后处理。它仍不是持久JNI context。两个context合计
+454,336,512B（433.29MiB），包体Gate明确不通过。RSS也不包含DSP allocations，不能冒充总内存；
 短时运行thermal status为0，不替代多分钟soak。
 
 Android Kotlin输入侧已单独闭环。`OwlV2ClipTokenizer`加载官方vocab/merges，宽泛和澄清query的16个
@@ -460,9 +461,9 @@ bilinear resize和CLIP normalize，1080×1440真实帧对Python raw达到**133.9
 `1.91e-6`，且源帧SHA不变。2.70秒是包含冷tokenizer解析、预处理、两次源SHA和reference读取的诊断
 总时间，不作为稳态性能结论。tokenizer文件仍是外部模型包制品，尚未并入APK。
 
-Android侧已增加纯Kotlin `OwlV2GroundingPostprocessor`，固定执行score gate、per-label NMS、box映射、
-候选数量决策和证据SHA；交给track bridge的只有canonical language、candidate count和SHA，不把box放入
-Goal IR。它已有host单测与shadow真机probe，但还没有接到真实QNN输出。
+Android侧纯Kotlin `OwlV2GroundingPostprocessor`固定执行score gate、per-label NMS、box映射、候选数量
+决策和证据SHA；交给track bridge的只有canonical language、candidate count和SHA，不把box放入Goal IR。
+它现已接到App-UID真实QNN输出：精确target得到唯一候选，宽泛`a cat`得到多个候选并返回`NeedUser`。
 
 汇总证据：
 
@@ -517,16 +518,16 @@ EdgeTAM grounding探针首选float模型验证语义，随后才比较W8A8；这
 ## 7. 当前门禁
 
 - OWLv2公开、Apache-2.0；QAIRT 2.45 contexts已在S26和vivo通过数值对照，Android tokenizer/图像
-  输入也已差分通过，宽泛语言`NeedUser`和澄清后唯一候选均通过；Android QNN JNI尚未完成。
+  输入也已差分通过，App-UID子进程context已完成宽泛`NeedUser`和精确唯一候选；持久JNI尚未完成。
 - EdgeTAM float QAIRT 2.45 QNN/TFLite单帧mask和memory encoder通过；vivo固定计数attention图银行
   已覆盖1/1到7/16，合成/自然遮挡、快速镜头、出画重入、取消恢复与短时soak通过；
   QAIRT 2.50/2.51明确禁用。
 - SAM3不是当前优先路径；OWLv2 box + EdgeTAM 2.45 mask已形成首个通过远程Gate的单帧backend。
 - 2.45 encoder、memory encoder、固定计数attention图银行、decoder、object-absent pointer常量与
   manifest均已下载；bounded图只保留失败回归样本。
-- 当前仍是抽样只读overlay，不构成可授权修改的`ScopeCertificate`；locator Android集成、逐帧覆盖、
-  多分钟完整pipeline soak、总host/DSP峰值内存及locator 433MiB与固定图银行包体方案仍未通过，任何
-  修改、填充或发布节点仍不可ready。
+- 真实语言→OWLv2→EdgeTAM关键帧mask→GLES区域工具已在shadow中进入`WAITING_USER`，但证书明确仅为
+  `KEY_FRAME_ONLY`；逐帧覆盖、多分钟完整pipeline soak、总host/DSP峰值内存及locator 433MiB与固定
+  图银行包体方案仍未通过，任何Live Photo修改、填充或发布节点仍不可ready。
 - 下游Android单帧GLES renderer及supplied observations → track/certificate → temporary artifact →
   confirm/undo shadow链已通过；但尚未接收本节locator的Android输出与真实逐帧`MASK_TRACK`，不改变
   上述Grounding与mutation门禁。
@@ -535,8 +536,8 @@ EdgeTAM grounding探针首选float模型验证语义，随后才比较W8A8；这
 
 ## 8. 后续Gate
 
-1. 把已验证的OWLv2 2.45 contexts接入Android QNN JNI/context生命周期，并把已通过差分的CLIP BPE
-   与960图像预处理接上真实输出，闭合应用内语言→box路径。
+1. 把已通过的App-UID子进程context runner替换为持久Android QNN JNI/context生命周期；应用内
+   CLIP BPE、960图像输入及语言→box路径现已闭合。
 2. 从抽样扩展到逐帧长序列，并增加多分钟完整pipeline soak和总host/DSP峰值内存观测。
 3. 增加进程终止、Activity重建和Android bridge级context重载；底层TERM取消/重载已通过。
 4. 把10%时序覆盖阈值扩展到更多尺度变化fixture；不充分时返回`NeedObservation`，不能静默接受。

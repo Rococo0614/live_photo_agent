@@ -21,6 +21,15 @@ val agentRuntime = providers.gradleProperty("agentRuntime")
 require(agentRuntime in setOf("static", "loop", "dag")) {
     "agentRuntime must be one of static, loop, dag"
 }
+val localTrackedPreview = providers.gradleProperty("localTrackedPreview")
+    .orElse("false")
+    .get()
+require(localTrackedPreview in setOf("true", "false")) {
+    "localTrackedPreview must be true or false"
+}
+require(localTrackedPreview == "false" || agentRuntime == "dag") {
+    "localTrackedPreview requires -PagentRuntime=dag"
+}
 val qwenModelPack = providers.gradleProperty("qwenModelPack")
     .orElse("instruct")
     .get()
@@ -64,6 +73,9 @@ android {
         // `-PagentRuntime=static` remains the explicit rollback path. `dag` is the Runtime v3
         // shadow compiler: it audits a typed graph while Runtime v2 still performs execution.
         buildConfigField("String", "AGENT_RUNTIME", "\"$agentRuntime\"")
+        // Experimental language-targeted local preview. Default false; even when enabled, it may
+        // only run under Runtime v3 shadow and cannot register a mutation/writeback executor.
+        buildConfigField("boolean", "LOCAL_TRACKED_PREVIEW", localTrackedPreview)
         // Native-thinking experiments use a separate model directory and never overwrite the
         // production Instruct-2507 pack. `route` keeps constrained bind classification direct.
         buildConfigField("String", "QWEN_MODEL_PACK", "\"$qwenModelPack\"")
@@ -97,6 +109,14 @@ android {
         buildConfig = true
     }
 
+    sourceSets {
+        getByName("main") {
+            if (localTrackedPreview == "true") {
+                jniLibs.srcDir("src/localTrackedPreview/jniLibs")
+            }
+        }
+    }
+
     packaging {
         jniLibs {
             // 两个 SDK 的 .so 若有同名，取第一个，避免打包冲突
@@ -106,6 +126,22 @@ android {
         resources {
             excludes += setOf("META-INF/DEPENDENCIES", "META-INF/LICENSE*", "META-INF/NOTICE*")
         }
+    }
+}
+
+// These properties alter generated constants and, for localTrackedPreview, native source sets.
+// AGP does not consistently invalidate every downstream task when the same variant is rebuilt
+// with a different Gradle property in one worktree. Make the experiment tuple an explicit task
+// input so `default -> experiment -> default` cannot reuse incompatible bytecode or packaging.
+tasks.configureEach {
+    if (name != "clean") {
+        inputs.property("lpa.plannerExperiment", plannerExperiment)
+        inputs.property("lpa.plannerEvalOnly", plannerEvalOnly)
+        inputs.property("lpa.agentRuntime", agentRuntime)
+        inputs.property("lpa.localTrackedPreview", localTrackedPreview)
+        inputs.property("lpa.qwenModelPack", qwenModelPack)
+        inputs.property("lpa.qwenThinking", qwenThinking)
+        inputs.property("lpa.qwenThinkingTokens", qwenThinkingTokens)
     }
 }
 

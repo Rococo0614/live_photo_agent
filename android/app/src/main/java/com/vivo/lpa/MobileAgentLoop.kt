@@ -9,7 +9,15 @@ import org.json.JSONArray
 import org.json.JSONObject
 
 /** Android-native bounded Plan-Execute-Replan loop; no LangChain runtime is required. */
-class MobileAgentLoop(private val context: Context) {
+class MobileAgentLoop(
+    private val context: Context,
+    private val localObservationBackend: AgentLocalObservationBackend =
+        if (BuildConfig.LOCAL_TRACKED_PREVIEW) {
+            AndroidQnnLocalObservationBackend(context)
+        } else {
+            UnavailableAgentLocalObservationBackend
+        }
+) {
     companion object {
         private const val MAX_EXECUTED_STEPS = 8
         private const val MAX_REPLANS = 2
@@ -54,6 +62,16 @@ class MobileAgentLoop(private val context: Context) {
 
             listener.onProgress("端侧大脑正在规划完整任务路线…")
             val planner = GenieTextPlanner(context, sessionId)
+            if (BuildConfig.LOCAL_TRACKED_PREVIEW && handleLocalTrackedPreviewGoal(
+                    planner,
+                    query,
+                    state,
+                    listener,
+                    cancelled
+                )
+            ) {
+                return
+            }
             var routeResult = planner.tryRoute(query, state)
             planner.lastTrace?.let { listener.onRuntimeBrainTrace("route", it) }
             if (routeResult == null) {
@@ -368,6 +386,207 @@ class MobileAgentLoop(private val context: Context) {
             )
         }
         return result?.call
+    }
+
+    /**
+     * Opt-in Runtime-v3 entry point for language-targeted local previews.
+     *
+     * The real OWLv2 backend may advance to MASK_TRACK; until full temporal tracking is registered
+     * it deliberately suspends there. It never falls back to a global STYLE tool.
+     */
+    private fun handleLocalTrackedPreviewGoal(
+        planner: GenieTextPlanner,
+        query: String,
+        state: AgentRuntimeState,
+        listener: MobileAgentRunner.Listener,
+        cancelled: AtomicBoolean
+    ): Boolean {
+        var planning = planner.tryGoalIr(query, state)?.withLocalValidationIfNeeded()
+        planner.lastTrace?.let { listener.onRuntimeBrainTrace("goal_ir", it) }
+        if (planning?.localPreviewApplicable == false) return false
+        if (planning == null || !planning.codecResult.valid) {
+            val correction = planning?.codecResult?.diagnostics.orEmpty()
+                .joinToString("; ") { "${it.path}: ${it.message}" }
+                .ifBlank { "上一输出不是可解析的plan_live_edit JSON" }
+            planning = planner.tryGoalIr(query, state, correction)?.withLocalValidationIfNeeded()
+            planning?.trace?.let { listener.onRuntimeBrainTrace("goal_ir_retry", it) }
+        }
+        if (planning?.localPreviewApplicable == false) return false
+        val codec = planning?.codecResult
+            ?: throw IllegalStateException("端侧大脑未能生成严格Goal IR；已停止避免全局误编辑")
+        if (!codec.valid) {
+            throw IllegalStateException(
+                "Goal IR校验失败：" + codec.diagnostics
+                    .filter { it.severity == AgentGoalCodecSeverity.ERROR }
+                    .joinToString("; ") { it.message }
+            )
+        }
+        val goal = codec.goal
+            ?: throw IllegalStateException(
+                "Goal IR校验失败：" + codec.diagnostics.joinToString("; ") { it.message }
+            )
+        val contentOperations = goal.operations.filter {
+            it.kind in setOf(
+                AgentGoalOperationKind.ADD_CONTENT,
+                AgentGoalOperationKind.CHANGE_CONTENT,
+                AgentGoalOperationKind.REMOVE_CONTENT
+            )
+        }
+        if (contentOperations.isEmpty()) return false
+        require(contentOperations.size == 1 && goal.operations.size == 1) {
+            "首版局部交互每轮只允许一个内容操作"
+        }
+        require(contentOperations.single().kind == AgentGoalOperationKind.CHANGE_CONTENT) {
+            "当前只开放局部调色或模糊preview"
+        }
+        val content = AgentContentGraphFactory.fromState(state)
+        listener.onRuntimeContentGraph(content)
+        val compileResult = AgentGoalCompiler.preflight(goal, state, content)
+        listener.onRuntimeGoal(goal, compileResult)
+        when (compileResult) {
+            is AgentCompileResult.NeedUser -> {
+                val waiting = AgentStateReducer.apply(
+                    state,
+                    StateDelta.SetStatus(AgentRunStatus.WAITING_USER, compileResult.question.prompt)
+                )
+                checkpoint(waiting)
+                listener.onRuntimeTerminal(waiting, compileResult.question.prompt)
+                listener.onPlan(MobilePlan(
+                    query,
+                    "local_content_clarification",
+                    waiting.selectedAssetIds,
+                    emptyList(),
+                    compileResult.question.prompt,
+                    planning.trace
+                ))
+                listener.onFinished(null, compileResult.question.prompt)
+            }
+            is AgentCompileResult.NeedObservation -> {
+                listener.onProgress("正在定位并跟踪语言目标…")
+                when (val observation = localObservationBackend.observe(
+                    goal,
+                    state,
+                    content,
+                    cancelled,
+                    listener::onProgress
+                )) {
+                    is AgentLocalObservationResolution.NeedUser -> {
+                        finishLocalSuspension(
+                            state,
+                            query,
+                            planning.trace,
+                            observation.prompt,
+                            AgentRunStatus.WAITING_USER,
+                            "local_content_clarification",
+                            listener
+                        )
+                    }
+                    is AgentLocalObservationResolution.Pending -> {
+                        val kinds = observation.requirements.joinToString(" → ") { it.kind.name }
+                        val message = "${observation.reason}（等待：$kinds）。未执行全局滤镜或媒体写回。"
+                        finishLocalSuspension(
+                            state,
+                            query,
+                            planning.trace,
+                            message,
+                            AgentRunStatus.WAITING_OBSERVATION,
+                            "local_content_observation",
+                            listener
+                        )
+                    }
+                    is AgentLocalObservationResolution.Ready -> executeLocalPreview(
+                        observation,
+                        state,
+                        query,
+                        planning.trace,
+                        listener
+                    )
+                }
+            }
+            is AgentCompileResult.Ready -> {
+                // A fresh certificate cannot appear without the observation coordinator. Refuse to
+                // execute here so no test fixture can accidentally become a production backend.
+                throw IllegalStateException("局部preview已ready，但Android观察executor尚未注册")
+            }
+            is AgentCompileResult.NeedBinding -> throw IllegalStateException(
+                "局部内容操作不应请求普通工具绑定"
+            )
+            is AgentCompileResult.Unsupported -> throw IllegalStateException(compileResult.reason)
+        }
+        return true
+    }
+
+    private fun AgentGoalPlanningResult.withLocalValidationIfNeeded(): AgentGoalPlanningResult {
+        val goal = codecResult.goal ?: return this
+        if (!AgentLocalGoalValidator.appliesTo(goal)) return this
+        val validated = AgentLocalGoalValidator.apply(codecResult)
+        return copy(codecResult = validated, trace = trace.copy(parsed = validated.valid))
+    }
+
+    private fun executeLocalPreview(
+        observation: AgentLocalObservationResolution.Ready,
+        state: AgentRuntimeState,
+        query: String,
+        trace: BrainTrace,
+        listener: MobileAgentRunner.Listener
+    ) {
+        val ready = AgentGoalCompiler.preflight(
+            observation.materialization.goal,
+            state,
+            observation.materialization.snapshot,
+            observation.materialization.compilerContext
+        ) as? AgentCompileResult.Ready
+            ?: throw IllegalStateException("真实观察完成后局部preview仍未ready")
+        listener.onRuntimeContentGraph(observation.materialization.snapshot)
+        listener.onRuntimeGoal(observation.materialization.goal, ready)
+        listener.onRuntimeGraph(ready.compilation)
+        val store = AndroidTemporaryLocalPreviewStore()
+        val execution = AgentDagExecutionEngine.runToTerminal(
+            ready.compilation,
+            AndroidLocalPreviewShadowExecutor(
+                materialization = observation.materialization,
+                sourceFrames = observation.sourceFrames,
+                previewStore = store,
+                currentStateFingerprint = { AgentStateFingerprint.of(state) },
+                onPreviewReady = listener::onLocalPreview
+            )
+        )
+        require(execution.runState.status == AgentDagRunStatus.FINISHED) {
+            "局部preview DAG执行失败：${execution.runState.status}"
+        }
+        val message = "局部目标预览已生成；请确认、取消或撤销。源媒体尚未写回。"
+        finishLocalSuspension(
+            state,
+            query,
+            trace,
+            message,
+            AgentRunStatus.WAITING_USER,
+            "local_content_preview_review",
+            listener
+        )
+    }
+
+    private fun finishLocalSuspension(
+        state: AgentRuntimeState,
+        query: String,
+        trace: BrainTrace,
+        message: String,
+        status: AgentRunStatus,
+        intent: String,
+        listener: MobileAgentRunner.Listener
+    ) {
+        val waiting = AgentStateReducer.apply(state, StateDelta.SetStatus(status, message))
+        checkpoint(waiting)
+        listener.onRuntimeTerminal(waiting, message)
+        listener.onPlan(MobilePlan(
+            query,
+            intent,
+            waiting.selectedAssetIds,
+            emptyList(),
+            message,
+            trace
+        ))
+        listener.onFinished(null, message)
     }
 
     private fun inputRefs(family: ToolFamily, state: AgentRuntimeState): List<AgentInputRef> {
