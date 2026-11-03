@@ -8,6 +8,7 @@ import android.content.ContentValues
 import android.content.Intent
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
+import android.media.MediaMetadataRetriever
 import android.net.Uri
 import android.os.Build
 import android.os.Handler
@@ -1086,9 +1087,22 @@ class HeadlessService : Service() {
             videoFile = decoded.video,
             metadata = JSONObject()
                 .put("media_format", "livephoto")
-                .put("duration_ms", 6034),
+                .put("duration_ms", videoDurationMs(decoded.video)),
             semantic = JSONObject().put("ready", true)
         )
+    }
+
+    private fun videoDurationMs(video: File): Long {
+        val retriever = MediaMetadataRetriever()
+        return try {
+            retriever.setDataSource(video.absolutePath)
+            retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION)
+                ?.toLongOrNull()
+                ?.coerceAtLeast(0L)
+                ?: 0L
+        } finally {
+            retriever.release()
+        }
     }
 
     private fun publishLivePhoto(source: File, displayName: String): Uri {

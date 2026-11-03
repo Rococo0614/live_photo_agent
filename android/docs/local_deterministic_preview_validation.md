@@ -185,9 +185,9 @@ SHA-256 438a3d13bf0de46c9730fee89199ac0a104eefdd1cdade9fcbbd917120fc3dd4
 debug/release APK都不包含`libqnn_net_run.so`；只有显式实验构建包含：
 
 ```text
-default debug APK       4b133505e32910bb207e580cdb5c8c0b64290abac4359077cc078ac7478e322e
-default release APK     731aed2e7b167be037aca8ffed3e6b3da5c84e7f7dcc307ac24cc1ba5659f83b
-experimental debug APK  e94bf85438dcbd997120a552689a442f90d28068ae1d7275cb0b6bad92d2eaf3
+default debug APK       0e1672e6779b500a6b08e51c9ef1c324bd8f9bc81bd7f1b595b5907b52b308be
+default release APK     3ea36f18da83f3c1df692fd549f67be32e2e8c6c4e42fed3a50d9d8a743d86f3
+experimental debug APK  f752aa9dc98d80fc1f232fa48796a627cf2c8b311bf45033846431f0ad9bc2cf
 ```
 
 所有自定义Gradle属性已注册为task inputs；同一worktree按“clean默认→实验→默认”构建，前后两个默认
@@ -309,10 +309,11 @@ alpha变化或RGB误差大于1都会返回FAIL。
 本结果关闭“单帧renderer数值等价”“真实语言到真实关键帧mask”和“mask到临时区域工具”Gate；以下
 仍阻止mutation：
 
-1. App-UID QAIRT 2.45子进程context已接入，但持久JNI context及181帧EdgeTAM传播尚未完成；当前真实
-   Agent证书仅覆盖关键帧，正常入口仍停在`MASK_TRACK`观察门禁；
-2. PyTorch全帧调色与私有Live Photo repack已通过；仍需把181帧tracking/render替换成App内QNN与
-   持久Android EGL pipeline；
+1. App-UID QAIRT 2.45子进程context已接入，但持久JNI context及“解码至EOS的全部帧”EdgeTAM传播
+   尚未完成（当前fixture恰为181帧）；当前真实Agent证书仅覆盖关键帧，正常入口仍停在`MASK_TRACK`
+   观察门禁；
+2. PyTorch全帧调色与私有Live Photo repack已通过；仍需把输入实际帧时间线上的tracking/render替换成
+   App内QNN与持久Android EGL pipeline，不能假设固定帧数或恒定帧率；
 3. UI已实现但尚未做触屏自动化、Activity/进程重建、会话恢复与旋转Gate；
 4. 多分钟完整pipeline soak、总host/GPU/DSP内存与温升尚未通过；
 5. 固定context银行包体仍未解决；任何确认仍只接受临时预览，不能写回。
@@ -321,7 +322,7 @@ alpha变化或RGB误差大于1都会返回FAIL。
 一致，且不包含实验`qnn-net-run`：
 
 ```text
-SHA-256 4b133505e32910bb207e580cdb5c8c0b64290abac4359077cc078ac7478e322e
+SHA-256 0e1672e6779b500a6b08e51c9ef1c324bd8f9bc81bd7f1b595b5907b52b308be
 ```
 
 vivo百度输入法保持启用，ADBKeyboard为disabled-user，stay-awake为0，LPA进程已停止。
