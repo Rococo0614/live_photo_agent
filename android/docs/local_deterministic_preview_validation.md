@@ -406,6 +406,36 @@ PSS/RSS为52,872/151,320KiB，thermal status为0；该数字仍不含DSP总分�
     SHA-256 2285c2244077bb3d4f804e7ea6d3a29d1bee5602550fa2ea14bf1ee52c1ee2b2
 ```
 
+### 4.5 手机总内存与FastRPC/DMA Gate
+
+在15,523,340KiB物理内存的V2547A上，以root诊断接口同步采样`smaps_rollup`、同UID全部进程、
+DMA-BUF、FastRPC map/unmap、系统`MemAvailable`、swap、PSI、LMKD和thermal。完整`N=53`整链仍成功
+进入`WAITING_USER`，但**非干扰式内存Gate失败**：Qwen规划子进程单次FastRPC映射峰值约
+5,562.5MiB，LMKD记录该子进程ION最高6,880,403,456B、系统ION最高7,691,677,696B；系统可用内存
+从9,484,244KiB最低降至3,671,656KiB。LMKD以`critical pressure`杀掉6个后台进程，共释放
+699,720KiB RSS和220,948KiB swap。LPA自身没有被杀、kernel OOM计数仍为0，但“能跑完”不能视为
+生产内存通过。
+
+主App在完整整链中的采样峰值为PSS 377,731KiB、RSS 467,508KiB、`VmHWM` 509,592KiB、持有
+DMA-BUF 1,047,896KiB；结束后回落到PSS 58,702KiB、RSS 159,196KiB、DMA-BUF 12,824KiB。
+FastRPC全局映射峰值约6,640.1MiB，结束后约12.5MiB。thermal status始终为0，skin最高31.934°C。
+
+为把planner问题与tracking分开，又在同一App进程连续运行5轮17帧固定图银行。五轮mask均逐字节
+一致，单轮峰值稳定在PSS 146–158MiB、RSS 235–247MiB、DMA-BUF 265,588KiB；每轮release后
+DMA-BUF都回到12,824KiB，最终PSS/RSS为43,914/131,772KiB。期间`MemAvailable`最低
+9,379,980KiB、PSI avg10始终0、无LMKD、context计数为0、burst vote关闭，说明持久QNN跟踪本身
+没有随轮次增长的泄漏。当前阻塞项明确收敛到Qwen planner模型/context峰值，而不是动态`N`或LRU。
+
+```text
+/mnt/ssd/lpa-aihub-probe/artifacts/android-dynamic-frame-timeline/
+  memory-gate-53-run1/summary.json
+    SHA-256 d356bc5b516c080ef103db0ebd0ad31474300c6dd4bb1a5a8358341d29a2eed4
+  memory-gate-53-run1/lmkd-log.txt
+    SHA-256 6083688717075c4c0fd26b001a8b38290dfc6f83534627e22e1d38b9aa708564
+  memory-gate-tracking-soak/summary.json
+    SHA-256 5d78fd6d48049cb4c53332913cc9bf9d6a3f2893cd87272d323d365d6b6af83a
+```
+
 当前完整视频artifact仅开放`color_tint`；`blur`仍只生成单帧review，必须完成持久双pass shader与视频
 差分后才能进入完整时间线编码。
 
@@ -517,7 +547,8 @@ certificate到临时区域工具”Gate；以下仍阻止mutation：
    素材通过，QNN执行中取消也已通过；仍需更多不同`N`/VFR素材、重复soak和DSP资源峰值验证；完整
    视频blur尚未实现；
 3. UI已实现但尚未做触屏自动化、Activity/进程重建、会话恢复与旋转Gate；
-4. 多分钟完整pipeline soak、总host/GPU/DSP内存与温升尚未通过；
+4. 持久QNN tracking五轮soak与释放已通过，但完整pipeline因Qwen FastRPC/ION峰值触发6次后台LMK，
+   手机总内存Gate明确失败；还需降低planner峰值并补GPU/DSP不可见私有分配；
 5. 固定context银行包体仍未解决；任何确认仍只接受临时预览，不能写回。
 
 本轮测试后已恢复当前默认`agentRuntime=loop / localTrackedPreview=false` APK；设备base.apk与host逐字节
