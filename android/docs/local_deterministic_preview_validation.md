@@ -114,7 +114,34 @@ SHA-256 89e93a44495e7f02bcbc9b75f057be755322398b9efde7a6c98dbec83299e99a
 debug/release单测均为87/87，`lintDebug`、debug/release assemble通过。headless probe验证了与UI相同的
 interaction/store状态机，但尚未做触屏自动化或Activity重建测试。
 
-## 5. 复现入口
+## 5. 逐帧跟踪调色显色证据
+
+在已经通过vivo QAIRT 2.45 Gate的17帧固定图跟踪链上，使用每帧`device-mask.png`对中间面板目标猫
+应用`#00FF66 / intensity=0.65`调色。17张无损输出均满足mask外逐像素不变：
+
+```text
+frames                              = 17
+total outside-mask changed pixels   = 0
+total inside-mask changed pixels    = 1,190,825
+minimum mask IoU vs host reference  = 0.953569
+maximum excess protection leakage   = 0
+```
+
+证据与人工查看视频：
+
+```text
+/mnt/ssd/lpa-aihub-probe/artifacts/vivo-qnn245-dense-seventeen-frame/tracked-tint-proof/
+  tracked-tint-evidence.json
+SHA-256 bbe69a034c77cdf1f1a2ac3c3a052d11506b5dca506f09d394bdcd6d7c1e80dc
+
+  tracked-tint-proof.mp4
+SHA-256 b3f28bb6a6ebcb7e41c88849e100013537dfb4d2a441b5612756ab962b817491
+```
+
+MP4是并排人工验收产物，像素Gate只依据无损PNG。该fixture覆盖17个抽样时刻和16个真实pointer，
+尚不是完整Live Photo的所有解码帧，也没有执行Live Photo repack或写回。
+
+## 6. 复现入口
 
 ```bash
 adb shell am start-foreground-service \
@@ -129,13 +156,13 @@ adb logcat -d -s LPA_PROBE2:I '*:S'
 shadow链的`i_shadow_bridge_evidence.json`与临时preview。任一renderer case使用fallback、mask外变化、
 alpha变化或RGB误差大于1都会返回FAIL。
 
-## 6. 尚未通过的Gate
+## 7. 尚未通过的Gate
 
 本结果关闭“单帧renderer数值等价”和“supplied observation到临时artifact”Gate；以下仍阻止mutation：
 
 1. OWLv2 QAIRT 2.45张量backend与Android输入均已通过，但Android QNN JNI尚未接入bridge；当前真机
    target/mask仍是已验证fixture，不是完整用户请求；
-2. 每帧视频/Live Photo解码、持久EGL context、时间戳保持与完整逐帧preservation尚未验证；
+2. 抽样跟踪调色已通过；视频/Live Photo全帧解码、持久EGL context、时间戳保持和repack尚未验证；
 3. UI已实现但尚未做触屏自动化、Activity/进程重建、会话恢复与旋转Gate；
 4. 多分钟完整pipeline soak、总host/GPU/DSP内存与温升尚未通过；
 5. 固定context银行包体仍未解决；任何确认仍只接受临时预览，不能写回。

@@ -379,6 +379,12 @@ power vote，实测会从约15–19ms退到约80–112ms。这是runtime契约�
 17帧preservation初检曾因第15帧有1个像素落到拼图区边界外而拒绝；独立PyTorch参考在同一主连通域
 有5个边界像素。最终验证规则是不裁剪mask、且设备额外泄漏不得超过独立参考；最大新增泄漏为0。
 
+为把数值mask变成用户可理解的跟踪证据，又对这17帧设备mask逐帧应用高对比绿色调色。无损PNG上
+mask外改变像素总数为0，mask内改变1,190,825像素，最低mask IoU仍为0.9536，额外保护区泄漏为0。
+并排MP4只用于人工查看，不参与像素Gate。它清楚显示仅中间面板的目标猫随运动持续变绿，其他猫和
+背景不变。该结果证明“已跟踪区域可稳定驱动确定性transform”，但输入仍是17帧抽样fixture，不等于
+完整Live Photo逐帧解码、编码和容器重组已经通过。
+
 7/16 context还通过了生命周期和短时热门禁：执行中TERM取消后无残留进程，连续10次重载输出SHA
 全部一致；3000次连续推理耗时77.99秒，NPU传感器峰值86.5°C，系统thermal status和CDSP cooling
 保持0，输出哈希不变。该结果不替代多分钟完整pipeline soak，也不代表DSP总峰值内存已量准。
@@ -402,6 +408,8 @@ object score之外增加确定性时序覆盖检查：raw mask面积若突然低
 /mnt/ssd/lpa-aihub-probe/artifacts/vivo-qnn245-real-pointer-counts/real-pointer-9-to-16-differential-summary.json
 /mnt/ssd/lpa-aihub-probe/artifacts/vivo-qnn245-dense-seventeen-frame/device-fixed-bank-run/
   vivo-dense-seventeen-frame-fixed-bank-evidence.json
+/mnt/ssd/lpa-aihub-probe/artifacts/vivo-qnn245-dense-seventeen-frame/tracked-tint-proof/
+  tracked-tint-evidence.json
 /mnt/ssd/lpa-aihub-probe/artifacts/vivo-qnn245-fixed-bank/cancel-reload-lifecycle-summary.json
 /mnt/ssd/lpa-aihub-probe/artifacts/vivo-qnn245-fixed-bank/soak-7-memory-16-pointer-summary.json
 /mnt/ssd/lpa-aihub-probe/artifacts/vivo-qnn245-fixed-bank/weight-sharing-probe.json
@@ -460,7 +468,7 @@ SHA-256 f5edb69c6ad06b6fd6aa9c47ba297facf83099595cccbf5f7351b0a564533e4e
 
 ## 6. 只读闭环工具
 
-已增加五个host工具：
+已增加六个host工具：
 
 - `android/tools/aihub_owlv2_grounding_probe.py`
   - 用户目标仍是语言；
@@ -490,6 +498,10 @@ SHA-256 f5edb69c6ad06b6fd6aa9c47ba297facf83099595cccbf5f7351b0a564533e4e
   - 对固定PyTorch raw tensors执行远程2.45 vision + 两轮text；
   - host执行PSNR、NMS、候选数量和`NeedUser/CandidateSetReady`决策；
   - 任一数值低于50dB、labels不等或语义分支错误即失败。
+- `android/tools/render_tracked_tint_validation.py`
+  - 消费已通过的source frame、设备mask及跟踪evidence，不重新推断或修正mask；
+  - 逐帧输出无损调色PNG，强制mask外逐像素不变；
+  - 可生成并排MP4供人工观察，但编码视频不参与preservation判定。
 
 EdgeTAM grounding探针首选float模型验证语义，随后才比较W8A8；这样可以把prompt/后处理错误与
 量化误差分开定位。
@@ -510,6 +522,7 @@ EdgeTAM grounding探针首选float模型验证语义，随后才比较W8A8；这
 - 下游Android单帧GLES renderer及supplied observations → track/certificate → temporary artifact →
   confirm/undo shadow链已通过；但尚未接收本节locator的Android输出与真实逐帧`MASK_TRACK`，不改变
   上述Grounding与mutation门禁。
+- 17帧设备`MASK_TRACK`已通过调色显色验证；完整Live Photo全帧decode/render/repack仍未通过。
 
 ## 8. 后续Gate
 
@@ -557,6 +570,10 @@ SHA-256 a8118e3bdb58d85426845d19d33da9f2877334387e1aec71101b2cc2fae7c6e1
 
 /mnt/ssd/lpa-aihub-probe/artifacts/owlv2-qnn245/summary.json
 SHA-256 88e651805309bd2ad5884d1bc81b3a9026ffdbb23cb697854fb6d9ef2ff2ba78
+
+/mnt/ssd/lpa-aihub-probe/artifacts/vivo-qnn245-dense-seventeen-frame/tracked-tint-proof/
+  tracked-tint-evidence.json
+SHA-256 bbe69a034c77cdf1f1a2ac3c3a052d11506b5dca506f09d394bdcd6d7c1e80dc
 
 /mnt/ssd/lpa-aihub-probe/artifacts/local-deterministic-preview-vivo-gles/summary.json
 SHA-256 73da947f37d8cdb3b59b5e774de342d955e20eb107f94fc25fe22d0ce762da71

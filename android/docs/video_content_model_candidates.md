@@ -377,7 +377,8 @@ TrackedComposite
 4. 纯Kotlin CPU oracle已固定调色、软mask与mask内模糊语义，mask外像素逐位不变；
 5. vivo单帧GLES调色/box blur已在真实mask与非对称软mask上通过CPU差分（最大RGB差≤1、mask外0）；
 6. supplied observations到track/certificate、临时artifact及确认/取消/undo状态机已通过单帧真机probe；
-7. 仍需把已验证的QAIRT 2.45 locator接入Android QNN生命周期，并完成逐帧preservation、
+7. 17帧设备track的高对比调色显色已通过（mask外0变化、最低IoU 0.9536）；仍需把已验证的QAIRT
+   2.45 locator接入Android QNN生命周期，并完成Live Photo全帧decode/repack、
    触屏/Activity生命周期和完整soak；全部通过后才单独评审mutation权限。
 
 ### P1：单帧LaMa probe

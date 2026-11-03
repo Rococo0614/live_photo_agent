@@ -300,6 +300,10 @@ box/point交给用户。`AndroidLocalPreviewShadowExecutor`仅接受完整eviden
 原图坐标映射和0/多/唯一候选分支均不交给Qwen；候选box只参与内部SHA，bridge只接收candidate count
 与`locatorEvidenceFingerprint`。任一物理候选变化都会使object grounding和certificate失效。
 
+17帧vivo设备track现已增加高对比调色显色Gate：无损输出mask外变化0、最低mask IoU 0.9536、额外
+保护区泄漏0。这证明同一`MASK_TRACK`能够稳定驱动确定性transform；它仍是抽样frame fixture，不能
+代替完整Live Photo全帧解码、时间戳保持、编码与repack。
+
 ## 8. 当前shadow实现
 
 已加入：
