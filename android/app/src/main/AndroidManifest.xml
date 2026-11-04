@@ -28,6 +28,7 @@
         tools:node="remove" />
 
     <application
+        android:name=".LivePhotoAgentApplication"
         android:allowBackup="false"
         android:label="Live Photo Agent"
         android:supportsRtl="true"

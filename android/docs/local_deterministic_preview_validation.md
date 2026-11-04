@@ -181,14 +181,14 @@ SHA-256 438a3d13bf0de46c9730fee89199ac0a104eefdd1cdade9fcbbd917120fc3dd4
                       SHA-256 4691654241a483d9c249f5300870daa124a96effd4cd0d0d0079147f9be6cec0
 ```
 
-当前debug/release单测均为131/131，`lintDebug`、`lintRelease`及debug/release assemble通过。默认
+当前debug/release单测均为132/132，`lintDebug`、`lintRelease`及debug/release assemble通过。默认
 debug/release APK都不包含`libqnn_net_run.so`；只有显式实验构建包含：
 
 ```text
-default debug APK        21182c81db10ce2720b9cd17b0fd6e3a80d9e19c2dec55865aec20426db7b69b
-default release APK      391f0d8643dc8f14a6ece93ed15a73dc7d0c2b784bd1c2cd50b781e3df5a35a5
-full-timeline fallback   f76b188f2a0a696f4fe3c80dbffa1bb699a702532b10627760e85d839eaf38b8
-persistent-QNN debug APK 40261b1b3a3f438eb81ae78b5abdbe388cb6e695e556827fbd7220fef2958b4f
+default debug APK        47f17a8c274b9a84bfff0285159d2c6dcf0884d6f01b5d2586bc93f341acf752
+default release APK      f9e097cd39bb72a2bc20599ac7aca9c9280135aa8d346e9f745b9a498d0c5eeb
+full-timeline fallback   b3c1db41758b233ca021fe57adfaa6f8fbeb3b30be4a25afe64821a651e8ca7f
+persistent-QNN debug APK 60a92c165496842b4e39d2646c14007a5592755ccb07a2ff0df7e653380c11a2
 ```
 
 所有自定义Gradle属性已注册为task inputs；同一worktree按“clean默认→实验→默认”构建，前后两个默认
@@ -452,10 +452,19 @@ pending MediaStore行、设置vivo `live_photo`标记，并以SHA-256
 固定输出目录创建的URI。该入口不会把“确认预览”静默升级为发布授权。本轮只验证到`publish_ready`
 并确认相册零变化，未替用户执行第二次发布授权。
 
+进程死亡清理也使用真实完整artifact验证：先故意保留一个`PENDING_REVIEW`的5帧Live Photo目录
+（1,073,325B、3个文件），确认源SHA和相册行数未改变；随后`force-stop`模拟进程被杀。新主进程的
+Application janitor启动时扫描1个孤儿根并删除1个，失败0、剩余0。janitor只在主进程启动执行且只
+处理`cache/full-timeline-previews/`的直接子目录，不会由`:reverse_worker`误删活跃artifact。
+
 ```text
 /mnt/ssd/lpa-aihub-probe/artifacts/android-dynamic-frame-timeline/
   persistent-jni-5-review-loop/evidence.json
     SHA-256 fa16518e0d441a820b60f43852c82042637bfce5d3e6c24cd13455554ed9964f
+  process-restart-preview-cleanup/pending-before-process-death.json
+    SHA-256 53711601d1eb33854704d7f8949df496d1f195eb5bf74d99be45715ce1368814
+  process-restart-preview-cleanup/cleanup-after-restart.json
+    SHA-256 5fdf577c3a361d8a33a7db85439df11dd5ce47e5fddf013d8c930c6ec59008ec
 ```
 
 完整时间线`blur`现与单帧renderer共享同一组整数域两阶段box-blur shader。5帧pbuffer差分中，单EGL
@@ -582,8 +591,8 @@ certificate到临时区域工具”Gate；以下仍阻止mutation：
 2. Android持久GLES→MediaCodec→AAC sample copy→Live Photo repack的`color_tint`已在`N=5`、
    `N=53`和`N=181`通过，`blur`已在`N=5`通过无损shader、编码和完整Agent闭环；仍需把blur扩展到
    不同`N`/VFR素材，QNN执行中取消已通过；
-3. 完整动态artifact的确认→publish-ready→撤销→清理已在headless真机通过，显式二次发布/删除入口已
-   接入UI；仍需触屏自动化、实际二次发布授权、Activity/进程重建、会话恢复与旋转Gate；
+3. 完整动态artifact的确认→publish-ready→撤销→清理及进程死亡后的孤儿清理已在headless真机通过，
+   显式二次发布/删除入口已接入UI；仍需触屏自动化、实际二次发布授权、Activity旋转与会话恢复Gate；
 4. 持久QNN tracking五轮soak与释放已通过；完整pipeline的Qwen FastRPC/ION峰值及6次后台LMK证据
    保留，但产品决策接受16GB目标机上的该资源代价，不再把它列为当前功能闭环阻塞项；
 5. 固定context银行包体仍未解决；任何确认仍只接受临时预览，不能写回。
@@ -592,7 +601,7 @@ certificate到临时区域工具”Gate；以下仍阻止mutation：
 一致，且不包含实验`qnn-net-run`：
 
 ```text
-SHA-256 21182c81db10ce2720b9cd17b0fd6e3a80d9e19c2dec55865aec20426db7b69b
+SHA-256 47f17a8c274b9a84bfff0285159d2c6dcf0884d6f01b5d2586bc93f341acf752
 ```
 
 vivo百度输入法保持启用，ADBKeyboard为disabled-user，stay-awake为0，LPA进程已停止。

@@ -1406,6 +1406,35 @@ class HeadlessService : Service() {
                 stopSelf()
                 return
             }
+            if (operation == "preview_orphan_cleanup_probe") {
+                require(BuildConfig.DEBUG) { "preview orphan cleanup probe is debug-only" }
+                val report = AndroidPreviewArtifactJanitor.lastReport
+                val remaining = File(cacheDir, "full-timeline-previews")
+                    .listFiles().orEmpty().count(File::isDirectory)
+                val passed = report.scannedRootCount >= 1 && report.deletedRootCount >= 1 &&
+                    report.failedRootCount == 0 && remaining == 0
+                val evidence = JSONObject()
+                    .put("schema_version", 1)
+                    .put(
+                        "status",
+                        if (passed) "PASS_PROCESS_RESTART_PREVIEW_ORPHAN_CLEANUP"
+                        else "FAIL_PROCESS_RESTART_PREVIEW_ORPHAN_CLEANUP"
+                    )
+                    .put("scanned_root_count", report.scannedRootCount)
+                    .put("deleted_root_count", report.deletedRootCount)
+                    .put("deleted_byte_count", report.deletedByteCount)
+                    .put("failed_root_count", report.failedRootCount)
+                    .put("remaining_root_count", remaining)
+                    .put("source_media_modified", false)
+                    .put("published", false)
+                File(outputDir, "preview-orphan-cleanup-evidence.json")
+                    .writeText(evidence.toString(2) + "\n")
+                require(passed) { "process restart preview orphan cleanup failed" }
+                log("PASS process restart preview orphan cleanup: deleted=${report.deletedRootCount}")
+                log("=== NATIVE ADAPTER TEST END ===")
+                stopSelf()
+                return
+            }
             if (operation == "agent_real_full_timeline_preview_probe") {
                 require(BuildConfig.DEBUG && BuildConfig.LOCAL_TRACKED_PREVIEW) {
                     "full timeline preview probe requires the opt-in debug build"
@@ -1414,8 +1443,8 @@ class HeadlessService : Service() {
                     "full timeline preview probe requires one Live Photo and agent_query"
                 }
                 val reviewAction = imageParams.optString("review_action", "cancel")
-                require(reviewAction in setOf("cancel", "confirm_undo")) {
-                    "review_action must be cancel or confirm_undo"
+                require(reviewAction in setOf("cancel", "confirm_undo", "leave_pending")) {
+                    "review_action must be cancel, confirm_undo or leave_pending"
                 }
                 val sourceShaBefore = fileSha256(inputs.single())
                 val galleryRowsBefore = countAgentPublishedImages()
@@ -1503,6 +1532,7 @@ class HeadlessService : Service() {
                 }
                 var acceptedReviewState: LocalPreviewReviewState? = null
                 var publishReadyAfterExplicitReview = false
+                var orphanCleanupRoot: File? = null
                 val terminalReviewState = when (reviewAction) {
                     "confirm_undo" -> {
                         val accepted = previewInteraction.confirm()
@@ -1522,9 +1552,23 @@ class HeadlessService : Service() {
                             ) == packedPreview.canonicalFile
                         previewInteraction.undo().lifecycle.state
                     }
+                    "leave_pending" -> {
+                        val timelineRoot = File(cacheDir, "full-timeline-previews").canonicalFile
+                        require(packedPreview.canonicalFile.toPath().startsWith(
+                            timelineRoot.toPath()
+                        ))
+                        val relative = timelineRoot.toPath().relativize(
+                            packedPreview.canonicalFile.toPath()
+                        )
+                        require(relative.nameCount > 1)
+                        orphanCleanupRoot = File(timelineRoot, relative.getName(0).toString())
+                        require(orphanCleanupRoot!!.isDirectory)
+                        preview.lifecycle.state
+                    }
                     else -> previewInteraction.cancel().lifecycle.state
                 }
-                previewInteraction.release()
+                val releasePerformed = reviewAction != "leave_pending"
+                if (releasePerformed) previewInteraction.release()
                 val packedPreviewCleaned = !packedPreview.exists()
                 val sourceShaAfter = fileSha256(inputs.single())
                 val galleryRowsAfter = countAgentPublishedImages()
@@ -1533,7 +1577,15 @@ class HeadlessService : Service() {
                         LocalPreviewReviewState.ACCEPTED_FOR_REVIEW &&
                         terminalReviewState == LocalPreviewReviewState.UNDONE &&
                         publishReadyAfterExplicitReview
+                    "leave_pending" -> terminalReviewState ==
+                        LocalPreviewReviewState.PENDING_REVIEW &&
+                        orphanCleanupRoot?.isDirectory == true
                     else -> terminalReviewState == LocalPreviewReviewState.CANCELLED
+                }
+                val cleanupStatePassed = if (releasePerformed) {
+                    packedPreviewCleaned
+                } else {
+                    !packedPreviewCleaned
                 }
                 val passed = terminalState?.status == AgentRunStatus.WAITING_USER &&
                     finalPlan?.intent == "local_content_preview_review" &&
@@ -1542,7 +1594,7 @@ class HeadlessService : Service() {
                     expectedFrames > 1 && observedFrames == expectedFrames &&
                     preview.timelineFrameCount == expectedFrames &&
                     packedPreviewCopy.isFile && errorMessage == null && lifecyclePassed &&
-                    packedPreviewCleaned && sourceShaBefore == sourceShaAfter &&
+                    cleanupStatePassed && sourceShaBefore == sourceShaAfter &&
                     galleryRowsBefore == galleryRowsAfter
                 val evidence = JSONObject()
                     .put("schema_version", 1)
@@ -1579,7 +1631,12 @@ class HeadlessService : Service() {
                     .put("publish_ready_after_explicit_review", publishReadyAfterExplicitReview)
                     .put("packed_artifact_content_bound", preview.packedLivePhotoSha256 != null)
                     .put("publish_requires_second_user_authorization", true)
+                    .put("release_performed", releasePerformed)
                     .put("packed_preview_cleaned_after_release", packedPreviewCleaned)
+                    .put(
+                        "orphan_cleanup_root",
+                        orphanCleanupRoot?.absolutePath ?: JSONObject.NULL
+                    )
                     .put("source_sha256_before", sourceShaBefore)
                     .put("source_sha256_after", sourceShaAfter)
                     .put("gallery_rows_before", galleryRowsBefore)
