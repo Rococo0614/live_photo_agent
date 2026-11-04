@@ -2636,6 +2636,10 @@ class HeadlessService : Service() {
                 backendIsFixture
             )
             .put("single_frame_only", true)
+            .put(
+                "generation_mask_padding_px",
+                LocalMaskedGenerationShadowCompiler.GENERATION_MASK_PADDING_PX
+            )
             .put("packed_livephoto_created", false)
             .put("backend_evidence_fingerprint", preview.backendEvidenceFingerprint)
             .put("changed_pixels", changedPixels)

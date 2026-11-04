@@ -26,6 +26,7 @@ class AndroidLocalGenerationPreviewShadowExecutor(
             "effect_kind",
             "generation_prompt",
             "generation_prompt_source_text",
+            "generation_mask_padding_px",
             "preview_only",
             "writeback",
             "single_frame_only"
@@ -38,6 +39,8 @@ class AndroidLocalGenerationPreviewShadowExecutor(
             parameters.getString("generation_prompt"),
             parameters.getString("generation_prompt_source_text")
         )
+        val generationMaskPaddingPx = parameters.getInt("generation_mask_padding_px")
+        require(generationMaskPaddingPx in 0..32)
 
         val media = inputs.single("media") as? AgentDagRuntimeValue.AssetSet
             ?: throw IllegalArgumentException("media input must be an asset set")
@@ -91,9 +94,15 @@ class AndroidLocalGenerationPreviewShadowExecutor(
             sourceFrame.bitmap.height == maskFrame.height)
 
         val generated = try {
+            val generationMask = dilateBinaryMask(
+                maskFrame.copyMaskValues(),
+                maskFrame.width,
+                maskFrame.height,
+                generationMaskPaddingPx
+            )
             backend.generate(
                 sourceFrame.bitmap,
-                maskFrame.copyMaskValues(),
+                generationMask,
                 change,
                 certificate.evidenceFingerprint,
                 cancelled
@@ -142,7 +151,46 @@ class AndroidLocalGenerationPreviewShadowExecutor(
         )
     }
 
-    private companion object {
-        const val MIN_GENERATION_MASK_AREA_RATIO = 0.001
+    companion object {
+        private const val MIN_GENERATION_MASK_AREA_RATIO = 0.001
+
+        internal fun dilateBinaryMask(
+            mask: ByteArray,
+            width: Int,
+            height: Int,
+            radius: Int
+        ): ByteArray {
+            require(width > 0 && height > 0 && mask.size == width * height)
+            require(radius in 0..32)
+            if (radius == 0) return mask.copyOf()
+            val horizontal = ByteArray(mask.size)
+            val prefix = IntArray(maxOf(width, height) + 1)
+            for (y in 0 until height) {
+                prefix[0] = 0
+                val row = y * width
+                for (x in 0 until width) {
+                    prefix[x + 1] = prefix[x] + if ((mask[row + x].toInt() and 0xff) > 0) 1 else 0
+                }
+                for (x in 0 until width) {
+                    val left = (x - radius).coerceAtLeast(0)
+                    val right = (x + radius + 1).coerceAtMost(width)
+                    if (prefix[right] > prefix[left]) horizontal[row + x] = 0xff.toByte()
+                }
+            }
+            val output = ByteArray(mask.size)
+            for (x in 0 until width) {
+                prefix[0] = 0
+                for (y in 0 until height) {
+                    prefix[y + 1] = prefix[y] +
+                        if ((horizontal[y * width + x].toInt() and 0xff) > 0) 1 else 0
+                }
+                for (y in 0 until height) {
+                    val top = (y - radius).coerceAtLeast(0)
+                    val bottom = (y + radius + 1).coerceAtMost(height)
+                    if (prefix[bottom] > prefix[top]) output[y * width + x] = 0xff.toByte()
+                }
+            }
+            return output
+        }
     }
 }

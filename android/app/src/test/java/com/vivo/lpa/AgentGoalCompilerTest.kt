@@ -297,6 +297,10 @@ class AgentGoalCompilerTest {
         assertTrue(parameters.getBoolean("preview_only"))
         assertTrue(parameters.getBoolean("single_frame_only"))
         assertTrue(!parameters.getBoolean("writeback"))
+        assertEquals(
+            LocalMaskedGenerationShadowCompiler.GENERATION_MASK_PADDING_PX,
+            parameters.getInt("generation_mask_padding_px")
+        )
         assertEquals(setOf(AgentStateEffect.ADD_ARTIFACT), node.effects)
     }
 

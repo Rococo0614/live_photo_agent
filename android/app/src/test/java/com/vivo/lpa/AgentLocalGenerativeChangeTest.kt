@@ -2,6 +2,7 @@ package com.vivo.lpa
 
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class AgentLocalGenerativeChangeTest {
@@ -18,6 +19,21 @@ class AgentLocalGenerativeChangeTest {
     fun rejectsMissingProvenanceAndUnknownParameters() {
         assertNull(LocalGenerativeChange.fromOperation(operation(promptSourceText = null)))
         assertNull(LocalGenerativeChange.fromOperation(operation(extraParameter = true)))
+    }
+
+    @Test
+    fun generationMaskPaddingIsDeterministicAndClippedToFrame() {
+        val mask = ByteArray(25)
+        mask[2 * 5 + 2] = 0xff.toByte()
+        val expanded = AndroidLocalGenerationPreviewShadowExecutor.dilateBinaryMask(
+            mask, 5, 5, 1
+        )
+
+        assertEquals(9, expanded.count { (it.toInt() and 0xff) > 0 })
+        assertTrue((expanded[1 * 5 + 1].toInt() and 0xff) > 0)
+        assertEquals(1, AndroidLocalGenerationPreviewShadowExecutor.dilateBinaryMask(
+            byteArrayOf(0xff.toByte()), 1, 1, 24
+        ).count { (it.toInt() and 0xff) > 0 })
     }
 
     private fun operation(

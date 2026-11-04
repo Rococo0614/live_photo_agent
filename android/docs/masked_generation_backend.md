@@ -95,3 +95,14 @@ target            = skateboard under a woman's feet
 generation_prompt = hoverboard
 effect_kind       = masked_replace
 ```
+
+首个真实模型验收使用固定24px派生生成区域；该padding进入DAG并由executor从证书Mask确定性计算。
+N=5手机闭环通过`http_masked_generation_v1/sd2_diffusers_inpaint`，生成可辨识的悬浮板：
+
+```text
+/mnt/ssd/lpa-aihub-probe/artifacts/android-dynamic-frame-timeline/
+  generation-sd2-hoverboard-5/evidence.json
+  generation-sd2-hoverboard-5/preview.png
+```
+
+结果仍是单帧私有preview；完整动态生成、padding保护区语义、模型安全与生产许可尚未通过。

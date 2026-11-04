@@ -81,6 +81,14 @@ object LocalMaskedGenerationPreviewAction {
                     AgentParameterType.STRING,
                     required = true
                 ),
+                AgentParameterSpec(
+                    "generation_mask_padding_px",
+                    AgentParameterType.INTEGER,
+                    required = true,
+                    unit = "px",
+                    minimum = 0.0,
+                    maximum = 32.0
+                ),
                 AgentParameterSpec("preview_only", AgentParameterType.BOOLEAN, required = true),
                 AgentParameterSpec("writeback", AgentParameterType.BOOLEAN, required = true),
                 AgentParameterSpec("single_frame_only", AgentParameterType.BOOLEAN, required = true)
@@ -95,7 +103,8 @@ object LocalMaskedGenerationPreviewAction {
                 "preview_artifact_exists",
                 "source_media_unchanged",
                 "scope_certificate_fresh",
-                "single_frame_generation_disclosed"
+                "single_frame_generation_disclosed",
+                "expanded_generation_region_preview_only"
             )
         ),
         destructive = false,
@@ -126,6 +135,7 @@ object LocalMaskedGenerationShadowCompiler {
 
         val nodeId = "generate-preview-$operationId"
         val parameters = change.parameters()
+            .put("generation_mask_padding_px", GENERATION_MASK_PADDING_PX)
             .put("preview_only", true)
             .put("writeback", false)
             .put("single_frame_only", true)
@@ -163,4 +173,6 @@ object LocalMaskedGenerationShadowCompiler {
             )
         ).compile(goal)
     }
+
+    const val GENERATION_MASK_PADDING_PX = 24
 }

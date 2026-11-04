@@ -181,16 +181,16 @@ SHA-256 438a3d13bf0de46c9730fee89199ac0a104eefdd1cdade9fcbbd917120fc3dd4
                       SHA-256 4691654241a483d9c249f5300870daa124a96effd4cd0d0d0079147f9be6cec0
 ```
 
-当前debug/release单测均为160/160，`lintDebug`、`lintRelease`及debug/release assemble通过。默认
+当前debug/release单测均为161/161，`lintDebug`、`lintRelease`及debug/release assemble通过。默认
 debug/release APK都不包含`libqnn_net_run.so`；默认debug也不含演示Provider。只有显式实验Debug
 构建加入只读Provider与实验native：
 
 ```text
-default debug APK          dcc0d9084a938763e602d2800f91a9f8e68b0889322ec8e2e002e73cec272f37
-default release APK        08c204017b805b5ec0608c4ab850b03e7c6b96a9cd5c1e0ddacf844732500948
-full-timeline fallback     17fe20a3cb66ba6967a63f14a2e23a3b49d52d5ee397a049f5fd1cc9fa2eb346
-persistent-QNN debug APK   12bc6eb50899fb4d1b280112aad20e341a0728a63171e937aa670fcd37cc7c33
-generation-fixture APK     49c148553f36d3e6e48ca97d58ea975a27a4de1c672d451c77964a9a3a440f1f
+default debug APK          724e5c78d4b0bebe25c2820c26e7be39e895c80c3a582bd5e86ebd0034e084bd
+default release APK        58de012f339337e2255d9aa54e69462189d8c9f895b122544aee53aafdff4b60
+full-timeline fallback     86858f6cc5451f289d6263c06783bd500075ff8432ee904393f4080010d03408
+persistent-QNN debug APK   902f151532522ce1098ef45bc48679176e44d3994ddc000b76fb60f246b47a2b
+generation-fixture APK     3c231fdb209bf690d1486e04c79c527d67e2ab2f64776e589f735070bf01e555
 ```
 
 所有自定义Gradle属性已注册为task inputs；同一worktree按“clean默认→实验→默认”构建，前后两个默认
@@ -647,7 +647,28 @@ N=5滑板fixture通过本地主机合同服务完成真实HTTP往返，backend�
 ```
 
 主机研究服务入口为`android/tools/masked_inpaint_server.py`，权重与Python环境固定放在仓库外部
-`/mnt/ssd/lpa-generation-backend/`；首个候选为OpenRAIL++的SD2 inpainting。真实模型结果仍需单独Gate。
+`/mnt/ssd/lpa-generation-backend/`；首个候选为OpenRAIL++的SD2 inpainting。
+
+真实SD2 fp16权重在RTX 5090主机加载后，先以诊断区域生成出可辨识的金属悬浮板。原对象Mask仅有
+1,662像素，严格按原Mask合成会裁掉新物体轮廓；因此Compiler加入固定24px
+`generation_mask_padding_px`，executor从证书绑定Mask确定性派生扩展区域，padding参数进入DAG且
+backend证据绑定派生Mask。扩展区域仍仅用于单帧私有preview，不能发布。
+
+手机端同一请求最终通过真实`http_masked_generation_v1/sd2_diffusers_inpaint`：N=5跟踪完整，SD2生成
+清晰悬浮板外形与发光边缘，手机重合成后改变20,116像素、alpha变化0；pending/accepted发布均被拒绝，
+确认后撤销，源SHA不变、相册38→38：
+
+```text
+  generation-sd2-hoverboard-5/evidence.json
+    SHA-256 5078b4c3f3d30d300a08ee3bd819aa0f4fc4c25662a92c179eac2d32f31e179f
+  generation-sd2-hoverboard-5/preview.png
+    SHA-256 132bed7e63e4bc93864859c37c8dc968d00e80e59c7875fac60ece0b152bea43
+  generation-sd2-hoverboard-5/host-diagnostic-inpaint.png
+    SHA-256 ac2a3211b3b094f76df2f691d77a3dc16c13b9a5c9d464b0887fcb50071ef5ec
+```
+
+这关闭了真实单帧masked inpaint backend Gate；完整动态生成、padding保护区语义、跨帧一致性、模型安全
+和生产许可仍未关闭。
 
 ## 5. 逐帧跟踪调色显色证据
 
@@ -760,8 +781,8 @@ certificate到临时区域工具”Gate；以下仍阻止mutation：
    通过。实际新副本发布/删除仍必须等待用户第二次明确授权，本轮未代替用户执行；
 4. 持久QNN tracking五轮soak与释放已通过；完整pipeline的Qwen FastRPC/ION峰值及6次后台LMK证据
    保留，但产品决策接受16GB目标机上的该资源代价，不再把它列为当前功能闭环阻塞项；
-5. 局部生成已完成单帧fixture backend接口与review闭环，但尚无真实可商用inpaint模型；完整动态替换、
-   边缘融合和时序一致性仍未通过，fixture永远不能发布；
+5. 局部生成已完成fixture、HTTP合同与主机SD2真实单帧inpaint闭环；该OpenRAIL++研究后端尚未完成
+   生产许可/安全评审，完整动态替换、padding保护语义和时序一致性仍未通过，生成预览不能发布；
 6. 固定context银行包体仍未解决；任何确认仍只接受临时预览，不能写回。
 
 常规验收结束时仍应恢复默认APK；本轮为继续验证可插拔生成backend，设备暂时保留显式实验
@@ -769,7 +790,7 @@ certificate到临时区域工具”Gate；以下仍阻止mutation：
 其中生成结果只来自不可发布fixture；设备base.apk与host逐字节一致：
 
 ```text
-SHA-256 49c148553f36d3e6e48ca97d58ea975a27a4de1c672d451c77964a9a3a440f1f
+SHA-256 3c231fdb209bf690d1486e04c79c527d67e2ab2f64776e589f735070bf01e555
 ```
 
 vivo百度输入法保持启用，ADBKeyboard为disabled-user，stay-awake为0，LPA进程已停止。
