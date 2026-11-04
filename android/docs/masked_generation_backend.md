@@ -58,6 +58,20 @@ HF_HOME=/mnt/ssd/lpa-generation-backend/hf-cache \
   --cache-dir /mnt/ssd/lpa-generation-backend/hf-cache
 ```
 
+当前研究模型固定为`sd2-community/stable-diffusion-2-inpainting` commit
+`5f74973cbb64c8568780732c17f43eb269d63a0d`，fp16 LFS SHA-256：
+
+```text
+text_encoder/model.fp16.safetensors
+  681c555376658c81dc273f2d737a2aeb23ddb6d1d8e5b3a7064636d359a22668
+unet/diffusion_pytorch_model.fp16.safetensors
+  29a698f37775d5904a958c9cebed98184483dfb441729a8e5f98dd5b65df70c8
+vae/diffusion_pytorch_model.fp16.safetensors
+  3e4c08995484ee61270175e9e7a072b66a6e4eeb5f0c266667fe1f45b90daf9a
+```
+
+模型采用CreativeML Open RAIL++-M许可，仅作为研究后端；生产使用前必须单独完成许可与安全评审。
+
 服务只绑定loopback，提供：
 
 ```text
