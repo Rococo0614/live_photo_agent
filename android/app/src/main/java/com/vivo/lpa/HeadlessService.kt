@@ -2245,12 +2245,21 @@ class HeadlessService : Service() {
                         )
                     }
                 }
-                if (planning == null ||
-                    (planning.localPreviewApplicable && !planning.codecResult.valid)
-                ) {
-                    val correction = planning?.codecResult?.diagnostics.orEmpty()
+                for (attempt in 1..2) {
+                    if (planning != null && (!planning.localPreviewApplicable ||
+                            planning.codecResult.valid)
+                    ) {
+                        break
+                    }
+                    val correctionBody = planning?.codecResult?.diagnostics.orEmpty()
                         .joinToString("; ") { "${it.path}: ${it.message}" }
                         .ifBlank { "上一输出不是可解析的plan_live_edit JSON" }
+                    val correction = if (planning?.localPreviewApplicable == true) {
+                        "已确认这是局部对象编辑，禁止改为skip_local_preview；" +
+                            "只修正JSON和目标短语：$correctionBody"
+                    } else {
+                        correctionBody
+                    }
                     planning = planner.tryGoalIr(agentQuery, state, correction)?.let { result ->
                         if (!result.localPreviewApplicable) result else {
                             val validated = AgentLocalGoalValidator.apply(result.codecResult)

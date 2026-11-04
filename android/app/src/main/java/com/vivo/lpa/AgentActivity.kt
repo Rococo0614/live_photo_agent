@@ -2,6 +2,7 @@ package com.vivo.lpa
 
 import android.app.Activity
 import android.app.AlertDialog
+import android.content.pm.ActivityInfo
 import android.content.ContentUris
 import android.content.Intent
 import android.graphics.Bitmap
@@ -92,6 +93,8 @@ class AgentActivity : Activity() {
     private var activePublishedCopy: AndroidPublishedLocalPreview? = null
     private var localPreviewRetainedForConfiguration = false
     private var localPreviewWillBeRestored = false
+    private var workerOrientationLocked = false
+    private var orientationBeforeWorker = ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
 
     private data class RetainedLocalPreview(
         val sessionId: String,
@@ -1381,12 +1384,26 @@ preparedAssets = prepared
     }
 
     private fun setBusy(busy: Boolean) {
+        updateWorkerOrientationLock(busy)
         if (busy) {
             startForegroundService(Intent(this, AgentKeepAliveService::class.java))
         } else {
             stopService(Intent(this, AgentKeepAliveService::class.java))
         }
         updateActionState(busy)
+    }
+
+    private fun updateWorkerOrientationLock(busy: Boolean) {
+        if (busy && !workerOrientationLocked) {
+            orientationBeforeWorker = requestedOrientation
+            requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_LOCKED
+            workerOrientationLocked = true
+        } else if (!busy && workerOrientationLocked) {
+            val restored = orientationBeforeWorker
+            workerOrientationLocked = false
+            orientationBeforeWorker = ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
+            requestedOrientation = restored
+        }
     }
 
     private fun updateActionState(busy: Boolean = worker != null) {
@@ -1762,6 +1779,12 @@ preparedAssets = prepared
                 // and report the interruption explicitly.
                 taskStatus = "interrupted"
                 append("上次端侧工具链在步骤边界外中断，系统未自动重复执行；可重新发送指令继续。")
+            } else if (checkpoint.optString("status") == "failed" && taskStatus == "running") {
+                taskStatus = "interrupted"
+                val message = "上次任务在界面重建时被安全中止，未修改媒体；可重新发送原指令继续。"
+                append(message)
+                saved.put("task_status", taskStatus).put("last_error", message)
+                runCatching { database.saveSessionState(sessionId, saved) }
             }
         }
 
@@ -1780,9 +1803,10 @@ preparedAssets = prepared
             }
             selectedUris.isNotEmpty() -> {
                 mediaSummary.visibility = View.VISIBLE
-                mediaSummary.text = "已恢复 ${selectedUris.size} 个素材；前处理缓存已失效，请重新分析"
+                mediaSummary.text = "已恢复 ${selectedUris.size} 个素材；重新发送后将自动分析"
                 renderUriPreviews(selectedUris)
-                append("上次素材仍在，但前处理缓存不可用，请点击‘分析’重新准备")
+                if (input.text.isBlank() && lastQuery.isNotBlank()) input.setText(lastQuery)
+                append("上次素材仍在，重新发送原指令即可自动完成前处理")
             }
             else -> {
                 mediaSummary.visibility = View.GONE

@@ -67,6 +67,26 @@ class AgentLocalGoalValidatorTest {
     }
 
     @Test
+    fun rejectsWholeRequestAndDestinationColorAsTargetIdentity() {
+        val operation = operation(
+            target = AgentGoalTarget.Semantic(
+                "a woman wearing blue clothing on green grass",
+                "帮我把画面中的女人调成蓝色"
+            ),
+            colorHex = "#0000FF"
+        )
+        val diagnostics = AgentLocalGoalValidator.validate(AgentGoalIr(
+            goalId = "goal-woman-blue",
+            userGoal = "帮我把画面中的女人调成蓝色",
+            stateFingerprint = "state",
+            operations = listOf(operation)
+        ))
+
+        assertTrue(diagnostics.any { it.code == "target_source_action_leakage" })
+        assertTrue(diagnostics.any { it.code == "target_effect_leakage" })
+    }
+
+    @Test
     fun rejectsCanonicalTargetThatDropsUserActionQualifier() {
         val operation = operation(AgentGoalTarget.Semantic(
             "orange cat on green grass",

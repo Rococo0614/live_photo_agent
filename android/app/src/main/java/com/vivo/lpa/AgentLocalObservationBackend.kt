@@ -96,8 +96,9 @@ class AndroidQnnLocalObservationBackend(
             return AgentLocalObservationResolution.NeedUser("局部预览每次需要明确一张 Live Photo。")
         }
         val source = assets.single()
-        val imageFile = source.imageFile
-            ?: return pending(operation, AgentDataKind.OBJECT_TRACK, "Live Photo 封面帧尚未解码")
+        if (source.imageFile == null && source.videoFile == null) {
+            return pending(operation, AgentDataKind.OBJECT_TRACK, "Live Photo 定位帧尚未解码")
+        }
         val missing = AndroidLocalTrackedModelPack.missingOwlV2Artifacts(context)
         if (missing.isNotEmpty()) {
             return pending(
@@ -106,7 +107,7 @@ class AndroidQnnLocalObservationBackend(
                 "OWLv2 QAIRT 2.45 模型包不完整：${missing.joinToString()}"
             )
         }
-        val bitmap = BitmapFactory.decodeFile(imageFile.absolutePath)
+        val bitmap = groundingBitmap(source, cancelled, progress)
             ?: return pending(operation, AgentDataKind.OBJECT_TRACK, "无法读取定位帧")
         try {
             val locator = AndroidOwlV2QnnLocator(context).locate(
@@ -176,6 +177,24 @@ class AndroidQnnLocalObservationBackend(
         )),
         reason
     )
+
+    private fun groundingBitmap(
+        source: PreparedAsset,
+        cancelled: AtomicBoolean,
+        progress: (String) -> Unit
+    ): Bitmap? {
+        val video = source.videoFile
+        val timestampUs = source.metadata.optLong("photo_timestamp_us", -1L)
+        if (video != null && timestampUs >= 0L) {
+            progress("正在解码封面时间戳对应的实际条件帧…")
+            val timeline = AndroidVideoFrameTimelineDecoder.decode(video, cancelled)
+            val anchorIndex = timeline.nearestFrameIndex(timestampUs)
+            return AndroidVideoFrameBatchReader(video, timeline).use { reader ->
+                reader.read(anchorIndex, 1).single().bitmap
+            }
+        }
+        return source.imageFile?.let { BitmapFactory.decodeFile(it.absolutePath) }
+    }
 }
 
 /** Production/default-false fallback when the experimental context runner is not packaged. */

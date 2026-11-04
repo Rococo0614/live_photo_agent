@@ -419,13 +419,24 @@ class MobileAgentLoop(
     ): Boolean {
         var planning = planner.tryGoalIr(query, state)?.withLocalValidationIfNeeded()
         planner.lastTrace?.let { listener.onRuntimeBrainTrace("goal_ir", it) }
-        if (planning?.localPreviewApplicable == false) return false
-        if (planning == null || !planning.codecResult.valid) {
-            val correction = planning?.codecResult?.diagnostics.orEmpty()
+        for (attempt in 1..2) {
+            if (planning?.localPreviewApplicable == false) return false
+            if (planning != null && planning.codecResult.valid) break
+            val correctionBody = planning?.codecResult?.diagnostics.orEmpty()
                 .joinToString("; ") { "${it.path}: ${it.message}" }
                 .ifBlank { "上一输出不是可解析的plan_live_edit JSON" }
+            val correction = if (planning?.localPreviewApplicable == true) {
+                "已确认这是局部对象编辑，禁止改为skip_local_preview；只修正JSON和目标短语：$correctionBody"
+            } else {
+                correctionBody
+            }
             planning = planner.tryGoalIr(query, state, correction)?.withLocalValidationIfNeeded()
-            planning?.trace?.let { listener.onRuntimeBrainTrace("goal_ir_retry", it) }
+            planning?.trace?.let {
+                listener.onRuntimeBrainTrace(
+                    if (attempt == 1) "goal_ir_retry" else "goal_ir_retry_2",
+                    it
+                )
+            }
         }
         if (planning?.localPreviewApplicable == false) return false
         val codec = planning?.codecResult

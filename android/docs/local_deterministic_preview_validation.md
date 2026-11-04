@@ -181,15 +181,15 @@ SHA-256 438a3d13bf0de46c9730fee89199ac0a104eefdd1cdade9fcbbd917120fc3dd4
                       SHA-256 4691654241a483d9c249f5300870daa124a96effd4cd0d0d0079147f9be6cec0
 ```
 
-当前debug/release单测均为145/145，`lintDebug`、`lintRelease`及debug/release assemble通过。默认
+当前debug/release单测均为150/150，`lintDebug`、`lintRelease`及debug/release assemble通过。默认
 debug/release APK都不包含`libqnn_net_run.so`；默认debug也不含演示Provider。只有显式实验Debug
 构建加入只读Provider与实验native：
 
 ```text
-default debug APK        b35fbf0de378ad277d1aefa0c5a3aff2947093a2ad04f477815c57bc7a2e3985
-default release APK      c2eec1aba8bac2c6ffbfeadfb281be823e6f21bbdb9b3e9a35a3bd4166522c49
-full-timeline fallback   e6ea0d0efd29eb279b3d77e3dba690ee14fd6fa344b2e2fbd537adaed95c56f0
-persistent-QNN debug APK 4f7b2ca7afd20a8fabf18000ad698905dc669cfe92af6dcc39cb2f83d999c192
+default debug APK        7677a3c3aaed82f96ea4270631555f5abc8f5f2f9584694eee5e3bc9e86f1e77
+default release APK      6ae3daf960693f86b0a6ad95d1af664c72f495757d5190030a1ed75e8813f3f3
+full-timeline fallback   b9ba45b836fab5ceeaaf539b29c637bd7ac7b267aa71da2682e9fbb0b28f47ac
+persistent-QNN debug APK 1a5e80b48d4c64a65d28471756e1736c4c7ac432dc3201be46f49e05295e301f
 ```
 
 所有自定义Gradle属性已注册为task inputs；同一worktree按“clean默认→实验→默认”构建，前后两个默认
@@ -560,6 +560,43 @@ Live Photo查询为151→151：
     SHA-256 c5ededb6a98d5f055382d1836a6e449a49e07e023badf31407871f3a0add04e0
 ```
 
+### 4.8 运行中Activity重建与坐姿女人蓝色换色回归
+
+第二轮真实UI输入“帮我把画面中的女人调成蓝色”在素材预处理后被取消。Runtime checkpoint显示
+`OWLv2 locator cancelled before preprocessing`：Activity在worker运行时重建，`onDestroy()`按旧策略取消
+worker；新Activity只恢复Photo Picker URI，并错误提示点击不存在的“分析”按钮。修复后worker期间锁定
+当前方向，结束后解锁；中断会话会预填原指令并提示重新发送自动前处理。VFR `N=7`真机回归中，worker
+运行时请求横屏仍保持rotation 0且未取消，完成后切到rotation 1并保留预览，取消后临时根为0：
+
+```text
+  worker-rotation-lock-vfr7/evidence.json
+    SHA-256 1df892090782e6151a3a6a7760610c20cfd7ce7d8a0e9c1d87d620b9f53b41b9
+```
+
+同一“女人→蓝色”请求还暴露两个独立泛化问题：Qwen输出过“操作间多一个`}`、外层少一个`}`、重复
+operation”的组合格式，并把结果颜色写进目标；窄结构修复只移动括号和删除逐字节重复项，语义validator
+仍拒绝`女人调成蓝色/a woman in blue clothing`，模型提示最终稳定输出`woman/画面中的女人`与
+`#0000FF`。更关键的是，该Motion Photo静态JPEG与1,500,000µs视频条件帧构图不同；旧链在JPEG上
+定位后把点直接用于视频，导致背景染蓝。现改为先将photo timestamp映射最近实际PTS，再从同一视频条件
+帧运行OWLv2和EdgeTAM。
+
+最终素材按EOS得到`N=270`，完成270/270双向跟踪、完整动态蓝色换色、私有Live Photo、确认门禁与
+撤销；窗帘、墙面和沙发不再染色，源SHA不变，相册37→37。固定双点图对坐姿人物覆盖头发、上身和
+双臂主区域，但不同材质裤子未合并，仍作为已知分割精度边界：
+
+```text
+  user-woman-blue-270/evidence.json
+    SHA-256 1dfcfec38298ef0753ec8e97659fd6589a36167ac68681bc89482a303ef96786
+  user-woman-blue-270/goal-ir-evidence.json
+    SHA-256 1c9deef3fdd1232799963fdbee4ac069d18b6a76dcda680c3ab0678020ea1faf
+  user-woman-blue-270/condition-mask-evidence.json
+    SHA-256 25e6b8e7d3b963ade5fc48f538047ac0fda202e21a3546598a8a2f87cc3e8eb0
+  user-woman-blue-270/preview-cover.png
+    SHA-256 4751fbf68f76e1689a2f483b5de140a22b6194f70462c611b7515dc9fad2950a
+  user-woman-blue-270/private-preview-copy.jpg
+    SHA-256 f28cb4ba2e9a29f3d93e276005c0d0ce61c7185728068d9a1b522d29e5ae9815
+```
+
 ## 5. 逐帧跟踪调色显色证据
 
 在已经通过vivo QAIRT 2.45 Gate的17帧固定图跟踪链上，使用每帧`device-mask.png`对中间面板目标猫
@@ -678,7 +715,7 @@ certificate到临时区域工具”Gate；以下仍阻止mutation：
 设备base.apk与host逐字节一致：
 
 ```text
-SHA-256 4f7b2ca7afd20a8fabf18000ad698905dc669cfe92af6dcc39cb2f83d999c192
+SHA-256 1a5e80b48d4c64a65d28471756e1736c4c7ac432dc3201be46f49e05295e301f
 ```
 
 vivo百度输入法保持启用，ADBKeyboard为disabled-user，stay-awake为0，LPA进程已停止。

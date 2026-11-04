@@ -44,6 +44,21 @@ class AndroidEdgeTamQnnSegmenterTest {
     }
 
     @Test
+    fun broadHumanBoxMovesPromptsAwayFromBackgroundBiasedCenter() {
+        val prompt = AndroidEdgeTamQnnSegmenter.promptFor(
+            grounding(
+                "woman",
+                OwlV2InternalBox(100.0, 100.0, 600.0, 500.0)
+            ),
+            imageWidth = 1_000,
+            imageHeight = 800
+        )
+
+        assertArrayEquals(floatArrayOf(0.25f, 0.3f, 0.25f, 0.45f), prompt.coordinates, 1e-6f)
+        assertArrayEquals(floatArrayOf(1f, 1f), prompt.labels, 0f)
+    }
+
+    @Test
     fun maskQualityCountsOnlyPixelsOutsideExpandedCandidateBox() {
         val mask = ByteArray(100) { 0 }
         mask[4 * 10 + 4] = 0xff.toByte()
@@ -124,7 +139,10 @@ class AndroidEdgeTamQnnSegmenterTest {
         return output
     }
 
-    private fun grounding(query: String) = OwlV2GroundingResult(
+    private fun grounding(
+        query: String,
+        box: OwlV2InternalBox = OwlV2InternalBox(100.0, 200.0, 300.0, 600.0)
+    ) = OwlV2GroundingResult(
         canonicalQuery = query,
         sourceText = null,
         expectedCount = 1,
@@ -133,7 +151,7 @@ class AndroidEdgeTamQnnSegmenterTest {
             rawIndex = 0,
             label = 0,
             score = 0.9f,
-            box = OwlV2InternalBox(100.0, 200.0, 300.0, 600.0)
+            box = box
         )),
         disposition = OwlV2GroundingDisposition.CANDIDATE_SET_READY,
         evidenceFingerprint = "0".repeat(64)

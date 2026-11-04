@@ -106,6 +106,52 @@ class AgentGoalJsonEnvelopeTest {
     }
 
     @Test
+    fun closesOuterEnvelopeThenRemovesDuplicateOperation() {
+        val operation = """{"op":"change_content","scope":"current","target":{"description":"a woman wearing blue clothing on green grass","source_text":"帮我把画面中的女人调成蓝色"},"parameters":{"effect_kind":"color_tint","color_hex":"#0000FF","intensity":1.0},"constraints":[]}"""
+        val parsed = AgentGoalJsonEnvelopeParser.parse(
+            """{"name":"plan_live_edit","arguments":{"operations":[$operation,$operation],"unresolved_slots":[]}"""
+        )!!
+
+        assertTrue(parsed.repaired)
+        assertEquals(1,
+            parsed.value.getJSONObject("arguments").getJSONArray("operations").length())
+        assertEquals(
+            "appended one missing outer envelope brace; removed exact duplicate operations",
+            parsed.repairDescription
+        )
+    }
+
+    @Test
+    fun movesExtraInterOperationBraceThenRemovesDuplicate() {
+        val operation = """{"op":"change_content","scope":"current","target":{"description":"a woman wearing blue clothing on green grass","source_text":"帮我把画面中的女人调成蓝色"},"parameters":{"effect_kind":"color_tint","color_hex":"#0000FF","intensity":1.0},"constraints":[]}"""
+        val malformed = """{"name":"plan_live_edit","arguments":{"operations":[${operation}},$operation],"unresolved_slots":[]}"""
+        val parsed = AgentGoalJsonEnvelopeParser.parse(malformed)!!
+
+        assertTrue(parsed.repaired)
+        assertEquals(1,
+            parsed.value.getJSONObject("arguments").getJSONArray("operations").length())
+        assertEquals(
+            "moved one extra inter-operation brace to outer envelope; " +
+                "removed exact duplicate operations",
+            parsed.repairDescription
+        )
+    }
+
+    @Test
+    fun repairsCombinedExtraOperationBraceAndMissingArrayTerminator() {
+        val malformed = """{"name":"plan_live_edit","arguments":{"operations":[{"op":"change_content","scope":"current","target":{"description":"a woman in blue clothing","source_text":"女人调成蓝色"},"parameters":{"effect_kind":"color_tint","color_hex":"#0000FF","intensity":1},"constraints":[]}},"unresolved_slots":[]}}"""
+        val parsed = AgentGoalJsonEnvelopeParser.parse(malformed)!!
+
+        assertTrue(parsed.repaired)
+        assertEquals(1,
+            parsed.value.getJSONObject("arguments").getJSONArray("operations").length())
+        assertEquals(
+            "removed extra operation brace and inserted array terminator",
+            parsed.repairDescription
+        )
+    }
+
+    @Test
     fun preservesNonEquivalentMultipleOperationsForStrictValidator() {
         val parsed = AgentGoalJsonEnvelopeParser.parse(
             """{"name":"plan_live_edit","arguments":{"operations":[{"op":"change_content","parameters":{"effect_kind":"blur","blur_radius_px":4}},{"op":"change_content","parameters":{"effect_kind":"blur","blur_radius_px":8}}]}}"""

@@ -1200,6 +1200,10 @@ class GenieTextPlanner(private val context: Context, private val sessionId: Stri
             - blur：parameters包含effect_kind=blur、blur_radius_px=0.5..64。
             color_tint和blur互斥，每轮只能选择一个。用户说绿色等颜色变化时只能输出color_tint；用户
             没有说模糊/虚化/blur时绝不能额外输出blur，也不能为了展示能力增加第二个operation。
+            人物换色示例：用户说“把画面中的女人调成蓝色”时，target只能是
+            {"description":"woman","source_text":"画面中的女人"}，蓝色只进入parameters的
+            color_hex；operations只有这一项。不得从其他示例添加草地、水面、衣服颜色等用户未说的
+            目标属性或场景。
             颜色、效果或强度会产生不同结果时由你依据用户原话选择。用户目标、效果或颜色不明确时，
             才在顶层unresolved_slots写slot；slot键只能是operation_index、name、alternatives、
             user_visible_impact，绝不能把这些键放入operation或target。局部修改阶段不附加publish。

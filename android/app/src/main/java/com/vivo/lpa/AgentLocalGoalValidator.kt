@@ -60,6 +60,13 @@ object AgentLocalGoalValidator {
                     "target source_text must quote the user's target phrase"
                 )
             } else {
+                if (targetSourceContainsEditAction(target.sourceText)) {
+                    errors += error(
+                        "target_source_action_leakage",
+                        "$.operations[0].target.source_text",
+                        "target source_text must quote only the pre-edit object phrase"
+                    )
+                }
                 val canonicalWords = target.description.lowercase()
                     .split(Regex("[^a-z]+"))
                     .filter(String::isNotBlank)
@@ -142,10 +149,11 @@ object AgentLocalGoalValidator {
         colorHex: String
     ): Set<String> {
         val destinationTerms = destinationColorTerms(colorHex)
-        if (destinationTerms.isEmpty() || sourceMentionsDestinationColor(
+        if (destinationTerms.isEmpty() || (!targetSourceContainsEditAction(sourceText) &&
+            sourceMentionsDestinationColor(
                 sourceText,
                 destinationTerms
-            )
+            ))
         ) {
             return emptySet()
         }
@@ -167,6 +175,9 @@ object AgentLocalGoalValidator {
     ): Boolean = SOURCE_COLOR_TERMS.any { (term, source) ->
         term in destinationTerms && source.containsMatchIn(sourceText)
     }
+
+    private fun targetSourceContainsEditAction(sourceText: String): Boolean =
+        TARGET_SOURCE_EDIT_ACTION.containsMatchIn(sourceText)
 
     private fun error(code: String, path: String, message: String) = AgentGoalCodecDiagnostic(
         AgentGoalCodecSeverity.ERROR,
@@ -200,6 +211,12 @@ object AgentLocalGoalValidator {
         "white" to Regex("白"),
         "gray" to Regex("灰"),
         "grey" to Regex("灰")
+    )
+
+    private val TARGET_SOURCE_EDIT_ACTION = Regex(
+        "调成|变成|改成|染成|换成|换色|上色|着色|调色|模糊|虚化|" +
+            "\\b(?:tint|color|colour|blur)\\b",
+        RegexOption.IGNORE_CASE
     )
 
     private data class RequiredQualifier(

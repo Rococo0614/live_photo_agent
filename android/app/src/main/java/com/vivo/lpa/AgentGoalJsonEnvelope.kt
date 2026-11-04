@@ -20,6 +20,77 @@ object AgentGoalJsonEnvelopeParser {
             return normalizeParameterTypes(it, repaired = false, description = null)
         }
 
+        // Observed duplicate-row truncation: the first operation gets one extra closing brace,
+        // while the outer envelope loses one, yielding a misleadingly balanced total:
+        //   "constraints":[]}}, {"op":...],"unresolved_slots":[]}
+        // Move that single brace back to the end; values and operation bytes are untouched.
+        if (raw.count { it == '{' } == raw.count { it == '}' } &&
+            raw.count { it == '[' } == raw.count { it == ']' } &&
+            raw.contains(Regex("""["]operations["]\s*:\s*\["""))
+        ) {
+            val extraBetweenRows = Regex(
+                """[}](\s*)[}](\s*),(\s*[{]\s*["]op["]\s*:)"""
+            )
+            val matches = extraBetweenRows.findAll(raw).toList()
+            if (matches.size == 1) {
+                val match = matches.single()
+                val moved = raw.replaceRange(
+                    match.range,
+                    "}${match.groupValues[1]}${match.groupValues[2]},${match.groupValues[3]}"
+                ) + "}"
+                runCatching { JSONObject(moved) }.getOrNull()?.let {
+                    return normalizeParameterTypes(
+                        it,
+                        repaired = true,
+                        description = "moved one extra inter-operation brace to outer envelope"
+                    )
+                }
+            }
+        }
+
+        // Combined observed variant: one extra brace closes the first operation and the array
+        // terminator is omitted before a fixed top-level arguments field.
+        if (raw.count { it == '}' } == raw.count { it == '{' } + 1 &&
+            raw.count { it == '[' } == raw.count { it == ']' } + 1 &&
+            raw.contains(Regex("""["]operations["]\s*:\s*\["""))
+        ) {
+            val combined = Regex(
+                """[}](\s*)[}](\s*),(\s*["](?:constraints|unresolved_slots)["]\s*:)"""
+            )
+            val matches = combined.findAll(raw).toList()
+            if (matches.size == 1) {
+                val match = matches.single()
+                val repaired = raw.replaceRange(
+                    match.range,
+                    "}${match.groupValues[1]}]${match.groupValues[2]},${match.groupValues[3]}"
+                )
+                runCatching { JSONObject(repaired) }.getOrNull()?.let {
+                    return normalizeParameterTypes(
+                        it,
+                        repaired = true,
+                        description = "removed extra operation brace and inserted array terminator"
+                    )
+                }
+            }
+        }
+
+        // Observed truncation where generation stops after closing `arguments` but omits exactly
+        // the outer function-call brace. Append only one trailing brace, only for the fixed Goal
+        // IR envelope with balanced arrays; semantic validation and duplicate removal still run.
+        if (raw.count { it == '{' } == raw.count { it == '}' } + 1 &&
+            raw.count { it == '[' } == raw.count { it == ']' } &&
+            raw.contains("\"name\"") && raw.contains("\"plan_live_edit\"") &&
+            raw.contains("\"arguments\"")
+        ) {
+            runCatching { JSONObject("$raw}") }.getOrNull()?.let {
+                return normalizeParameterTypes(
+                    it,
+                    repaired = true,
+                    description = "appended one missing outer envelope brace"
+                )
+            }
+        }
+
         // Qwen occasionally closes the last operation object and immediately writes the next
         // top-level arguments key, omitting only the operations array bracket:
         //   ... "constraints":[]},"unresolved_slots":[] ...

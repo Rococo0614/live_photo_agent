@@ -228,14 +228,17 @@ class AndroidEdgeTamQnnSegmenter(
         ): AndroidEdgeTamPrompt {
             val box = grounding.candidates.single().box
             return if (HUMAN_TARGET.containsMatchIn(grounding.canonicalQuery)) {
-                val centerX = (box.left + box.right) / 2.0
+                val width = box.right - box.left
                 val height = box.bottom - box.top
+                val broadBox = height / width < 1.55
+                val promptX = box.left + width * if (broadBox) 0.30 else 0.50
+                val lowerY = if (broadBox) 0.65 else 0.75
                 AndroidEdgeTamPrompt(
                     floatArrayOf(
-                        (centerX / imageWidth).coerceIn(0.0, 1.0).toFloat(),
+                        (promptX / imageWidth).coerceIn(0.0, 1.0).toFloat(),
                         ((box.top + height * 0.35) / imageHeight).coerceIn(0.0, 1.0).toFloat(),
-                        (centerX / imageWidth).coerceIn(0.0, 1.0).toFloat(),
-                        ((box.top + height * 0.75) / imageHeight).coerceIn(0.0, 1.0).toFloat()
+                        (promptX / imageWidth).coerceIn(0.0, 1.0).toFloat(),
+                        ((box.top + height * lowerY) / imageHeight).coerceIn(0.0, 1.0).toFloat()
                     ),
                     floatArrayOf(1f, 1f)
                 )
