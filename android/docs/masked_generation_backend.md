@@ -53,7 +53,8 @@ python3.10 -m venv /mnt/ssd/lpa-generation-backend/venv
 HF_HOME=/mnt/ssd/lpa-generation-backend/hf-cache \
 /mnt/ssd/lpa-generation-backend/venv/bin/python \
   android/tools/masked_inpaint_server.py \
-  --model sd2-community/stable-diffusion-2-inpainting \
+  --model /mnt/ssd/lpa-generation-backend/model/sd2-inpainting \
+  --model-id sd2-community/stable-diffusion-2-inpainting \
   --cache-dir /mnt/ssd/lpa-generation-backend/hf-cache
 ```
 

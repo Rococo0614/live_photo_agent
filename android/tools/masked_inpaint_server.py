@@ -27,6 +27,11 @@ def parse_args() -> argparse.Namespace:
         default="sd2-community/stable-diffusion-2-inpainting",
     )
     parser.add_argument(
+        "--model-id",
+        default=None,
+        help="Protocol model id when --model is a local path (defaults to --model)",
+    )
+    parser.add_argument(
         "--cache-dir",
         default="/mnt/ssd/lpa-generation-backend/hf-cache",
     )
@@ -48,6 +53,7 @@ def main() -> None:
         raise SystemExit("research backend must bind to loopback")
     if not 1 <= args.steps <= 100:
         raise SystemExit("steps must be in 1..100")
+    protocol_model_id = args.model_id or args.model
 
     import torch
     from diffusers import DPMSolverMultistepScheduler, StableDiffusionInpaintPipeline
@@ -58,6 +64,8 @@ def main() -> None:
     pipe = StableDiffusionInpaintPipeline.from_pretrained(
         args.model,
         torch_dtype=torch.float16,
+        variant="fp16",
+        use_safetensors=True,
         cache_dir=args.cache_dir,
     )
     pipe.scheduler = DPMSolverMultistepScheduler.from_config(pipe.scheduler.config)
@@ -74,7 +82,7 @@ def main() -> None:
             schema_version=1,
             status="ready",
             backend_id="sd2_diffusers_inpaint",
-            model_id=args.model,
+            model_id=protocol_model_id,
             cuda_device=torch.cuda.get_device_name(0),
         )
 
@@ -86,7 +94,7 @@ def main() -> None:
             request_sha = request.form["request_sha256"]
             if len(request_sha) != 64:
                 return jsonify(error="invalid request_sha256"), 400
-            if request.form["model_id"] != args.model:
+            if request.form["model_id"] != protocol_model_id:
                 return jsonify(error="model_id mismatch"), 409
             prompt = request.form["prompt"].strip()
             if not prompt or len(prompt) > 160:
@@ -127,7 +135,7 @@ def main() -> None:
                 output_sha256=hashlib.sha256(encoded).hexdigest(),
                 image_base64=base64.b64encode(encoded).decode("ascii"),
                 backend_id="sd2_diffusers_inpaint",
-                model_id=args.model,
+                model_id=protocol_model_id,
                 seed=seed,
                 single_frame_only=True,
             )
