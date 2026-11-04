@@ -181,15 +181,15 @@ SHA-256 438a3d13bf0de46c9730fee89199ac0a104eefdd1cdade9fcbbd917120fc3dd4
                       SHA-256 4691654241a483d9c249f5300870daa124a96effd4cd0d0d0079147f9be6cec0
 ```
 
-当前debug/release单测均为135/135，`lintDebug`、`lintRelease`及debug/release assemble通过。默认
+当前debug/release单测均为145/145，`lintDebug`、`lintRelease`及debug/release assemble通过。默认
 debug/release APK都不包含`libqnn_net_run.so`；默认debug也不含演示Provider。只有显式实验Debug
 构建加入只读Provider与实验native：
 
 ```text
-default debug APK        06a97395080816ec9431b019cb7b41512055c65ea6a6b9b9cd03473675cb6034
-default release APK      54fee37bad903003ea0f3fb8dd42ab3ca443d1b40f1bd523a0921926f52f7baf
-full-timeline fallback   e7cee0fea66f1fe9dfce12aa77b203ecb437ba2a585e2e1b7866eec48644ac6b
-persistent-QNN debug APK 0ed95cd057f112e7528e8409037cfd6d45413546ca44a8894c25c827376b669a
+default debug APK        b35fbf0de378ad277d1aefa0c5a3aff2947093a2ad04f477815c57bc7a2e3985
+default release APK      c2eec1aba8bac2c6ffbfeadfb281be823e6f21bbdb9b3e9a35a3bd4166522c49
+full-timeline fallback   e6ea0d0efd29eb279b3d77e3dba690ee14fd6fa344b2e2fbd537adaed95c56f0
+persistent-QNN debug APK 4f7b2ca7afd20a8fabf18000ad698905dc669cfe92af6dcc39cb2f83d999c192
 ```
 
 所有自定义Gradle属性已注册为task inputs；同一worktree按“clean默认→实验→默认”构建，前后两个默认
@@ -529,6 +529,37 @@ Live Photo查询为151→151：
     SHA-256 64426ec92f32af0cb30e3675579906be22c949bb93802590badd9604487b116a
 ```
 
+### 4.7 真实用户滑板素材的局部红色换色回归
+
+真实UI输入“帮我把live中滑滑板的人调成红色么”最初失败。审计记录表明手机当时是关闭局部跟踪的
+默认loop APK，旧Route Planner又把请求错误收敛成了单独`PUBLISH`。切换到实验构建后还发现三个
+素材泛化问题，并逐项fail-closed修复：
+
+1. Goal IR曾把结果颜色泄漏进定位词`a person skateboarding on red grass`；host现拒绝非原始目标中的
+   destination color并要求Qwen重试，最终得到`a person sliding on a skateboard`与
+   `color_tint/#FF0000`；
+2. Photo Picker复制出的JPEG由fallback拆轨，vendor SDK未返回封面时间戳；现从XMP
+   `GCamera:MotionPhotoPresentationTimestampUs=1500000`恢复，并在复用旧PreparedAsset时补齐；
+3. OWLv2返回一个完整人物框和两个低分滑板碎片框；只有最高候选同时满足最低分0.20、分差0.08和
+   倍率1.40时才由host收敛为唯一候选，近分多目标仍返回`NeedUser`。人物EdgeTAM提示改为上身35%与
+   下身75%两个正点，单帧mask覆盖率4.856%、检测框外泄漏0，覆盖头、躯干、双臂和双腿。
+
+最终同一句输入在同一素材上按MediaCodec EOS得到`N=339`，完成339/339双向跟踪、完整动态红色换色、
+私有Live Photo repack、`PENDING_REVIEW→ACCEPTED_FOR_REVIEW→UNDONE`。源SHA前后一致，相册输出目录
+37→37，未发布：
+
+```text
+/mnt/ssd/lpa-aihub-probe/artifacts/android-dynamic-frame-timeline/
+  user-skateboarder-red-339/evidence.json
+    SHA-256 c3c615cd87bb562c46e873ab862b84a4a9c2ab605bec53e9e2bdcf8cf42e6d03
+  user-skateboarder-red-339/preview-cover.png
+    SHA-256 b086ac306944ad4d23a47794de3f24c3201fa1dbe0354433d658394bd45c55d4
+  user-skateboarder-red-339/private-preview-copy.jpg
+    SHA-256 b671a28b6f8ec938d25af0a9367e110c3334317f0bb7744ee29089bc02bfc77e
+  user-skateboarder-red-339/language-mask-evidence.json
+    SHA-256 c5ededb6a98d5f055382d1836a6e449a49e07e023badf31407871f3a0add04e0
+```
+
 ## 5. 逐帧跟踪调色显色证据
 
 在已经通过vivo QAIRT 2.45 Gate的17帧固定图跟踪链上，使用每帧`device-mask.png`对中间面板目标猫
@@ -642,11 +673,12 @@ certificate到临时区域工具”Gate；以下仍阻止mutation：
    保留，但产品决策接受16GB目标机上的该资源代价，不再把它列为当前功能闭环阻塞项；
 5. 固定context银行包体仍未解决；任何确认仍只接受临时预览，不能写回。
 
-本轮测试后已恢复当前默认`agentRuntime=loop / localTrackedPreview=false` APK；设备base.apk与host逐字节
-一致，且不包含实验`qnn-net-run`：
+常规验收结束时仍应恢复默认APK；但本轮收到真实用户失败反馈后，为允许用户立即复测同一滑板素材，
+设备暂时保留显式实验`dag/localTrackedPreview/fullTimeline/persistentQnn` Debug APK。该包不是生产构建，
+设备base.apk与host逐字节一致：
 
 ```text
-SHA-256 06a97395080816ec9431b019cb7b41512055c65ea6a6b9b9cd03473675cb6034
+SHA-256 4f7b2ca7afd20a8fabf18000ad698905dc669cfe92af6dcc39cb2f83d999c192
 ```
 
 vivo百度输入法保持启用，ADBKeyboard为disabled-user，stay-awake为0，LPA进程已停止。

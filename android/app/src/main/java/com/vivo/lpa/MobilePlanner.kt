@@ -40,6 +40,7 @@ class MobilePlanner(context: Context? = null, sessionId: String? = null) {
                 "调色", "滤镜", "增强", "识别", "摘要", "倒放", "变速", "加速", "慢放",
                 "反转", "翻转", "镜像", "模糊", "动感", "换", "替换", "主色", "配色",
                 "色板", "取色", "美颜", "锐化", "降噪", "提亮", "palette", "mirror",
+                "调成", "变成", "改成", "染成", "上色", "着色", "换色", "改颜色",
                 "flip", "reverse", "replace", "collage", "trim", "filter"
             ).any(lower::contains)
         }

@@ -20,6 +20,30 @@ class AndroidEdgeTamQnnSegmenterTest {
     }
 
     @Test
+    fun humanTargetDistributesPositivePointsAcrossUpperAndLowerBody() {
+        val prompt = AndroidEdgeTamQnnSegmenter.promptFor(
+            grounding("a person sliding on a skateboard"),
+            imageWidth = 1_000,
+            imageHeight = 800
+        )
+
+        assertArrayEquals(floatArrayOf(0.2f, 0.425f, 0.2f, 0.625f), prompt.coordinates, 1e-6f)
+        assertArrayEquals(floatArrayOf(1f, 1f), prompt.labels, 0f)
+    }
+
+    @Test
+    fun nonHumanTargetKeepsValidatedPositivePointPrompt() {
+        val prompt = AndroidEdgeTamQnnSegmenter.promptFor(
+            grounding("an orange cat walking on green grass"),
+            imageWidth = 1_000,
+            imageHeight = 800
+        )
+
+        assertArrayEquals(floatArrayOf(0.2f, 0.5f, 0.2f, 0.575f), prompt.coordinates, 1e-6f)
+        assertArrayEquals(floatArrayOf(1f, 1f), prompt.labels, 0f)
+    }
+
+    @Test
     fun maskQualityCountsOnlyPixelsOutsideExpandedCandidateBox() {
         val mask = ByteArray(100) { 0 }
         mask[4 * 10 + 4] = 0xff.toByte()
@@ -99,4 +123,19 @@ class AndroidEdgeTamQnnSegmenterTest {
         }
         return output
     }
+
+    private fun grounding(query: String) = OwlV2GroundingResult(
+        canonicalQuery = query,
+        sourceText = null,
+        expectedCount = 1,
+        candidates = listOf(OwlV2InternalCandidate(
+            candidateId = "candidate-0",
+            rawIndex = 0,
+            label = 0,
+            score = 0.9f,
+            box = OwlV2InternalBox(100.0, 200.0, 300.0, 600.0)
+        )),
+        disposition = OwlV2GroundingDisposition.CANDIDATE_SET_READY,
+        evidenceFingerprint = "0".repeat(64)
+    )
 }

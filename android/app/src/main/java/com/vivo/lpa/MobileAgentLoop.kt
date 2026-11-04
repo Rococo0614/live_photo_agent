@@ -58,11 +58,12 @@ class MobileAgentLoop(
 
         try {
             if (uris.isNotEmpty() || preparedAssets != null) {
-                val assets = preparedAssets ?: preprocessor.prepare(
-                    uris,
-                    cancelled = { cancelled.get() },
-                    progress = listener::onProgress
-                )
+                val assets = preparedAssets?.map(::recoverMotionPhotoTimestamp)
+                    ?: preprocessor.prepare(
+                        uris,
+                        cancelled = { cancelled.get() },
+                        progress = listener::onProgress
+                    )
                 state = AgentStateReducer.apply(state, StateDelta.AddAssets(assets))
                 listener.onAssetsPrepared(uris.ifEmpty { assets.map { it.sourceUri } }, assets)
             }
@@ -88,6 +89,14 @@ class MobileAgentLoop(
                     "只输出完整 ROUTE 行；编辑请求不能同时输出 REPLY/QUESTION，也不能漏掉实际编辑能力"
                 )
                 planner.lastTrace?.let { listener.onRuntimeBrainTrace("route_retry", it) }
+            }
+            if (routeResult == null && !BuildConfig.LOCAL_TRACKED_PREVIEW &&
+                handleLocalTrackedPreviewGoal(planner, query, state, listener, cancelled)
+            ) {
+                // A default build has no locator/tracker, but Qwen can still identify the request
+                // as a local object edit. Suspend with the unavailable-backend explanation rather
+                // than misreporting a malformed route or falling back to a global style/publish.
+                return
             }
             var parsedRoute = routeResult
                 ?: throw IllegalStateException("端侧大脑未能生成可解析的语义路线")
@@ -726,6 +735,19 @@ class MobileAgentLoop(
         } finally {
             database.close()
         }
+    }
+
+    private fun recoverMotionPhotoTimestamp(asset: PreparedAsset): PreparedAsset {
+        if (asset.videoFile == null || asset.metadata.optLong("photo_timestamp_us", -1L) >= 0L) {
+            return asset
+        }
+        val timestampUs = MotionPhotoXmpMetadata.presentationTimestampUs(asset.sourceFile)
+            ?: return asset
+        val durationMs = asset.metadata.optLong("duration_ms", -1L)
+        if (durationMs > 0L && timestampUs > durationMs * 1_000L) return asset
+        return asset.copy(
+            metadata = JSONObject(asset.metadata.toString()).put("photo_timestamp_us", timestampUs)
+        )
     }
 
     private fun emitPlan(

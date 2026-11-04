@@ -110,7 +110,7 @@ object OwlV2GroundingPostprocessor {
         }
 
         val scale = MODEL_IMAGE_SIZE.toDouble() / max(imageWidth, imageHeight)
-        val candidates = retained.mapNotNull { candidate ->
+        val contextCandidates = retained.mapNotNull { candidate ->
             val left = (candidate.box[0] / scale).coerceIn(0.0, imageWidth.toDouble())
             val top = (candidate.box[1] / scale).coerceIn(0.0, imageHeight.toDouble())
             val right = (candidate.box[2] / scale).coerceIn(0.0, imageWidth.toDouble())
@@ -125,6 +125,13 @@ object OwlV2GroundingPostprocessor {
             )
         }.mapIndexed { index, candidate -> candidate.copy(candidateId = "candidate-$index") }
 
+        val candidates = if (expectedCount == 1 && contextCandidates.size > 1 &&
+            confidentlyDominant(contextCandidates[0], contextCandidates[1])
+        ) {
+            listOf(contextCandidates.first())
+        } else {
+            contextCandidates
+        }
         val disposition = when {
             candidates.isEmpty() -> OwlV2GroundingDisposition.NEED_OBSERVATION
             candidates.size != expectedCount -> OwlV2GroundingDisposition.NEED_USER
@@ -145,10 +152,17 @@ object OwlV2GroundingPostprocessor {
                 expectedCount,
                 scoreThreshold,
                 iouThreshold,
-                candidates
+                contextCandidates
             )
         )
     }
+
+    private fun confidentlyDominant(
+        first: OwlV2InternalCandidate,
+        second: OwlV2InternalCandidate
+    ): Boolean = first.score >= DOMINANT_MIN_SCORE &&
+        first.score - second.score >= DOMINANT_MIN_MARGIN &&
+        first.score / second.score.coerceAtLeast(0.0001f) >= DOMINANT_MIN_RATIO
 
     private data class RawCandidate(
         val index: Int,
@@ -217,4 +231,8 @@ object OwlV2GroundingPostprocessor {
         .order(ByteOrder.BIG_ENDIAN)
         .putLong(value)
         .array()
+
+    private const val DOMINANT_MIN_SCORE = 0.20f
+    private const val DOMINANT_MIN_MARGIN = 0.08f
+    private const val DOMINANT_MIN_RATIO = 1.40f
 }

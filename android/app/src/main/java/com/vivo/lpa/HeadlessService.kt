@@ -1359,14 +1359,15 @@ class HeadlessService : Service() {
                 } finally {
                     bitmap.recycle()
                 }
-                require(mask.qualityAccepted) {
-                    "EdgeTAM mask failed coverage/leakage gate"
-                }
                 val maskFile = File(outputDir, "qnn-language-mask.raw")
                 maskFile.writeBytes(mask.maskValues)
                 val evidence = JSONObject()
                     .put("schema_version", 1)
-                    .put("status", "PASS_ANDROID_LANGUAGE_TO_EDGETAM_MASK")
+                    .put(
+                        "status",
+                        if (mask.qualityAccepted) "PASS_ANDROID_LANGUAGE_TO_EDGETAM_MASK"
+                        else "FAIL_ANDROID_LANGUAGE_TO_EDGETAM_MASK"
+                    )
                     .put("canonical_query", locatorRun.result.canonicalQuery)
                     .put("locator_candidate_count", locatorRun.result.candidates.size)
                     .put("locator_evidence_fingerprint", locatorRun.result.evidenceFingerprint)
@@ -1399,9 +1400,13 @@ class HeadlessService : Service() {
                 File(outputDir, "qnn-language-mask-evidence.json")
                     .writeText(evidence.toString(2) + "\n")
                 log(
-                    "PASS language -> EdgeTAM mask: selected=${mask.selectedPixels} " +
+                    "${if (mask.qualityAccepted) "PASS" else "FAIL"} language -> EdgeTAM mask: " +
+                        "selected=${mask.selectedPixels} " +
                         "coverage=${mask.coverage} leakage=${mask.outsideExpandedBoxFraction}"
                 )
+                require(mask.qualityAccepted) {
+                    "EdgeTAM mask failed coverage/leakage gate"
+                }
                 log("=== NATIVE ADAPTER TEST END ===")
                 stopSelf()
                 return
@@ -1510,7 +1515,33 @@ class HeadlessService : Service() {
                     preparedAssets = listOf(asset),
                     dagShadow = true
                 )
-                val previewInteraction = requireNotNull(interaction)
+                val previewInteraction = interaction ?: run {
+                    val sourceShaAfter = fileSha256(inputs.single())
+                    val galleryRowsAfter = countAgentPublishedImages()
+                    val reason = errorMessage
+                        ?: finalMessage.takeIf(String::isNotBlank)
+                        ?: "local preview did not materialize"
+                    val failureEvidence = JSONObject()
+                        .put("schema_version", 1)
+                        .put("status", "FAIL_AGENT_REAL_FULL_DYNAMIC_TIMELINE_PREVIEW")
+                        .put("query", agentQuery)
+                        .put("expected_frame_count", expectedFrames)
+                        .put("observed_frame_count", observedFrames)
+                        .put("compile_statuses", org.json.JSONArray(compileStatuses))
+                        .put("terminal_status", terminalState?.status?.name ?: JSONObject.NULL)
+                        .put("plan_intent", finalPlan?.intent ?: JSONObject.NULL)
+                        .put("final_message", finalMessage)
+                        .put("error_message", reason)
+                        .put("source_sha256_before", sourceShaBefore)
+                        .put("source_sha256_after", sourceShaAfter)
+                        .put("gallery_rows_before", galleryRowsBefore)
+                        .put("gallery_rows_after", galleryRowsAfter)
+                        .put("source_media_modified", sourceShaBefore != sourceShaAfter)
+                        .put("published", false)
+                    File(outputDir, "agent-real-full-timeline-preview-evidence.json")
+                        .writeText(failureEvidence.toString(2) + "\n")
+                    error(reason)
+                }
                 val preview = previewInteraction.snapshot()
                 val previewFile = File(outputDir, "agent-real-full-timeline-preview.png")
                 FileOutputStream(previewFile).use { stream ->

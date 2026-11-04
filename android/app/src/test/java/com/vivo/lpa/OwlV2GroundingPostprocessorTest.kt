@@ -33,6 +33,29 @@ class OwlV2GroundingPostprocessorTest {
     }
 
     @Test
+    fun confidentlyDominantCandidateSuppressesLowConfidenceContextFragments() {
+        val result = OwlV2GroundingPostprocessor.process(
+            canonicalQuery = "a person sliding on a skateboard",
+            sourceText = "滑滑板的人",
+            stateFingerprint = "state-skateboarder",
+            imageWidth = 1920,
+            imageHeight = 1080,
+            boxesXyxy = floatArrayOf(
+                400f, 100f, 610f, 460f,
+                430f, 470f, 660f, 540f,
+                450f, 450f, 630f, 490f
+            ),
+            scores = floatArrayOf(0.267578125f, 0.177734375f, 0.1474609375f),
+            labels = intArrayOf(0, 0, 0),
+            expectedCount = 1
+        )
+
+        assertEquals(OwlV2GroundingDisposition.CANDIDATE_SET_READY, result.disposition)
+        assertEquals(1, result.candidates.size)
+        assertEquals(0, result.candidates.single().rawIndex)
+    }
+
+    @Test
     fun noCandidateRequestsObservationRatherThanUserSelection() {
         val result = OwlV2GroundingPostprocessor.process(
             canonicalQuery = "a cat",

@@ -50,6 +50,7 @@ class AndroidEdgeTamTemporalQnnRunner(
         sourceWidth: Int,
         sourceHeight: Int,
         initialPromptCoordinates: FloatArray?,
+        initialPromptLabels: FloatArray? = null,
         state: AndroidEdgeTamTemporalState,
         cancelled: AtomicBoolean,
         produceMemory: Boolean = true,
@@ -59,8 +60,12 @@ class AndroidEdgeTamTemporalQnnRunner(
         require(sequenceIndex == state.processedFrameCount)
         require(imageInput.isFile && imageInput.length() == IMAGE_INPUT_BYTES)
         require(sourceWidth > 0 && sourceHeight > 0)
-        if (sequenceIndex == 0) require(initialPromptCoordinates?.size == 4)
-        else require(initialPromptCoordinates == null)
+        if (sequenceIndex == 0) {
+            require(initialPromptCoordinates?.size == 4)
+            require(initialPromptLabels == null || initialPromptLabels.size == 2)
+        } else {
+            require(initialPromptCoordinates == null && initialPromptLabels == null)
+        }
         requireModelPack()
         val work = File(
             context.cacheDir,
@@ -74,7 +79,10 @@ class AndroidEdgeTamTemporalQnnRunner(
                     coordinates,
                     requireNotNull(initialPromptCoordinates)
                 )
-                AndroidOwlV2QnnLocator.writeFloats(labels, floatArrayOf(1f, 1f))
+                AndroidOwlV2QnnLocator.writeFloats(
+                    labels,
+                    initialPromptLabels ?: floatArrayOf(1f, 1f)
+                )
             } else {
                 AndroidOwlV2QnnLocator.writeFloats(coordinates, FloatArray(4))
                 AndroidOwlV2QnnLocator.writeFloats(labels, floatArrayOf(-1f, -1f))

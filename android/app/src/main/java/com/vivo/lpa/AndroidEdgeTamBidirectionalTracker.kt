@@ -43,9 +43,11 @@ class AndroidEdgeTamBidirectionalTracker(
         outputDirectory: File,
         cancelled: AtomicBoolean,
         materializer: AndroidEdgeTamFrameInputMaterializer,
+        initialPromptLabels: FloatArray = floatArrayOf(1f, 1f),
         progress: (String) -> Unit = {}
     ): AndroidEdgeTamBidirectionalTrackResult {
         require(initialPromptCoordinates.size == 4)
+        require(initialPromptLabels.size == 2)
         require(sourceWidth > 0 && sourceHeight > 0)
         outputDirectory.mkdirs()
         val work = File(outputDirectory, "inputs").apply { mkdirs() }
@@ -71,6 +73,7 @@ class AndroidEdgeTamBidirectionalTracker(
                     sourceWidth = sourceWidth,
                     sourceHeight = sourceHeight,
                     initialPromptCoordinates = prompt,
+                    initialPromptLabels = if (prompt == null) null else initialPromptLabels,
                     state = state,
                     cancelled = cancelled,
                     produceMemory = produceMemory,

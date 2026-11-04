@@ -32,6 +32,41 @@ class AgentLocalGoalValidatorTest {
     }
 
     @Test
+    fun rejectsDestinationColorInventedForAnUnmentionedScene() {
+        val operation = operation(
+            target = AgentGoalTarget.Semantic(
+                "a person skateboarding on red grass",
+                "滑滑板的人"
+            ),
+            colorHex = "#FF0000"
+        )
+        val diagnostics = AgentLocalGoalValidator.validate(AgentGoalIr(
+            goalId = "goal-skateboarder",
+            userGoal = "帮我把live中滑滑板的人调成红色么",
+            stateFingerprint = "state",
+            operations = listOf(operation)
+        ))
+
+        assertTrue(diagnostics.any { it.code == "target_effect_leakage" })
+    }
+
+    @Test
+    fun requiresSkateboardingQualifierInCanonicalTarget() {
+        val operation = operation(
+            target = AgentGoalTarget.Semantic("a person", "滑滑板的人"),
+            colorHex = "#FF0000"
+        )
+        val diagnostics = AgentLocalGoalValidator.validate(AgentGoalIr(
+            goalId = "goal-skateboarder-action",
+            userGoal = "帮我把live中滑滑板的人调成红色么",
+            stateFingerprint = "state",
+            operations = listOf(operation)
+        ))
+
+        assertTrue(diagnostics.any { it.code == "target_qualifier_loss" })
+    }
+
+    @Test
     fun rejectsCanonicalTargetThatDropsUserActionQualifier() {
         val operation = operation(AgentGoalTarget.Semantic(
             "orange cat on green grass",
@@ -88,9 +123,12 @@ class AgentLocalGoalValidatorTest {
         operations = listOf(operation(AgentGoalTarget.Semantic(target, "草地上的橘猫")))
     )
 
-    private fun operation(target: AgentGoalTarget? = AgentGoalTarget.Semantic(
-        "orange cat on grass", "草地上的橘猫"
-    )) = AgentGoalOperation(
+    private fun operation(
+        target: AgentGoalTarget? = AgentGoalTarget.Semantic(
+            "orange cat on grass", "草地上的橘猫"
+        ),
+        colorHex: String = "#008000"
+    ) = AgentGoalOperation(
         operationId = "change-1",
         kind = AgentGoalOperationKind.CHANGE_CONTENT,
         scope = AgentGoalScope.CurrentAssets,
@@ -100,7 +138,7 @@ class AgentLocalGoalValidatorTest {
                 AgentGoalValue.Text("color_tint"), AgentValueProvenance.MODEL_INFERRED
             ),
             "color_hex" to AgentGoalArgument(
-                AgentGoalValue.Text("#008000"), AgentValueProvenance.MODEL_INFERRED
+                AgentGoalValue.Text(colorHex), AgentValueProvenance.MODEL_INFERRED
             ),
             "intensity" to AgentGoalArgument(
                 AgentGoalValue.Number(0.8), AgentValueProvenance.MODEL_INFERRED

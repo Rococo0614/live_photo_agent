@@ -33,8 +33,8 @@ class AndroidFullTimelineMaskTracker(
             else timeline.width
         val visualHeight = if (timeline.rotationDegrees in setOf(90, 270)) timeline.width
             else timeline.height
-        val prompt = AndroidEdgeTamQnnSegmenter.promptPoints(
-            grounding.candidates.single().box,
+        val prompt = AndroidEdgeTamQnnSegmenter.promptFor(
+            grounding,
             sourceBitmap.width,
             sourceBitmap.height
         )
@@ -50,11 +50,12 @@ class AndroidFullTimelineMaskTracker(
                     photoTimestampUs,
                     visualWidth,
                     visualHeight,
-                    prompt,
+                    prompt.coordinates,
                     root,
                     cancelled,
                     materializer,
-                    progress
+                    initialPromptLabels = prompt.labels,
+                    progress = progress
                 )
             }
         } catch (failure: Throwable) {

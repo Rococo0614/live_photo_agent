@@ -65,7 +65,12 @@ class LivePhotoPreprocessor(private val context: Context) {
             }
             val video = split.second ?: if (isVideo(source)) source else sidecar
             val metadata = metadata(source, image, video).apply {
-                sdkDecoded?.let { put("photo_timestamp_us", it.photoTimestampUs) }
+                val timestampUs = sdkDecoded?.photoTimestampUs
+                    ?: split.second?.let { MotionPhotoXmpMetadata.presentationTimestampUs(source) }
+                timestampUs?.takeIf { timestamp ->
+                    val durationMs = optLong("duration_ms", -1L)
+                    durationMs <= 0L || timestamp <= durationMs * 1_000L
+                }?.let { put("photo_timestamp_us", it) }
             }
             val provisional = PreparedAsset(
                 assetId = assetId(uri, source),

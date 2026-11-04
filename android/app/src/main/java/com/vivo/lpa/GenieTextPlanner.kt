@@ -422,6 +422,8 @@ class GenieTextPlanner(private val context: Context, private val sessionId: Stri
                 "滤镜", "调色", "颜色", "色调", "黑白", "灰度", "暖", "冷", "复古",
                 "鲜艳", "提亮", "锐化", "降噪", "美颜", "虚化", "模糊", "动感",
                 "光效", "贴纸", "边框", "水印", "filter", "style", "color", "tone",
+                "调成", "变成", "改成", "染成", "上色", "着色", "换色", "改颜色",
+                "红色", "橙色", "黄色", "绿色", "青色", "蓝色", "紫色", "粉色", "棕色",
                 "bright", "sharpen", "denoise", "beauty", "blur", "sticker", "watermark"
             )
             ToolFamily.TEMPORAL -> hasExplicitTemporalAction(query)

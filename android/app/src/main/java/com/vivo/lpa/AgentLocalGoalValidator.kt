@@ -94,15 +94,11 @@ object AgentLocalGoalValidator {
                 .toSet()
             val leakedTerms = when (change) {
                 is LocalDeterministicChange.ColorTint -> {
-                    // A destination colour may legitimately describe the surrounding scene
-                    // ("orange cat on green grass"). Only the subject phrase before a spatial
-                    // relation is checked; "green cat" remains invalid.
-                    val subjectWords = target.description.lowercase()
-                        .split(Regex("[^a-z]+"))
-                        .filter(String::isNotBlank)
-                        .takeWhile { it !in SCENE_RELATIONS }
-                        .toSet()
-                    destinationColorTerms(change.colorHex).intersect(subjectWords)
+                    destinationColorLeakage(
+                        target.description,
+                        target.sourceText.orEmpty(),
+                        change.colorHex
+                    )
                 }
                 is LocalDeterministicChange.Blur -> setOf("blur", "blurred", "blurry")
                     .intersect(targetWords)
@@ -140,6 +136,38 @@ object AgentLocalGoalValidator {
         }
     }
 
+    private fun destinationColorLeakage(
+        canonicalTarget: String,
+        sourceText: String,
+        colorHex: String
+    ): Set<String> {
+        val destinationTerms = destinationColorTerms(colorHex)
+        if (destinationTerms.isEmpty() || sourceMentionsDestinationColor(
+                sourceText,
+                destinationTerms
+            )
+        ) {
+            return emptySet()
+        }
+        var remaining = canonicalTarget.lowercase()
+        NATURAL_SCENE_COLORS.forEach { scene ->
+            if (scene.colorTerm in destinationTerms && scene.source.containsMatchIn(sourceText)) {
+                remaining = scene.canonical.replace(remaining, " ")
+            }
+        }
+        val remainingWords = remaining.split(Regex("[^a-z]+"))
+            .filter(String::isNotBlank)
+            .toSet()
+        return destinationTerms.intersect(remainingWords)
+    }
+
+    private fun sourceMentionsDestinationColor(
+        sourceText: String,
+        destinationTerms: Set<String>
+    ): Boolean = SOURCE_COLOR_TERMS.any { (term, source) ->
+        term in destinationTerms && source.containsMatchIn(sourceText)
+    }
+
     private fun error(code: String, path: String, message: String) = AgentGoalCodecDiagnostic(
         AgentGoalCodecSeverity.ERROR,
         code,
@@ -147,9 +175,31 @@ object AgentLocalGoalValidator {
         message
     )
 
-    private val SCENE_RELATIONS = setOf(
-        "on", "in", "at", "near", "beside", "by", "over", "under", "across", "through",
-        "against", "inside", "outside", "around", "behind", "between", "with"
+    private data class NaturalSceneColor(
+        val colorTerm: String,
+        val source: Regex,
+        val canonical: Regex
+    )
+
+    private val NATURAL_SCENE_COLORS = listOf(
+        NaturalSceneColor("green", Regex("草地|草坪"), Regex("\\bgreen\\s+(grass|lawn)\\b")),
+        NaturalSceneColor("blue", Regex("水面|水中|海面|海里|天空"),
+            Regex("\\bblue\\s+(water|sea|ocean|sky)\\b")),
+        NaturalSceneColor("white", Regex("雪地|雪中|雪上"), Regex("\\bwhite\\s+snow\\b"))
+    )
+
+    private val SOURCE_COLOR_TERMS = mapOf(
+        "red" to Regex("红"),
+        "green" to Regex("绿"),
+        "blue" to Regex("蓝"),
+        "yellow" to Regex("黄"),
+        "cyan" to Regex("青"),
+        "purple" to Regex("紫|品红|洋红"),
+        "magenta" to Regex("紫|品红|洋红"),
+        "black" to Regex("黑"),
+        "white" to Regex("白"),
+        "gray" to Regex("灰"),
+        "grey" to Regex("灰")
     )
 
     private data class RequiredQualifier(
@@ -163,6 +213,11 @@ object AgentLocalGoalValidator {
         RequiredQualifier(Regex("行走|走动|走"), setOf("walk"), "walking action"),
         RequiredQualifier(Regex("奔跑|跑"), setOf("run"), "running action"),
         RequiredQualifier(Regex("跳跃|跳"), setOf("jump"), "jumping action"),
+        RequiredQualifier(
+            Regex("滑板"),
+            setOf("skateboard", "skating", "skater"),
+            "skateboarding action"
+        ),
         RequiredQualifier(Regex("草坪|草地"), setOf("grass", "lawn"), "grass scene")
     )
 }

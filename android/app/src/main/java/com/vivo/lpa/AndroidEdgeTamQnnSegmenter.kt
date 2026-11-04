@@ -28,6 +28,16 @@ data class AndroidEdgeTamInitialMask(
     val decoderExecutionMs: Long
 )
 
+data class AndroidEdgeTamPrompt(
+    val coordinates: FloatArray,
+    val labels: FloatArray
+) {
+    init {
+        require(coordinates.size == 4)
+        require(labels.size == 2)
+    }
+}
+
 /** Unique OWLv2 candidate -> EdgeTAM key-frame mask, pinned to QAIRT 2.45. */
 class AndroidEdgeTamQnnSegmenter(
     private val context: Context,
@@ -66,11 +76,11 @@ class AndroidEdgeTamQnnSegmenter(
                 target.parentFile?.mkdirs()
                 imageFile.copyTo(target, overwrite = true)
             }
-            val pointValues = promptPoints(candidate.box, sourceBitmap.width, sourceBitmap.height)
+            val prompt = promptFor(grounding, sourceBitmap.width, sourceBitmap.height)
             val coordinateFile = File(work, "unnorm_coords.raw")
             val labelFile = File(work, "labels.raw")
-            AndroidOwlV2QnnLocator.writeFloats(coordinateFile, pointValues)
-            AndroidOwlV2QnnLocator.writeFloats(labelFile, floatArrayOf(1f, 1f))
+            AndroidOwlV2QnnLocator.writeFloats(coordinateFile, prompt.coordinates)
+            AndroidOwlV2QnnLocator.writeFloats(labelFile, prompt.labels)
             val preprocessingMs = System.currentTimeMillis() - preprocessingStarted
             check(!cancelled.get()) { "EdgeTAM segmentation cancelled after preprocessing" }
 
@@ -211,6 +221,32 @@ class AndroidEdgeTamQnnSegmenter(
             )
         }
 
+        internal fun promptFor(
+            grounding: OwlV2GroundingResult,
+            imageWidth: Int,
+            imageHeight: Int
+        ): AndroidEdgeTamPrompt {
+            val box = grounding.candidates.single().box
+            return if (HUMAN_TARGET.containsMatchIn(grounding.canonicalQuery)) {
+                val centerX = (box.left + box.right) / 2.0
+                val height = box.bottom - box.top
+                AndroidEdgeTamPrompt(
+                    floatArrayOf(
+                        (centerX / imageWidth).coerceIn(0.0, 1.0).toFloat(),
+                        ((box.top + height * 0.35) / imageHeight).coerceIn(0.0, 1.0).toFloat(),
+                        (centerX / imageWidth).coerceIn(0.0, 1.0).toFloat(),
+                        ((box.top + height * 0.75) / imageHeight).coerceIn(0.0, 1.0).toFloat()
+                    ),
+                    floatArrayOf(1f, 1f)
+                )
+            } else {
+                AndroidEdgeTamPrompt(
+                    promptPoints(box, imageWidth, imageHeight),
+                    floatArrayOf(1f, 1f)
+                )
+            }
+        }
+
         internal fun preprocessImage(bitmap: Bitmap, targetSize: Int = EDGE_SIZE): FloatArray {
             require(!bitmap.isRecycled && targetSize > 0)
             val width = bitmap.width
@@ -219,6 +255,10 @@ class AndroidEdgeTamQnnSegmenter(
             bitmap.getPixels(source, 0, width, 0, 0, width, height)
             return preprocessArgb(width, height, source, targetSize)
         }
+
+        private val HUMAN_TARGET = Regex(
+            """(?i)\b(person|people|human|man|woman|girl|boy|skater|skateboarder)\b"""
+        )
 
         /** Pillow's UINT8 `Image.resize(..., BILINEAR)` two-pass convolution. */
         internal fun preprocessArgb(
