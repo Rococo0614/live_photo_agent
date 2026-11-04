@@ -186,8 +186,8 @@ debug/release APK都不包含`libqnn_net_run.so`；默认debug也不含演示Pro
 构建加入只读Provider与实验native：
 
 ```text
-default debug APK          62b6011ac03186213e1e524189837267833346633f1cbd19bc281db2b41147cb
-default release APK        9f2e90f1905d0627fcc0f80070fd714eae32c313990943a6b7ddd7c6cb2b14de
+default debug APK          dcc0d9084a938763e602d2800f91a9f8e68b0889322ec8e2e002e73cec272f37
+default release APK        08c204017b805b5ec0608c4ab850b03e7c6b96a9cd5c1e0ddacf844732500948
 full-timeline fallback     17fe20a3cb66ba6967a63f14a2e23a3b49d52d5ee397a049f5fd1cc9fa2eb346
 persistent-QNN debug APK   12bc6eb50899fb4d1b280112aad20e341a0728a63171e937aa670fcd37cc7c33
 generation-fixture APK     49c148553f36d3e6e48ca97d58ea975a27a4de1c672d451c77964a9a3a440f1f
