@@ -181,16 +181,16 @@ SHA-256 438a3d13bf0de46c9730fee89199ac0a104eefdd1cdade9fcbbd917120fc3dd4
                       SHA-256 4691654241a483d9c249f5300870daa124a96effd4cd0d0d0079147f9be6cec0
 ```
 
-当前debug/release单测均为157/157，`lintDebug`、`lintRelease`及debug/release assemble通过。默认
+当前debug/release单测均为160/160，`lintDebug`、`lintRelease`及debug/release assemble通过。默认
 debug/release APK都不包含`libqnn_net_run.so`；默认debug也不含演示Provider。只有显式实验Debug
 构建加入只读Provider与实验native：
 
 ```text
-default debug APK          20cab6992248acb22d5f00e31486f1cfa0d896e14e9bbea90271597f2f70c2dc
-default release APK        df6e8ee3364108d712c6dcf0b39012ee3946adfa5c6f4c191ef62ce39302bcca
-full-timeline fallback     0c3cb95a354704ae9835407317a12afcda4051e5261b0ebceb58713511a499a3
-persistent-QNN debug APK   879dba9535154d7552020d4ef6fdf5c58b6e2dd32f4a348e3ecb986e7c77c1f9
-generation-fixture APK     584e77ee222025f094422eed31b0dff4845e1de51609828c7e98d8523db3756e
+default debug APK          62b6011ac03186213e1e524189837267833346633f1cbd19bc281db2b41147cb
+default release APK        9f2e90f1905d0627fcc0f80070fd714eae32c313990943a6b7ddd7c6cb2b14de
+full-timeline fallback     17fe20a3cb66ba6967a63f14a2e23a3b49d52d5ee397a049f5fd1cc9fa2eb346
+persistent-QNN debug APK   12bc6eb50899fb4d1b280112aad20e341a0728a63171e937aa670fcd37cc7c33
+generation-fixture APK     49c148553f36d3e6e48ca97d58ea975a27a4de1c672d451c77964a9a3a440f1f
 ```
 
 所有自定义Gradle属性已注册为task inputs；同一worktree按“clean默认→实验→默认”构建，前后两个默认
@@ -631,6 +631,24 @@ single_frame_only=true`均为强制参数。
 该闭环只证明生成工具的Planner/DAG/backend/review接口，不代表真实inpaint质量，也不生成动态时间线。
 接入真实云端或端侧模型后仍需独立验证生成内容、边缘融合、保护区、时序一致性和商业许可。
 
+随后加入`AndroidHttpMaskedGenerationBackend`：配置只从应用私有目录读取；远端只允许HTTPS，明文仅允许
+localhost/127.0.0.1供`adb reverse`；multipart请求绑定source PNG、mask、prompt、model、seed与
+certificate SHA，响应必须回显request SHA并提供同尺寸PNG与output SHA。网络调用支持超时和取消，
+即使远端改写整图，手机仍以源像素为准重新按认证mask合成，保证mask外不被远端修改。
+
+N=5滑板fixture通过本地主机合同服务完成真实HTTP往返，backend为
+`http_masked_generation_v1/contract_fixture`，改变1,662像素、alpha变化0，确认后仍不可发布：
+
+```text
+  generation-http-contract-hoverboard-5/evidence.json
+    SHA-256 ba84c24496fda832e40993bc7b87f02189b39432b440937850a5113defece38d
+  generation-http-contract-hoverboard-5/preview.png
+    SHA-256 a8c9cf9134cd6bb8a7fad7fdba2b4779a9c40780476ccbb4ab9b68224ada15b9
+```
+
+主机研究服务入口为`android/tools/masked_inpaint_server.py`，权重与Python环境固定放在仓库外部
+`/mnt/ssd/lpa-generation-backend/`；首个候选为OpenRAIL++的SD2 inpainting。真实模型结果仍需单独Gate。
+
 ## 5. 逐帧跟踪调色显色证据
 
 在已经通过vivo QAIRT 2.45 Gate的17帧固定图跟踪链上，使用每帧`device-mask.png`对中间面板目标猫
@@ -751,7 +769,7 @@ certificate到临时区域工具”Gate；以下仍阻止mutation：
 其中生成结果只来自不可发布fixture；设备base.apk与host逐字节一致：
 
 ```text
-SHA-256 584e77ee222025f094422eed31b0dff4845e1de51609828c7e98d8523db3756e
+SHA-256 49c148553f36d3e6e48ca97d58ea975a27a4de1c672d451c77964a9a3a440f1f
 ```
 
 vivo百度输入法保持启用，ADBKeyboard为disabled-user，stay-awake为0，LPA进程已停止。

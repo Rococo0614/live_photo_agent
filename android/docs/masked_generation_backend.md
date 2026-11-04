@@ -1,0 +1,82 @@
+# Masked generation backend（实验）
+
+## 边界
+
+- 只生成photo timestamp对应条件帧的私有单帧预览。
+- Android始终以本地source和认证mask重新合成，远端不能修改mask外像素。
+- 不生成或发布Live Photo；确认review也不授权写回。
+- fixture与SD2均不是生产后端，模型许可、安全、质量与时序一致性需另行评审。
+
+## Android开关
+
+```bash
+./gradlew :app:assembleDebug \
+  -PagentRuntime=dag \
+  -PlocalTrackedPreview=true \
+  -PfullTimelineTrackedPreview=true \
+  -PpersistentQnn=true \
+  -PlocalGeneratedPreview=true
+```
+
+无HTTP配置时使用`fixture_masked_generation_v1`。HTTP配置位于应用私有目录：
+
+```text
+files/models/local-generation-http/config.json
+```
+
+示例：
+
+```json
+{
+  "endpoint": "http://127.0.0.1:8765/v1/inpaint",
+  "model_id": "sd2-community/stable-diffusion-2-inpainting",
+  "connect_timeout_ms": 15000,
+  "read_timeout_ms": 300000
+}
+```
+
+远端明文HTTP会被拒绝；127.0.0.1/localhost只用于ADB反向代理：
+
+```bash
+adb reverse tcp:8765 tcp:8765
+```
+
+## 主机研究服务
+
+环境和权重放在仓库外：
+
+```bash
+python3.10 -m venv /mnt/ssd/lpa-generation-backend/venv
+/mnt/ssd/lpa-generation-backend/venv/bin/pip install \
+  torch torchvision diffusers transformers accelerate safetensors flask pillow scipy
+
+HF_HOME=/mnt/ssd/lpa-generation-backend/hf-cache \
+/mnt/ssd/lpa-generation-backend/venv/bin/python \
+  android/tools/masked_inpaint_server.py \
+  --model sd2-community/stable-diffusion-2-inpainting \
+  --cache-dir /mnt/ssd/lpa-generation-backend/hf-cache
+```
+
+服务只绑定loopback，提供：
+
+```text
+GET  /health
+POST /v1/inpaint
+```
+
+POST使用multipart：`source`、`mask`、`prompt`、`model_id`、`seed`、`request_sha256`和
+`certificate_fingerprint`。响应为JSON，含同尺寸PNG的Base64、request SHA和output SHA。
+
+## 首个验收请求
+
+```text
+把女人脚下的滑板变成悬浮板
+```
+
+Qwen必须拆成：
+
+```text
+target            = skateboard under a woman's feet
+generation_prompt = hoverboard
+effect_kind       = masked_replace
+```

@@ -1440,7 +1440,11 @@ class HeadlessService : Service() {
                 stopSelf()
                 return
             }
-            if (operation == "agent_local_generation_fixture_probe") {
+            if (operation in setOf(
+                    "agent_local_generation_fixture_probe",
+                    "agent_local_generation_preview_probe"
+                )
+            ) {
                 require(BuildConfig.DEBUG && BuildConfig.LOCAL_TRACKED_PREVIEW &&
                     BuildConfig.LOCAL_GENERATED_PREVIEW
                 ) { "local generation fixture probe requires all explicit debug gates" }
@@ -2512,8 +2516,7 @@ class HeadlessService : Service() {
             AndroidQnnLocalObservationBackend(
                 this,
                 AndroidFullTimelineMaskTracker(this)
-            ),
-            AndroidFixtureMaskedGenerationBackend()
+            )
         ).run(
             query = query,
             uris = emptyList(),
@@ -2563,7 +2566,8 @@ class HeadlessService : Service() {
         }
         val preview = previewInteraction.snapshot()
         require(preview.effectKind == LocalGenerativeChange.EFFECT_KIND)
-        require(preview.rendererBackendId == AndroidFixtureMaskedGenerationBackend.BACKEND_ID)
+        require(preview.rendererBackendId == AndroidFixtureMaskedGenerationBackend.BACKEND_ID ||
+            preview.rendererBackendId.startsWith(AndroidHttpMaskedGenerationBackend.BACKEND_ID + "/"))
         require(preview.packedLivePhotoFile == null && preview.timelineFrameCount == null)
         require(Regex("[0-9a-f]{64}").matches(
             requireNotNull(preview.backendEvidenceFingerprint)
@@ -2597,8 +2601,12 @@ class HeadlessService : Service() {
         previewInteraction.release()
         val sourceShaAfter = fileSha256(packed)
         val galleryRowsAfter = countAgentPublishedImages()
+        val backendIsFixture = preview.rendererBackendId.contains("fixture")
         val passed = terminalState?.status == AgentRunStatus.WAITING_USER &&
-            finalPlan?.intent == "local_generation_fixture_preview_review" &&
+            finalPlan?.intent in setOf(
+                "local_generation_fixture_preview_review",
+                "local_generation_preview_review"
+            ) &&
             compileStatuses == listOf("need_observation", "ready") &&
             graphActions == listOf(LocalMaskedGenerationPreviewAction.ACTION_ID) &&
             expectedFrames > 1 && observedFrames == expectedFrames &&
@@ -2611,7 +2619,8 @@ class HeadlessService : Service() {
             .put("schema_version", 1)
             .put(
                 "status",
-                if (passed) "PASS_LOCAL_GENERATION_FIXTURE_PREVIEW"
+                if (passed && backendIsFixture) "PASS_LOCAL_GENERATION_FIXTURE_PREVIEW"
+                else if (passed) "PASS_LOCAL_GENERATION_HTTP_PREVIEW"
                 else "FAIL_LOCAL_GENERATION_FIXTURE_PREVIEW"
             )
             .put("query", query)
@@ -2622,7 +2631,10 @@ class HeadlessService : Service() {
             .put("final_message", finalMessage)
             .put("effect_kind", preview.effectKind)
             .put("backend_id", preview.rendererBackendId)
-            .put("backend_is_fixture_not_model", true)
+            .put(
+                "backend_is_fixture_not_model",
+                backendIsFixture
+            )
             .put("single_frame_only", true)
             .put("packed_livephoto_created", false)
             .put("backend_evidence_fingerprint", preview.backendEvidenceFingerprint)

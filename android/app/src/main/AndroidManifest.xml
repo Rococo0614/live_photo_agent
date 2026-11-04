@@ -31,6 +31,7 @@
         android:name=".LivePhotoAgentApplication"
         android:allowBackup="false"
         android:label="Live Photo Agent"
+        android:networkSecurityConfig="@xml/network_security_config"
         android:supportsRtl="true"
         android:theme="@style/Theme.AppCompat.DayNight.NoActionBar">
 

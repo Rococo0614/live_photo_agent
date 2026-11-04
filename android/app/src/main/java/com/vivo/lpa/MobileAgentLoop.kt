@@ -26,7 +26,8 @@ class MobileAgentLoop(
         },
     private val localGenerationBackend: AndroidMaskedGenerationBackend =
         if (BuildConfig.DEBUG && BuildConfig.LOCAL_GENERATED_PREVIEW) {
-            AndroidFixtureMaskedGenerationBackend()
+            AndroidHttpMaskedGenerationBackend.fromPrivateConfig(context)
+                ?: AndroidFixtureMaskedGenerationBackend()
         } else {
             UnavailableAndroidMaskedGenerationBackend
         }
@@ -614,11 +615,16 @@ class MobileAgentLoop(
         }
         val execution = AgentDagExecutionEngine.runToTerminal(ready.compilation, executor)
         require(execution.runState.status == AgentDagRunStatus.FINISHED) {
-            "局部preview DAG执行失败：${execution.runState.status}"
+            "局部preview DAG执行失败：${execution.runState.status}: " +
+                execution.runState.lastError.orEmpty()
         }
         val generated = LocalMaskedGenerationPreviewAction.ACTION_ID in actionIds
         val message = if (generated) {
-            "局部生成fixture单帧预览已生成；这不是真实生成模型，也不是完整动态结果。源媒体尚未写回。"
+            if (localGenerationBackend is AndroidFixtureMaskedGenerationBackend) {
+                "局部生成fixture单帧预览已生成；这不是真实生成模型，也不是完整动态结果。源媒体尚未写回。"
+            } else {
+                "局部生成单帧私有预览已生成；这不是完整动态结果。源媒体尚未写回。"
+            }
         } else {
             "局部目标预览已生成；请确认、取消或撤销。源媒体尚未写回。"
         }
@@ -628,7 +634,9 @@ class MobileAgentLoop(
             trace,
             message,
             AgentRunStatus.WAITING_USER,
-            if (generated) "local_generation_fixture_preview_review"
+            if (generated && localGenerationBackend is AndroidFixtureMaskedGenerationBackend) {
+                "local_generation_fixture_preview_review"
+            } else if (generated) "local_generation_preview_review"
             else "local_content_preview_review",
             listener
         )

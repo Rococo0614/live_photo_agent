@@ -1079,8 +1079,13 @@ preparedAssets = prepared
         localPreviewPanel.visibility = View.VISIBLE
         val status = TextView(this).apply {
             text = when (artifact.effectKind) {
-                LocalGenerativeChange.EFFECT_KIND ->
+                LocalGenerativeChange.EFFECT_KIND -> if (
+                    artifact.rendererBackendId == AndroidFixtureMaskedGenerationBackend.BACKEND_ID
+                ) {
                     "局部生成fixture · 仅单帧私有预览，不是真实生成模型，尚未写回"
+                } else {
+                    "局部生成 · 仅单帧私有预览，不是完整动态结果，尚未写回"
+                }
                 "blur" -> (if (artifact.packedLivePhotoFile != null) "完整动态" else "局部") +
                     "模糊 · 仅临时预览，尚未写回"
                 else -> (if (artifact.packedLivePhotoFile != null) "完整动态" else "局部") +
