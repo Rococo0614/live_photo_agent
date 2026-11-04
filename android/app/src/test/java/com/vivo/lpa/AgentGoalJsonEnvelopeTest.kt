@@ -152,6 +152,20 @@ class AgentGoalJsonEnvelopeTest {
     }
 
     @Test
+    fun removesExtraBraceBeforeArrayWithFollowingTopLevelFields() {
+        val malformed = """{"name":"plan_live_edit","arguments":{"operations":[{"op":"change_content","parameters":{"effect_kind":"masked_replace","generation_prompt":{"value":"blue robotic cat","source_text":"蓝色机械猫"}},"constraints":[]},{"op":"color_tint","parameters":{"effect_kind":"color_tint","color_hex":"#0000FF","intensity":1},"constraints":[]}}],"constraints":[],"unresolved_slots":[]}}"""
+        val parsed = AgentGoalJsonEnvelopeParser.parse(malformed)!!
+
+        assertTrue(parsed.repaired)
+        assertEquals(2,
+            parsed.value.getJSONObject("arguments").getJSONArray("operations").length())
+        assertEquals(
+            "removed extra brace before operations array terminator",
+            parsed.repairDescription
+        )
+    }
+
+    @Test
     fun preservesNonEquivalentMultipleOperationsForStrictValidator() {
         val parsed = AgentGoalJsonEnvelopeParser.parse(
             """{"name":"plan_live_edit","arguments":{"operations":[{"op":"change_content","parameters":{"effect_kind":"blur","blur_radius_px":4}},{"op":"change_content","parameters":{"effect_kind":"blur","blur_radius_px":8}}]}}"""

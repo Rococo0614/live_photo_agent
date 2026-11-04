@@ -117,19 +117,22 @@ object AgentGoalCompiler {
                     )
                 }
                 if (first.kind == AgentGoalOperationKind.CHANGE_CONTENT) {
-                    val change = LocalDeterministicChange.fromOperation(first)
-                        ?: return AgentCompileResult.NeedUser(
+                    val deterministicChange = LocalDeterministicChange.fromOperation(first)
+                    val generativeChange = LocalGenerativeChange.fromOperation(first)
+                    if (deterministicChange == null && generativeChange == null) {
+                        return AgentCompileResult.NeedUser(
                             goal,
                             AgentQuestionSpec(
                                 questionId = "question-${first.operationId}-local-effect",
                                 operationId = first.operationId,
                                 missingSlot = "local_effect",
                                 prompt = "请确认局部修改方式和强度",
-                                alternatives = listOf("局部调色", "局部模糊"),
+                                alternatives = listOf("局部调色", "局部模糊", "局部生成替换"),
                                 continuationToken = continuationToken(goal, "local-effect"),
                                 graphVersion = state.plan?.version ?: 0
                             )
                         )
+                    }
                     val sourceAssetId = observations.sourceAssetIds[first.operationId]
                     val sourceExists = sourceAssetId != null && (
                         state.sourceAssets.any { it.assetId == sourceAssetId } ||
@@ -146,15 +149,23 @@ object AgentGoalCompiler {
                             ))
                         )
                     }
-                    return AgentCompileResult.Ready(
+                    return AgentCompileResult.Ready(if (deterministicChange != null) {
                         LocalDeterministicChangeShadowCompiler.compilePreview(
                             goal,
                             first.operationId,
                             requireNotNull(sourceAssetId),
                             requireNotNull(certificate),
-                            change
+                            deterministicChange
                         )
-                    )
+                    } else {
+                        LocalMaskedGenerationShadowCompiler.compilePreview(
+                            goal,
+                            first.operationId,
+                            requireNotNull(sourceAssetId),
+                            requireNotNull(certificate),
+                            requireNotNull(generativeChange)
+                        )
+                    })
                 }
                 return AgentCompileResult.Unsupported(
                     goal,

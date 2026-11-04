@@ -1078,9 +1078,14 @@ preparedAssets = prepared
         localPreviewPanel.removeAllViews()
         localPreviewPanel.visibility = View.VISIBLE
         val status = TextView(this).apply {
-            text = (if (artifact.packedLivePhotoFile != null) "完整动态" else "局部") +
-                "${if (artifact.effectKind == "blur") "模糊" else "调色"} · " +
-                "仅临时预览，尚未写回"
+            text = when (artifact.effectKind) {
+                LocalGenerativeChange.EFFECT_KIND ->
+                    "局部生成fixture · 仅单帧私有预览，不是真实生成模型，尚未写回"
+                "blur" -> (if (artifact.packedLivePhotoFile != null) "完整动态" else "局部") +
+                    "模糊 · 仅临时预览，尚未写回"
+                else -> (if (artifact.packedLivePhotoFile != null) "完整动态" else "局部") +
+                    "调色 · 仅临时预览，尚未写回"
+            }
             textSize = 13f
             setTypeface(typeface, android.graphics.Typeface.BOLD)
             setTextColor(Color.rgb(26, 61, 52))
@@ -1325,6 +1330,10 @@ preparedAssets = prepared
             .put("frame_index", artifact.frameIndex)
             .put("timeline_frame_count", artifact.timelineFrameCount ?: JSONObject.NULL)
             .put("packed_livephoto_private", artifact.packedLivePhotoFile != null)
+            .put(
+                "backend_evidence_fingerprint",
+                artifact.backendEvidenceFingerprint ?: JSONObject.NULL
+            )
             .put("review_state", artifact.lifecycle.state.name)
             .put("writeback", false))
     }
@@ -1338,6 +1347,10 @@ preparedAssets = prepared
             .put("review_state", artifact.lifecycle.state.name)
             .put("revision", artifact.lifecycle.revision)
             .put("writeback_authorized", artifact.lifecycle.writebackAuthorized)
+            .put(
+                "backend_evidence_fingerprint",
+                artifact.backendEvidenceFingerprint ?: JSONObject.NULL
+            )
             .put("source_media_modified", false))
     }
 

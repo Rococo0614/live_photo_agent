@@ -23,6 +23,12 @@ class MobileAgentLoop(
             )
         } else {
             UnavailableAgentLocalObservationBackend
+        },
+    private val localGenerationBackend: AndroidMaskedGenerationBackend =
+        if (BuildConfig.DEBUG && BuildConfig.LOCAL_GENERATED_PREVIEW) {
+            AndroidFixtureMaskedGenerationBackend()
+        } else {
+            UnavailableAndroidMaskedGenerationBackend
         }
 ) {
     companion object {
@@ -464,7 +470,20 @@ class MobileAgentLoop(
             "首版局部交互每轮只允许一个内容操作"
         }
         require(contentOperations.single().kind == AgentGoalOperationKind.CHANGE_CONTENT) {
-            "当前只开放局部调色或模糊preview"
+            "当前只开放局部调色、模糊或fixture生成preview"
+        }
+        val generation = LocalGenerativeChange.fromOperation(contentOperations.single())
+        if (generation != null && !localGenerationBackend.available) {
+            finishLocalSuspension(
+                state,
+                query,
+                planning.trace,
+                "局部生成请求已识别，但生成后端未启用；未执行调色回退或媒体写回。",
+                AgentRunStatus.WAITING_OBSERVATION,
+                "local_generation_backend_unavailable",
+                listener
+            )
+            return true
         }
         val content = AgentContentGraphFactory.fromState(state)
         listener.onRuntimeContentGraph(content)
@@ -526,7 +545,8 @@ class MobileAgentLoop(
                         state,
                         query,
                         planning.trace,
-                        listener
+                        listener,
+                        cancelled
                     )
                 }
             }
@@ -555,7 +575,8 @@ class MobileAgentLoop(
         state: AgentRuntimeState,
         query: String,
         trace: BrainTrace,
-        listener: MobileAgentRunner.Listener
+        listener: MobileAgentRunner.Listener,
+        cancelled: AtomicBoolean
     ) {
         val ready = AgentGoalCompiler.preflight(
             observation.materialization.goal,
@@ -568,9 +589,10 @@ class MobileAgentLoop(
         listener.onRuntimeGoal(observation.materialization.goal, ready)
         listener.onRuntimeGraph(ready.compilation)
         val store = AndroidTemporaryLocalPreviewStore()
-        val execution = AgentDagExecutionEngine.runToTerminal(
-            ready.compilation,
-            AndroidLocalPreviewShadowExecutor(
+        val actionIds = ready.compilation.graph.nodes.values.map { it.actionId }.toSet()
+        val executor: AgentDagNodeExecutor = when (actionIds) {
+            setOf(LocalDeterministicChangePreviewAction.ACTION_ID) ->
+                AndroidLocalPreviewShadowExecutor(
                 materialization = observation.materialization,
                 sourceFrames = observation.sourceFrames,
                 timelinePreviewRenderer = observation.timelinePreviewRenderer,
@@ -578,18 +600,36 @@ class MobileAgentLoop(
                 currentStateFingerprint = { AgentStateFingerprint.of(state) },
                 onPreviewReady = listener::onLocalPreview
             )
-        )
+            setOf(LocalMaskedGenerationPreviewAction.ACTION_ID) ->
+                AndroidLocalGenerationPreviewShadowExecutor(
+                    materialization = observation.materialization,
+                    sourceFrames = observation.sourceFrames,
+                    previewStore = store,
+                    backend = localGenerationBackend,
+                    cancelled = cancelled,
+                    currentStateFingerprint = { AgentStateFingerprint.of(state) },
+                    onPreviewReady = listener::onLocalPreview
+                )
+            else -> error("unsupported local preview actions: $actionIds")
+        }
+        val execution = AgentDagExecutionEngine.runToTerminal(ready.compilation, executor)
         require(execution.runState.status == AgentDagRunStatus.FINISHED) {
             "局部preview DAG执行失败：${execution.runState.status}"
         }
-        val message = "局部目标预览已生成；请确认、取消或撤销。源媒体尚未写回。"
+        val generated = LocalMaskedGenerationPreviewAction.ACTION_ID in actionIds
+        val message = if (generated) {
+            "局部生成fixture单帧预览已生成；这不是真实生成模型，也不是完整动态结果。源媒体尚未写回。"
+        } else {
+            "局部目标预览已生成；请确认、取消或撤销。源媒体尚未写回。"
+        }
         finishLocalSuspension(
             state,
             query,
             trace,
             message,
             AgentRunStatus.WAITING_USER,
-            "local_content_preview_review",
+            if (generated) "local_generation_fixture_preview_review"
+            else "local_content_preview_review",
             listener
         )
     }

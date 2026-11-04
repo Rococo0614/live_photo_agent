@@ -136,6 +136,39 @@ class AgentLocalGoalValidatorTest {
         assertTrue(!AgentLocalGoalValidator.appliesTo(goal))
     }
 
+    @Test
+    fun acceptsTypedMaskedGenerationWithoutTreatingItAsDeterministicEffect() {
+        val query = "把草地上的橘猫变成蓝色机械猫"
+        val operation = AgentGoalOperation(
+            operationId = "generate-cat",
+            kind = AgentGoalOperationKind.CHANGE_CONTENT,
+            scope = AgentGoalScope.CurrentAssets,
+            target = AgentGoalTarget.Semantic(
+                "orange cat on green grass",
+                "草地上的橘猫"
+            ),
+            parameters = mapOf(
+                "effect_kind" to AgentGoalArgument(
+                    AgentGoalValue.Text(LocalGenerativeChange.EFFECT_KIND),
+                    AgentValueProvenance.MODEL_INFERRED
+                ),
+                "generation_prompt" to AgentGoalArgument(
+                    AgentGoalValue.Text("blue robotic cat"),
+                    AgentValueProvenance.USER_EXPLICIT,
+                    "蓝色机械猫"
+                )
+            )
+        )
+        val diagnostics = AgentLocalGoalValidator.validate(AgentGoalIr(
+            "goal-generate-cat",
+            userGoal = query,
+            stateFingerprint = "state",
+            operations = listOf(operation)
+        ))
+
+        assertTrue(diagnostics.isEmpty())
+    }
+
     private fun goal(target: String) = AgentGoalIr(
         goalId = "goal-local",
         userGoal = "把草地上的橘猫调成绿色",

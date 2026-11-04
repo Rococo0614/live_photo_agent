@@ -85,13 +85,26 @@ object AgentLocalGoalValidator {
             }
         }
         val change = LocalDeterministicChange.fromOperation(operation)
-        if (change == null &&
-            unresolvedNames.none { it in setOf("local_effect", "effect", "color", "intensity", "blur_radius") }
+        val generation = LocalGenerativeChange.fromOperation(operation)
+        if (change == null && generation == null &&
+            unresolvedNames.none {
+                it in setOf(
+                    "local_effect", "effect", "color", "intensity", "blur_radius",
+                    "generation_prompt", "replacement"
+                )
+            }
         ) {
             errors += error(
                 "local_effect",
                 "$.operations[0].parameters",
-                "effect must be a bounded color_tint or blur"
+                "effect must be a bounded color_tint, blur or masked_replace"
+            )
+        }
+        if (generation != null && !goal.userGoal.contains(generation.promptSourceText)) {
+            errors += error(
+                "generation_prompt_source_text",
+                "$.operations[0].parameters.generation_prompt.source_text",
+                "generation prompt source_text must quote the requested replacement"
             )
         }
         if (target != null && change != null) {

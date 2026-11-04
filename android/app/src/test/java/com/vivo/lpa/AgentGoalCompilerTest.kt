@@ -228,6 +228,78 @@ class AgentGoalCompilerTest {
         assertTrue(!node.destructive)
     }
 
+    @Test
+    fun groundedMaskedGenerationCompilesSeparateSingleFramePreviewAction() {
+        val query = "把草地上的橘猫变成蓝色机械猫"
+        val state = AgentRuntimeState(null, "turn-generation-preview", query)
+        val graph = AgentContentGraph(
+            graphId = "content-generation",
+            version = 1,
+            sourceAssetIds = listOf("asset-1"),
+            nodes = mapOf(
+                "object-1" to ContentNode("object-1", ContentNodeKind.OBJECT_TRACK),
+                "mask-1" to ContentNode("mask-1", ContentNodeKind.MASK_TRACK)
+            ),
+            edges = mapOf(
+                "masks-1" to ContentEdge(
+                    "masks-1", "mask-1", "object-1", ContentEdgeKind.MASKS
+                )
+            )
+        )
+        val content = AgentContentGraphSnapshot(
+            graph,
+            AgentContentGraphValidator.validate(graph),
+            AgentStateFingerprint.of(state)
+        )
+        val semantic = parse(query, JSONObject().put("operations", JSONArray().put(JSONObject()
+            .put("op", "change_content")
+            .put("target", JSONObject()
+                .put("description", "orange cat on green grass")
+                .put("source_text", "草地上的橘猫"))
+            .put("parameters", JSONObject()
+                .put("effect_kind", LocalGenerativeChange.EFFECT_KIND)
+                .put("generation_prompt", JSONObject()
+                    .put("value", "blue robotic cat")
+                    .put("source_text", "蓝色机械猫"))))), state)
+        val operation = semantic.operations.single()
+        val goal = semantic.copy(operations = listOf(operation.copy(
+            target = AgentGoalTarget.GroundedContentNode(graph.graphId, graph.version, "object-1")
+        )))
+        val certificate = AgentScopeCertificate(
+            "scope-generate",
+            graph.graphId,
+            graph.version,
+            "object-1",
+            "mask-1",
+            AgentStateFingerprint.of(state),
+            1,
+            listOf(ValidatedTrackObservation(
+                0, 0, TrackObservationStatus.VISIBLE_VALIDATED, 10_000, null
+            )),
+            uniqueTarget = true,
+            protectionChecksPassed = true,
+            validationPolicy = TrackValidationPolicy("generation-preview-v1", 0.10)
+        )
+
+        val result = AgentGoalCompiler.preflight(
+            goal,
+            state,
+            content,
+            AgentCompilerObservationContext(
+                scopeCertificates = mapOf(operation.operationId to certificate),
+                sourceAssetIds = mapOf(operation.operationId to "asset-1")
+            )
+        ) as AgentCompileResult.Ready
+
+        val node = result.compilation.graph.nodes.values.single()
+        assertEquals(LocalMaskedGenerationPreviewAction.ACTION_ID, node.actionId)
+        val parameters = JSONObject(node.parametersJson)
+        assertTrue(parameters.getBoolean("preview_only"))
+        assertTrue(parameters.getBoolean("single_frame_only"))
+        assertTrue(!parameters.getBoolean("writeback"))
+        assertEquals(setOf(AgentStateEffect.ADD_ARTIFACT), node.effects)
+    }
+
     private fun groundedRemoveGoal(
         query: String,
         state: AgentRuntimeState,

@@ -181,15 +181,16 @@ SHA-256 438a3d13bf0de46c9730fee89199ac0a104eefdd1cdade9fcbbd917120fc3dd4
                       SHA-256 4691654241a483d9c249f5300870daa124a96effd4cd0d0d0079147f9be6cec0
 ```
 
-当前debug/release单测均为150/150，`lintDebug`、`lintRelease`及debug/release assemble通过。默认
+当前debug/release单测均为157/157，`lintDebug`、`lintRelease`及debug/release assemble通过。默认
 debug/release APK都不包含`libqnn_net_run.so`；默认debug也不含演示Provider。只有显式实验Debug
 构建加入只读Provider与实验native：
 
 ```text
-default debug APK        7677a3c3aaed82f96ea4270631555f5abc8f5f2f9584694eee5e3bc9e86f1e77
-default release APK      6ae3daf960693f86b0a6ad95d1af664c72f495757d5190030a1ed75e8813f3f3
-full-timeline fallback   b9ba45b836fab5ceeaaf539b29c637bd7ac7b267aa71da2682e9fbb0b28f47ac
-persistent-QNN debug APK 1a5e80b48d4c64a65d28471756e1736c4c7ac432dc3201be46f49e05295e301f
+default debug APK          20cab6992248acb22d5f00e31486f1cfa0d896e14e9bbea90271597f2f70c2dc
+default release APK        df6e8ee3364108d712c6dcf0b39012ee3946adfa5c6f4c191ef62ce39302bcca
+full-timeline fallback     0c3cb95a354704ae9835407317a12afcda4051e5261b0ebceb58713511a499a3
+persistent-QNN debug APK   879dba9535154d7552020d4ef6fdf5c58b6e2dd32f4a348e3ecb986e7c77c1f9
+generation-fixture APK     584e77ee222025f094422eed31b0dff4845e1de51609828c7e98d8523db3756e
 ```
 
 所有自定义Gradle属性已注册为task inputs；同一worktree按“clean默认→实验→默认”构建，前后两个默认
@@ -597,6 +598,39 @@ operation”的组合格式，并把结果颜色写进目标；窄结构修复�
     SHA-256 f28cb4ba2e9a29f3d93e276005c0d0ce61c7185728068d9a1b522d29e5ae9815
 ```
 
+### 4.9 可插拔局部生成fixture工具
+
+生成能力与确定性调色/模糊分离，并由新增`-PlocalGeneratedPreview=true`第四层开关控制。Qwen可输出
+`masked_replace`、编辑前目标和带原文provenance的ASCII generation prompt；Compiler将其降低为独立
+`local_mask_generation_preview_shadow`节点。节点只接受当前素材、完整Mask Track和fresh
+ScopeCertificate，输出单帧process-local artifact；`preview_only=true / writeback=false /
+single_frame_only=true`均为强制参数。
+
+首个`fixture_masked_generation_v1`实现可插拔backend接口，用prompt SHA生成确定性棋盘图案；它不是
+生成模型。纯Kotlin测试要求Mask外ARGB逐位不变、alpha不变、prompt改变输出且取消生效；backend输出
+再绑定source、mask、prompt、certificate和output SHA。低于画面0.1%的Mask被拒绝，避免把不可审查的
+小碎片当作生成成功。
+
+真机以5帧滑板fixture输入“把女人脚下的滑板变成悬浮板”：Qwen产生
+`skateboard under a woman's feet → hoverboard`，5/5时序Mask完成后执行生成节点，图案落在滑板区域，
+改变1,662像素且alpha变化0。结果无packed Live Photo；pending与accepted状态均被发布器拒绝，随后
+`ACCEPTED_FOR_REVIEW→UNDONE`，源SHA不变、相册38→38：
+
+```text
+/mnt/ssd/lpa-aihub-probe/artifacts/android-dynamic-frame-timeline/
+  generation-fixture-hoverboard-5/evidence.json
+    SHA-256 f913e30dc5dc3c2dbff82b132aa6a3857a6507d2f4195d106a25111f93440ecb
+  generation-fixture-hoverboard-5/goal-ir-evidence.json
+    SHA-256 8623d36dab9240aadb96463ee686dfba5290b77e3af0b729b183b84d1f8c775d
+  generation-fixture-hoverboard-5/preview.png
+    SHA-256 7f8cd9a11263b77a1b78f2fa0f1f04803be449b05dc918e4945596a250a16179
+  generation-fixture-hoverboard-5/ui-pending.png
+    SHA-256 cd5b048ddbb571eaad3d8986067b32898212c7ce6222e8129131e36dcf4fa879
+```
+
+该闭环只证明生成工具的Planner/DAG/backend/review接口，不代表真实inpaint质量，也不生成动态时间线。
+接入真实云端或端侧模型后仍需独立验证生成内容、边缘融合、保护区、时序一致性和商业许可。
+
 ## 5. 逐帧跟踪调色显色证据
 
 在已经通过vivo QAIRT 2.45 Gate的17帧固定图跟踪链上，使用每帧`device-mask.png`对中间面板目标猫
@@ -708,14 +742,16 @@ certificate到临时区域工具”Gate；以下仍阻止mutation：
    通过。实际新副本发布/删除仍必须等待用户第二次明确授权，本轮未代替用户执行；
 4. 持久QNN tracking五轮soak与释放已通过；完整pipeline的Qwen FastRPC/ION峰值及6次后台LMK证据
    保留，但产品决策接受16GB目标机上的该资源代价，不再把它列为当前功能闭环阻塞项；
-5. 固定context银行包体仍未解决；任何确认仍只接受临时预览，不能写回。
+5. 局部生成已完成单帧fixture backend接口与review闭环，但尚无真实可商用inpaint模型；完整动态替换、
+   边缘融合和时序一致性仍未通过，fixture永远不能发布；
+6. 固定context银行包体仍未解决；任何确认仍只接受临时预览，不能写回。
 
-常规验收结束时仍应恢复默认APK；但本轮收到真实用户失败反馈后，为允许用户立即复测同一滑板素材，
-设备暂时保留显式实验`dag/localTrackedPreview/fullTimeline/persistentQnn` Debug APK。该包不是生产构建，
-设备base.apk与host逐字节一致：
+常规验收结束时仍应恢复默认APK；本轮为继续验证可插拔生成backend，设备暂时保留显式实验
+`dag/localTrackedPreview/fullTimeline/persistentQnn/localGeneratedPreview` Debug APK。该包不是生产构建，
+其中生成结果只来自不可发布fixture；设备base.apk与host逐字节一致：
 
 ```text
-SHA-256 1a5e80b48d4c64a65d28471756e1736c4c7ac432dc3201be46f49e05295e301f
+SHA-256 584e77ee222025f094422eed31b0dff4845e1de51609828c7e98d8523db3756e
 ```
 
 vivo百度输入法保持启用，ADBKeyboard为disabled-user，stay-awake为0，LPA进程已停止。

@@ -58,8 +58,7 @@ object AgentGoalJsonEnvelopeParser {
                 """[}](\s*)[}](\s*),(\s*["](?:constraints|unresolved_slots)["]\s*:)"""
             )
             val matches = combined.findAll(raw).toList()
-            if (matches.size == 1) {
-                val match = matches.single()
+            matches.asReversed().forEach { match ->
                 val repaired = raw.replaceRange(
                     match.range,
                     "}${match.groupValues[1]}]${match.groupValues[2]},${match.groupValues[3]}"
@@ -69,6 +68,32 @@ object AgentGoalJsonEnvelopeParser {
                         it,
                         repaired = true,
                         description = "removed extra operation brace and inserted array terminator"
+                    )
+                }
+            }
+        }
+
+        // One extra operation-closing brace immediately before the operations array terminator,
+        // followed by a valid fixed top-level arguments field.
+        if (raw.count { it == '}' } == raw.count { it == '{' } + 1 &&
+            raw.count { it == '[' } == raw.count { it == ']' } &&
+            raw.contains(Regex("""["]operations["]\s*:\s*\["""))
+        ) {
+            val extraBeforeArray = Regex(
+                """[}](\s*)[}](\s*)](\s*),(\s*["](?:constraints|unresolved_slots)["]\s*:)"""
+            )
+            val matches = extraBeforeArray.findAll(raw).toList()
+            if (matches.size == 1) {
+                val match = matches.single()
+                val repaired = raw.replaceRange(
+                    match.range,
+                    "}${match.groupValues[1]}]${match.groupValues[3]},${match.groupValues[4]}"
+                )
+                runCatching { JSONObject(repaired) }.getOrNull()?.let {
+                    return normalizeParameterTypes(
+                        it,
+                        repaired = true,
+                        description = "removed extra brace before operations array terminator"
                     )
                 }
             }

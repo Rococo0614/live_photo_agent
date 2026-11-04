@@ -26,6 +26,7 @@ data class AndroidTemporaryLocalPreviewArtifact(
     val effectKind: String,
     val rendererBackendId: String,
     val certificateFingerprint: String,
+    val backendEvidenceFingerprint: String? = null,
     val packedLivePhotoFile: java.io.File? = null,
     val packedLivePhotoSha256: String? = null,
     val timelineFrameCount: Int? = null,
@@ -56,6 +57,7 @@ class AndroidTemporaryLocalPreviewStore(
         effectKind: String,
         rendererBackendId: String,
         certificateFingerprint: String,
+        backendEvidenceFingerprint: String? = null,
         ownsSourceBitmap: Boolean = false,
         encodedTimeline: AndroidEncodedTimelinePreview? = null
     ): AndroidLocalPreviewInteraction {
@@ -63,9 +65,11 @@ class AndroidTemporaryLocalPreviewStore(
         require(frameIndex >= 0 && timestampMs >= 0)
         require(!sourceBitmap.isRecycled && !previewBitmap.isRecycled)
         require(sourceBitmap.width == previewBitmap.width && sourceBitmap.height == previewBitmap.height)
-        require(effectKind in setOf("color_tint", "blur"))
+        require(effectKind in setOf("color_tint", "blur", LocalGenerativeChange.EFFECT_KIND))
         require(rendererBackendId.isNotBlank())
         require(certificateFingerprint.isNotBlank())
+        require(backendEvidenceFingerprint == null ||
+            Regex("[0-9a-f]{64}").matches(backendEvidenceFingerprint))
         val now = clockMs()
         val artifactId = "local-preview-${now}-${sequence.incrementAndGet()}"
         val lifecycle = LocalPreviewLifecycleReducer.create(artifactId, now)
@@ -79,6 +83,7 @@ class AndroidTemporaryLocalPreviewStore(
             effectKind,
             rendererBackendId,
             certificateFingerprint,
+            backendEvidenceFingerprint,
             encodedTimeline?.packedLivePhoto,
             encodedTimeline?.packedLivePhoto?.let(
                 AndroidLocalPreviewPublishPolicy::contentSha256

@@ -1164,12 +1164,36 @@ class GenieTextPlanner(private val context: Context, private val sessionId: Stri
         }.eachCount().entries.joinToString { "${it.key}:${it.value}" }.ifBlank { "无素材" }
         val correctionLine = correction.takeIf { it.isNotBlank() }
             ?.let { "上一次JSON无效，必须修正：$it" }.orEmpty()
+        val generationEligibility = if (BuildConfig.LOCAL_TRACKED_PREVIEW) {
+            "或‘把一个已存在对象局部替换生成成另一种视觉内容’"
+        } else {
+            ""
+        }
+        val generationContract = if (BuildConfig.LOCAL_TRACKED_PREVIEW) {
+            """
+            - masked_replace：parameters只能包含effect_kind=masked_replace与generation_prompt；
+              generation_prompt必须是{"value":"简短ASCII英文生成概念","source_text":"用户原话中的替换内容"}。
+              例如“把草地上的橘猫变成机械猫”时，target仍描述编辑前的橘猫，generation_prompt
+              描述robotic cat。用户明确说“变成/替换成/改造成”新身份时，只能有一个masked_replace
+              operation；替换内容里的颜色是generation_prompt属性，绝不能再添加color_tint。
+              完整格式示例：
+              {"name":"plan_live_edit","arguments":{"operations":[{"op":"change_content","scope":"current","target":{"description":"orange cat on green grass","source_text":"草地上的橘猫"},"parameters":{"effect_kind":"masked_replace","generation_prompt":{"value":"robotic cat","source_text":"机械猫"}},"constraints":[]}],"constraints":[],"unresolved_slots":[]}}
+              人物示例：“把滑板上的女人变成机器人”时，target description是woman on a skateboard，
+              generation_prompt value是humanoid robot、source_text是机器人；不得复制猫示例的cat。
+              物体示例：“把女人脚下的滑板变成悬浮板”时，target description是skateboard under a
+              woman's feet、source_text是女人脚下的滑板；generation_prompt value是hoverboard、
+              source_text是悬浮板。目标是滑板，不是女人。
+              该能力只生成单帧私有fixture预览，绝不能附加publish。
+            """.trimIndent()
+        } else {
+            ""
+        }
         return """
             <|im_start|>system
             你是Live Photo Agent的Goal IR规划器。只输出一个JSON对象，不要Markdown或解释。
             顶层只能是下面说明的plan_live_edit或skip_local_preview二选一。
 
-            先判断请求是否明确要求“对画面中一个语义对象局部调色或模糊”。如果不是（包括全局编辑、
+            先判断请求是否明确要求“对画面中一个语义对象局部调色或模糊”$generationEligibility。如果不是（包括全局编辑、
             拼图、检索、裁剪、发布、聊天、提问和能力询问），只输出：
             {"name":"skip_local_preview","arguments":{}}
             不要为了进入实验功能而猜目标。
@@ -1198,6 +1222,7 @@ class GenieTextPlanner(private val context: Context, private val sessionId: Stri
             当前局部preview只支持：
             - color_tint：parameters包含effect_kind=color_tint、color_hex=#RRGGBB、intensity=0..1；
             - blur：parameters包含effect_kind=blur、blur_radius_px=0.5..64。
+            $generationContract
             color_tint和blur互斥，每轮只能选择一个。用户说绿色等颜色变化时只能输出color_tint；用户
             没有说模糊/虚化/blur时绝不能额外输出blur，也不能为了展示能力增加第二个operation。
             人物换色示例：用户说“把画面中的女人调成蓝色”时，target只能是

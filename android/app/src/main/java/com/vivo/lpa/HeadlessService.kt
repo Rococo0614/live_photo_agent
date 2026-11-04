@@ -1440,6 +1440,18 @@ class HeadlessService : Service() {
                 stopSelf()
                 return
             }
+            if (operation == "agent_local_generation_fixture_probe") {
+                require(BuildConfig.DEBUG && BuildConfig.LOCAL_TRACKED_PREVIEW &&
+                    BuildConfig.LOCAL_GENERATED_PREVIEW
+                ) { "local generation fixture probe requires all explicit debug gates" }
+                require(inputs.size == 1 && !agentQuery.isNullOrBlank()) {
+                    "local generation fixture probe requires one Live Photo and agent_query"
+                }
+                runLocalGenerationFixtureProbe(inputs.single(), agentQuery, outputDir)
+                log("=== NATIVE ADAPTER TEST END ===")
+                stopSelf()
+                return
+            }
             if (operation == "agent_real_full_timeline_preview_probe") {
                 require(BuildConfig.DEBUG && BuildConfig.LOCAL_TRACKED_PREVIEW) {
                     "full timeline preview probe requires the opt-in debug build"
@@ -2334,9 +2346,15 @@ class HeadlessService : Service() {
                 require(target.description.all { it.isWhitespace() || it.code in 0x20..0x7e }) {
                     "canonical target is not ASCII"
                 }
-                val change = requireNotNull(LocalDeterministicChange.fromOperation(operationRow)) {
+                val deterministicChange = LocalDeterministicChange.fromOperation(operationRow)
+                val generativeChange = LocalGenerativeChange.fromOperation(operationRow)
+                require(deterministicChange != null || generativeChange != null) {
                     "Goal IR did not produce a supported typed local effect"
                 }
+                val effectParameters = deterministicChange?.parameters()
+                    ?: requireNotNull(generativeChange).parameters()
+                val effectKind = deterministicChange?.effectKind
+                    ?: requireNotNull(generativeChange).effectKind
                 val content = AgentContentGraphFactory.fromState(state)
                 val preflight = AgentGoalCompiler.preflight(goal, state, content)
                 require(preflight is AgentCompileResult.NeedObservation)
@@ -2354,7 +2372,7 @@ class HeadlessService : Service() {
                     .put("operation_kind", operationRow.kind.name)
                     .put("canonical_target", target.description)
                     .put("target_source_text", target.sourceText ?: JSONObject.NULL)
-                    .put("effect", change.parameters())
+                    .put("effect", effectParameters)
                     .put("preflight", AgentCompileResultJson.toJson(preflight))
                     .put("media_modified", false)
                     .put("published", false)
@@ -2362,7 +2380,7 @@ class HeadlessService : Service() {
                 targetFile.writeText(evidence.toString(2) + "\n")
                 log(
                     "PASS Goal IR: kind=${operationRow.kind} target=${target.description} " +
-                        "effect=${change.effectKind} next=OBJECT_TRACK"
+                        "effect=$effectKind next=OBJECT_TRACK"
                 )
                 log("=== NATIVE ADAPTER TEST END ===")
                 stopSelf()
@@ -2465,6 +2483,168 @@ class HeadlessService : Service() {
                 .put("duration_ms", videoDurationMs(decoded.video))
                 .put("photo_timestamp_us", decoded.photoTimestampUs),
             semantic = JSONObject().put("ready", true)
+        )
+    }
+
+    private fun runLocalGenerationFixtureProbe(
+        packed: File,
+        query: String,
+        outputDir: File
+    ) {
+        val sourceShaBefore = fileSha256(packed)
+        val galleryRowsBefore = countAgentPublishedImages()
+        val asset = prepareGoalProbeAsset(
+            packed,
+            outputDir,
+            "generation-fixture-decoded"
+        )
+        val compileStatuses = mutableListOf<String>()
+        val graphActions = mutableListOf<String>()
+        var expectedFrames = 0
+        var observedFrames = 0
+        var interaction: AndroidLocalPreviewInteraction? = null
+        var terminalState: AgentRuntimeState? = null
+        var finalPlan: MobilePlan? = null
+        var finalMessage = ""
+        var errorMessage: String? = null
+        MobileAgentLoop(
+            this,
+            AndroidQnnLocalObservationBackend(
+                this,
+                AndroidFullTimelineMaskTracker(this)
+            ),
+            AndroidFixtureMaskedGenerationBackend()
+        ).run(
+            query = query,
+            uris = emptyList(),
+            layoutContext = null,
+            cancelled = AtomicBoolean(false),
+            listener = object : MobileAgentRunner.Listener {
+                override fun onProgress(message: String) {
+                    log(message)
+                }
+                override fun onRuntimeGoal(goal: AgentGoalIr, result: AgentCompileResult) {
+                    compileStatuses += AgentCompileResultJson.toJson(result).getString("status")
+                }
+                override fun onRuntimeContentGraph(snapshot: AgentContentGraphSnapshot) {
+                    snapshot.graph.nodes.values.firstOrNull {
+                        it.kind == ContentNodeKind.MASK_TRACK
+                    }?.attributes?.let { attributes ->
+                        expectedFrames = attributes["expected_frame_count"]?.toIntOrNull() ?: 0
+                        observedFrames = attributes["observed_frame_count"]?.toIntOrNull() ?: 0
+                    }
+                }
+                override fun onRuntimeGraph(compilation: AgentDagCompilation) {
+                    graphActions += compilation.graph.nodes.values.map { it.actionId }
+                }
+                override fun onLocalPreview(value: AndroidLocalPreviewInteraction) {
+                    interaction = value
+                }
+                override fun onRuntimeTerminal(state: AgentRuntimeState, message: String) {
+                    terminalState = state
+                }
+                override fun onPlan(plan: MobilePlan) {
+                    finalPlan = plan
+                }
+                override fun onResult(result: MobileToolResult) = Unit
+                override fun onFinished(uri: Uri?, message: String) {
+                    require(uri == null)
+                    finalMessage = message
+                }
+                override fun onError(message: String) {
+                    errorMessage = message
+                }
+            },
+            preparedAssets = listOf(asset),
+            dagShadow = true
+        )
+        val previewInteraction = requireNotNull(interaction) {
+            errorMessage ?: finalMessage.ifBlank { "generation fixture did not produce a preview" }
+        }
+        val preview = previewInteraction.snapshot()
+        require(preview.effectKind == LocalGenerativeChange.EFFECT_KIND)
+        require(preview.rendererBackendId == AndroidFixtureMaskedGenerationBackend.BACKEND_ID)
+        require(preview.packedLivePhotoFile == null && preview.timelineFrameCount == null)
+        require(Regex("[0-9a-f]{64}").matches(
+            requireNotNull(preview.backendEvidenceFingerprint)
+        ))
+        val sourcePixels = IntArray(preview.sourceBitmap.width * preview.sourceBitmap.height)
+        val generatedPixels = IntArray(sourcePixels.size)
+        preview.sourceBitmap.getPixels(
+            sourcePixels, 0, preview.sourceBitmap.width, 0, 0,
+            preview.sourceBitmap.width, preview.sourceBitmap.height
+        )
+        preview.previewBitmap.getPixels(
+            generatedPixels, 0, preview.previewBitmap.width, 0, 0,
+            preview.previewBitmap.width, preview.previewBitmap.height
+        )
+        val changedPixels = sourcePixels.indices.count { sourcePixels[it] != generatedPixels[it] }
+        val changedAlphaPixels = sourcePixels.indices.count {
+            sourcePixels[it] ushr 24 != generatedPixels[it] ushr 24
+        }
+        val previewFile = File(outputDir, "agent-generation-fixture-preview.png")
+        FileOutputStream(previewFile).use { stream ->
+            require(preview.previewBitmap.compress(Bitmap.CompressFormat.PNG, 100, stream))
+        }
+        val pendingPublishRejected = runCatching {
+            AndroidConfirmedLivePhotoPublisher(this).publish(preview)
+        }.isFailure
+        val accepted = previewInteraction.confirm()
+        val acceptedPublishRejected = runCatching {
+            AndroidConfirmedLivePhotoPublisher(this).publish(accepted)
+        }.isFailure
+        val terminalReviewState = previewInteraction.undo().lifecycle.state
+        previewInteraction.release()
+        val sourceShaAfter = fileSha256(packed)
+        val galleryRowsAfter = countAgentPublishedImages()
+        val passed = terminalState?.status == AgentRunStatus.WAITING_USER &&
+            finalPlan?.intent == "local_generation_fixture_preview_review" &&
+            compileStatuses == listOf("need_observation", "ready") &&
+            graphActions == listOf(LocalMaskedGenerationPreviewAction.ACTION_ID) &&
+            expectedFrames > 1 && observedFrames == expectedFrames &&
+            changedPixels > 0 && changedAlphaPixels == 0 &&
+            accepted.lifecycle.state == LocalPreviewReviewState.ACCEPTED_FOR_REVIEW &&
+            terminalReviewState == LocalPreviewReviewState.UNDONE &&
+            pendingPublishRejected && acceptedPublishRejected && errorMessage == null &&
+            sourceShaBefore == sourceShaAfter && galleryRowsBefore == galleryRowsAfter
+        val evidence = JSONObject()
+            .put("schema_version", 1)
+            .put(
+                "status",
+                if (passed) "PASS_LOCAL_GENERATION_FIXTURE_PREVIEW"
+                else "FAIL_LOCAL_GENERATION_FIXTURE_PREVIEW"
+            )
+            .put("query", query)
+            .put("expected_frame_count", expectedFrames)
+            .put("observed_frame_count", observedFrames)
+            .put("graph_actions", org.json.JSONArray(graphActions))
+            .put("plan_intent", finalPlan?.intent ?: JSONObject.NULL)
+            .put("final_message", finalMessage)
+            .put("effect_kind", preview.effectKind)
+            .put("backend_id", preview.rendererBackendId)
+            .put("backend_is_fixture_not_model", true)
+            .put("single_frame_only", true)
+            .put("packed_livephoto_created", false)
+            .put("backend_evidence_fingerprint", preview.backendEvidenceFingerprint)
+            .put("changed_pixels", changedPixels)
+            .put("changed_alpha_pixels", changedAlphaPixels)
+            .put("pending_publish_rejected", pendingPublishRejected)
+            .put("accepted_publish_rejected", acceptedPublishRejected)
+            .put("terminal_review_state", terminalReviewState.name)
+            .put("preview_sha256", fileSha256(previewFile))
+            .put("source_sha256_before", sourceShaBefore)
+            .put("source_sha256_after", sourceShaAfter)
+            .put("gallery_rows_before", galleryRowsBefore)
+            .put("gallery_rows_after", galleryRowsAfter)
+            .put("error_message", errorMessage ?: JSONObject.NULL)
+            .put("source_media_modified", false)
+            .put("published", false)
+        File(outputDir, "agent-generation-fixture-evidence.json")
+            .writeText(evidence.toString(2) + "\n")
+        require(passed) { "local generation fixture preview contract failed" }
+        log(
+            "PASS local generation fixture: changed=$changedPixels " +
+                "frames=$observedFrames/$expectedFrames backend=${preview.rendererBackendId}"
         )
     }
 

@@ -48,6 +48,15 @@ require(persistentQnn in setOf("true", "false")) {
 require(persistentQnn == "false" || localTrackedPreview == "true") {
     "persistentQnn requires -PlocalTrackedPreview=true"
 }
+val localGeneratedPreview = providers.gradleProperty("localGeneratedPreview")
+    .orElse("false")
+    .get()
+require(localGeneratedPreview in setOf("true", "false")) {
+    "localGeneratedPreview must be true or false"
+}
+require(localGeneratedPreview == "false" || localTrackedPreview == "true") {
+    "localGeneratedPreview requires -PlocalTrackedPreview=true"
+}
 val qwenModelPack = providers.gradleProperty("qwenModelPack")
     .orElse("instruct")
     .get()
@@ -104,6 +113,9 @@ android {
         // QAIRT 2.45 contexts are loaded in-process and retained in a bounded LRU only in this
         // separately opted-in build. The validated App-UID qnn-net-run bridge remains the fallback.
         buildConfigField("boolean", "PERSISTENT_QNN", persistentQnn)
+        // Separately gated masked-generation preview. Its first implementation is a deterministic
+        // fixture backend; it cannot write or publish media.
+        buildConfigField("boolean", "LOCAL_GENERATED_PREVIEW", localGeneratedPreview)
         // Native-thinking experiments use a separate model directory and never overwrite the
         // production Instruct-2507 pack. `route` keeps constrained bind classification direct.
         buildConfigField("String", "QWEN_MODEL_PACK", "\"$qwenModelPack\"")
@@ -191,6 +203,7 @@ tasks.configureEach {
         inputs.property("lpa.localTrackedPreview", localTrackedPreview)
         inputs.property("lpa.fullTimelineTrackedPreview", fullTimelineTrackedPreview)
         inputs.property("lpa.persistentQnn", persistentQnn)
+        inputs.property("lpa.localGeneratedPreview", localGeneratedPreview)
         inputs.property("lpa.qwenModelPack", qwenModelPack)
         inputs.property("lpa.qwenThinking", qwenThinking)
         inputs.property("lpa.qwenThinkingTokens", qwenThinkingTokens)
