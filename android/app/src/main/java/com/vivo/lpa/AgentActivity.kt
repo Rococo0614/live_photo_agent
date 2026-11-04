@@ -1048,6 +1048,23 @@ preparedAssets = prepared
         localPreviewPanel.addView(controls, LinearLayout.LayoutParams(-1, -2).apply {
             topMargin = dp(6)
         })
+        val publishControls = LinearLayout(this).apply {
+            gravity = Gravity.CENTER_VERTICAL
+            orientation = LinearLayout.HORIZONTAL
+            visibility = View.GONE
+        }
+        val publishCopy = button("发布副本") {}
+        val deletePublishedCopy = button("删除已发布副本") {}
+        deletePublishedCopy.visibility = View.GONE
+        publishControls.addView(publishCopy, LinearLayout.LayoutParams(0, dp(42), 1f))
+        publishControls.addView(
+            deletePublishedCopy,
+            LinearLayout.LayoutParams(0, dp(42), 1f).apply { leftMargin = dp(5) }
+        )
+        localPreviewPanel.addView(publishControls, LinearLayout.LayoutParams(-1, -2).apply {
+            topMargin = dp(6)
+        })
+        var publishedCopy: AndroidPublishedLocalPreview? = null
 
         confirm.setOnClickListener {
             runCatching { interaction.confirm() }.onSuccess { accepted ->
@@ -1055,6 +1072,10 @@ preparedAssets = prepared
                 confirm.visibility = View.GONE
                 cancelPreview.visibility = View.GONE
                 undo.visibility = View.VISIBLE
+                if (accepted.packedLivePhotoFile != null) {
+                    publishControls.visibility = View.VISIBLE
+                    publishCopy.visibility = View.VISIBLE
+                }
                 logLocalPreviewReview(accepted)
             }.onFailure { append("确认预览失败：${it.message}") }
         }
@@ -1073,6 +1094,7 @@ preparedAssets = prepared
             toggle.visibility = View.GONE
             confirm.visibility = View.GONE
             cancelPreview.visibility = View.GONE
+            publishControls.visibility = View.GONE
         }
         undo.setOnClickListener {
             preview.setImageBitmap(artifact.sourceBitmap)
@@ -1086,8 +1108,116 @@ preparedAssets = prepared
             }
             activeLocalPreview = null
             status.text = "已撤销临时预览 · 源媒体未改变"
+            if (publishedCopy != null) {
+                status.text = "已撤销临时预览 · 已发布副本仍保留"
+            }
             toggle.visibility = View.GONE
             undo.visibility = View.GONE
+            publishCopy.visibility = View.GONE
+            publishControls.visibility = if (publishedCopy == null) View.GONE else View.VISIBLE
+        }
+        publishCopy.setOnClickListener {
+            val accepted = runCatching { interaction.snapshot() }.getOrElse {
+                append("发布前预览状态已失效：${it.message}")
+                return@setOnClickListener
+            }
+            if (accepted.lifecycle.state != LocalPreviewReviewState.ACCEPTED_FOR_REVIEW) {
+                append("请先确认预览，再单独授权发布副本")
+                return@setOnClickListener
+            }
+            AlertDialog.Builder(this)
+                .setTitle("发布动态照片副本")
+                .setMessage("将已确认的临时预览作为新副本写入系统相册，不会覆盖原片。是否继续？")
+                .setNegativeButton("暂不发布", null)
+                .setPositiveButton("发布副本") { _, _ ->
+                    publishCopy.isEnabled = false
+                    undo.isEnabled = false
+                    val generation = sessionGeneration
+                    Thread({
+                        runCatching {
+                            AndroidConfirmedLivePhotoPublisher(this).publish(accepted)
+                        }.onSuccess { result ->
+                            uiFor(generation) {
+                                publishedCopy = result
+                                lastResult = result.uri
+                                taskStatus = "published_local_preview_copy"
+                                persistSessionState("已发布动态照片副本")
+                                status.text = "已发布相册副本 · 原片未覆盖，可删除副本或撤销临时预览"
+                                publishCopy.visibility = View.GONE
+                                deletePublishedCopy.visibility = View.VISIBLE
+                                deletePublishedCopy.isEnabled = true
+                                undo.isEnabled = true
+                                append("已发布动态照片副本：${result.displayName}")
+                                logAudit("LOCAL_PREVIEW_PUBLISHED", JSONObject()
+                                    .put("artifact_id", accepted.artifactId)
+                                    .put("uri", result.uri.toString())
+                                    .put("display_name", result.displayName)
+                                    .put("content_sha256", result.contentSha256)
+                                    .put("byte_count", result.byteCount)
+                                    .put("source_overwritten", false))
+                            }
+                        }.onFailure { error ->
+                            uiFor(generation) {
+                                publishCopy.isEnabled = true
+                                undo.isEnabled = true
+                                append("发布副本失败：${error.message}")
+                            }
+                        }
+                    }, "local-preview-publish").start()
+                }
+                .show()
+        }
+        deletePublishedCopy.setOnClickListener {
+            val target = publishedCopy ?: return@setOnClickListener
+            AlertDialog.Builder(this)
+                .setTitle("删除已发布副本")
+                .setMessage("只删除本次新建的相册副本，原片不会改变。是否继续？")
+                .setNegativeButton("保留", null)
+                .setPositiveButton("删除副本") { _, _ ->
+                    deletePublishedCopy.isEnabled = false
+                    undo.isEnabled = false
+                    val generation = sessionGeneration
+                    Thread({
+                        runCatching {
+                            require(AndroidConfirmedLivePhotoPublisher(this)
+                                .deletePublishedCopy(target))
+                        }.onSuccess {
+                            uiFor(generation) {
+                                publishedCopy = null
+                                if (lastResult == target.uri) lastResult = null
+                                val stillAccepted = runCatching {
+                                    interaction.snapshot().lifecycle.state ==
+                                        LocalPreviewReviewState.ACCEPTED_FOR_REVIEW
+                                }.getOrDefault(false)
+                                taskStatus = if (stillAccepted) {
+                                    "accepted_local_preview"
+                                } else {
+                                    "local_preview_undone"
+                                }
+                                persistSessionState("已删除发布副本")
+                                status.text = "已删除相册副本 · 原片未改变"
+                                deletePublishedCopy.visibility = View.GONE
+                                undo.isEnabled = true
+                                publishCopy.visibility = if (stillAccepted) View.VISIBLE else View.GONE
+                                publishCopy.isEnabled = true
+                                publishControls.visibility =
+                                    if (stillAccepted) View.VISIBLE else View.GONE
+                                append("已删除本次发布的相册副本")
+                                logAudit("LOCAL_PREVIEW_PUBLISH_UNDONE", JSONObject()
+                                    .put("artifact_id", acceptedArtifactId(interaction))
+                                    .put("uri", target.uri.toString())
+                                    .put("source_overwritten", false))
+                            }
+                        }.onFailure { error ->
+                            uiFor(generation) {
+                                deletePublishedCopy.isEnabled = true
+                                undo.isEnabled = true
+                                append("删除发布副本失败：${error.message}")
+                            }
+                        }
+                    }, "local-preview-publish-delete").start()
+                }
+                .show()
         }
         logAudit("LOCAL_PREVIEW_READY", JSONObject()
             .put("artifact_id", artifact.artifactId)
@@ -1099,6 +1229,9 @@ preparedAssets = prepared
             .put("review_state", artifact.lifecycle.state.name)
             .put("writeback", false))
     }
+
+    private fun acceptedArtifactId(interaction: AndroidLocalPreviewInteraction): String =
+        runCatching { interaction.snapshot().artifactId }.getOrDefault(interaction.artifactId)
 
     private fun logLocalPreviewReview(artifact: AndroidTemporaryLocalPreviewArtifact) {
         logAudit("LOCAL_PREVIEW_REVIEW", JSONObject()

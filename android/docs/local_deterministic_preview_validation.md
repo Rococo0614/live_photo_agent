@@ -1,6 +1,6 @@
 # 局部确定性预览 Renderer 验证
 
-> 验证日期：2026-11-03
+> 验证日期：2026-11-04
 > 设备：vivo V2547A / PD2547，SM8850，Android 16（SDK 36）  
 > 状态：**真实语言→OWLv2→EdgeTAM全时序mask→私有Live Photo预览已通过显式实验路径；写回仍禁用**
 
@@ -181,14 +181,14 @@ SHA-256 438a3d13bf0de46c9730fee89199ac0a104eefdd1cdade9fcbbd917120fc3dd4
                       SHA-256 4691654241a483d9c249f5300870daa124a96effd4cd0d0d0079147f9be6cec0
 ```
 
-当前debug/release单测均为127/127，`lintDebug`、`lintRelease`及debug/release assemble通过。默认
+当前debug/release单测均为131/131，`lintDebug`、`lintRelease`及debug/release assemble通过。默认
 debug/release APK都不包含`libqnn_net_run.so`；只有显式实验构建包含：
 
 ```text
-default debug APK        6bdccc048dc982fe7ccdbace21741748b845c36d7f8b0301e2ada0283e75a8a5
-default release APK      4e6edfd6f776355ab9df8d720091856c4d74dc49400122c4b97529d884d92e40
-full-timeline fallback   721b522a105b0db2d630e640a8f6efa33b4b956e50f5e8e6a3892de2de6f871d
-persistent-QNN debug APK b2bc69981cda957a0ac223f0329c6e27b4de7f32a639b018b1dad2168e26b5b5
+default debug APK        75de85e1fd67f74ea07eb1f6e46a4c21b64a541e0bd8046df86713dd24e20635
+default release APK      7f4301ec40a785ef843e81896f8c81926d77d5f3fc0a1299f91f53a9c8368093
+full-timeline fallback   a0c3df1bd73580aa4d4cafb9509e543a3f71f1e8e1992a4fc6341de257a268ed
+persistent-QNN debug APK 008c9bd7d2776d9e9c001b7db686c9c5772860c4e1eebccbfbf6eee18bec2f8d
 ```
 
 所有自定义Gradle属性已注册为task inputs；同一worktree按“clean默认→实验→默认”构建，前后两个默认
@@ -436,6 +436,28 @@ DMA-BUF都回到12,824KiB，最终PSS/RSS为43,914/131,772KiB。期间`MemAvaila
     SHA-256 5d78fd6d48049cb4c53332913cc9bf9d6a3f2893cd87272d323d365d6b6af83a
 ```
 
+### 4.6 完整动态预览的确认、撤销与可选发布
+
+5帧真实Agent整链又执行了完整review生命周期：`PENDING_REVIEW → ACCEPTED_FOR_REVIEW → UNDONE`。
+确认只接受视觉结果，`writeback_authorized`始终为false；确认后同一packed Live Photo通过私有根目录、
+完整时间线、certificate fingerprint和JPEG contract检查，进入`publish_ready`，但发布仍要求第二次独立
+用户授权；同一发布器在`PENDING_REVIEW`状态被真机probe明确拒绝。撤销后artifact拥有的完整动态目录
+已删除，源Live Photo SHA前后一致，相册输出目录行数
+保持37→37，本轮没有发布。
+
+UI现只在完整Live Photo已确认后显示“发布副本”；用户点击后还必须通过“不会覆盖原片”的确认对话框。
+artifact在创建时即记录packed输出SHA；发布器先验证该内容绑定，再重新decode、核对帧数、写入新的
+pending MediaStore行、设置vivo `live_photo`标记，并以SHA-256
+重读验证；任一步失败都删除pending行。成功后可单独“删除已发布副本”，删除策略只接受本发布器在
+固定输出目录创建的URI。该入口不会把“确认预览”静默升级为发布授权。本轮只验证到`publish_ready`
+并确认相册零变化，未替用户执行第二次发布授权。
+
+```text
+/mnt/ssd/lpa-aihub-probe/artifacts/android-dynamic-frame-timeline/
+  persistent-jni-5-review-loop/evidence.json
+    SHA-256 fa16518e0d441a820b60f43852c82042637bfce5d3e6c24cd13455554ed9964f
+```
+
 当前完整视频artifact仅开放`color_tint`；`blur`仍只生成单帧review，必须完成持久双pass shader与视频
 差分后才能进入完整时间线编码。
 
@@ -546,16 +568,17 @@ certificate到临时区域工具”Gate；以下仍阻止mutation：
 2. Android持久GLES→MediaCodec→AAC sample copy→Live Photo repack已在`N=5`、`N=53`和`N=181`
    素材通过，QNN执行中取消也已通过；仍需更多不同`N`/VFR素材、重复soak和DSP资源峰值验证；完整
    视频blur尚未实现；
-3. UI已实现但尚未做触屏自动化、Activity/进程重建、会话恢复与旋转Gate；
-4. 持久QNN tracking五轮soak与释放已通过，但完整pipeline因Qwen FastRPC/ION峰值触发6次后台LMK，
-   手机总内存Gate明确失败；还需降低planner峰值并补GPU/DSP不可见私有分配；
+3. 完整动态artifact的确认→publish-ready→撤销→清理已在headless真机通过，显式二次发布/删除入口已
+   接入UI；仍需触屏自动化、实际二次发布授权、Activity/进程重建、会话恢复与旋转Gate；
+4. 持久QNN tracking五轮soak与释放已通过；完整pipeline的Qwen FastRPC/ION峰值及6次后台LMK证据
+   保留，但产品决策接受16GB目标机上的该资源代价，不再把它列为当前功能闭环阻塞项；
 5. 固定context银行包体仍未解决；任何确认仍只接受临时预览，不能写回。
 
 本轮测试后已恢复当前默认`agentRuntime=loop / localTrackedPreview=false` APK；设备base.apk与host逐字节
 一致，且不包含实验`qnn-net-run`：
 
 ```text
-SHA-256 6bdccc048dc982fe7ccdbace21741748b845c36d7f8b0301e2ada0283e75a8a5
+SHA-256 75de85e1fd67f74ea07eb1f6e46a4c21b64a541e0bd8046df86713dd24e20635
 ```
 
 vivo百度输入法保持启用，ADBKeyboard为disabled-user，stay-awake为0，LPA进程已停止。

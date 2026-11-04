@@ -27,6 +27,7 @@ data class AndroidTemporaryLocalPreviewArtifact(
     val rendererBackendId: String,
     val certificateFingerprint: String,
     val packedLivePhotoFile: java.io.File? = null,
+    val packedLivePhotoSha256: String? = null,
     val timelineFrameCount: Int? = null,
     val lifecycle: LocalPreviewLifecycle
 )
@@ -79,6 +80,9 @@ class AndroidTemporaryLocalPreviewStore(
             rendererBackendId,
             certificateFingerprint,
             encodedTimeline?.packedLivePhoto,
+            encodedTimeline?.packedLivePhoto?.let(
+                AndroidLocalPreviewPublishPolicy::contentSha256
+            ),
             encodedTimeline?.frameCount,
             lifecycle
         )

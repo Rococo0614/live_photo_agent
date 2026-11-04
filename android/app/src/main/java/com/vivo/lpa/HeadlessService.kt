@@ -1355,6 +1355,12 @@ class HeadlessService : Service() {
                 require(inputs.size == 1 && !agentQuery.isNullOrBlank()) {
                     "full timeline preview probe requires one Live Photo and agent_query"
                 }
+                val reviewAction = imageParams.optString("review_action", "cancel")
+                require(reviewAction in setOf("cancel", "confirm_undo")) {
+                    "review_action must be cancel or confirm_undo"
+                }
+                val sourceShaBefore = fileSha256(inputs.single())
+                val galleryRowsBefore = countAgentPublishedImages()
                 val asset = prepareGoalProbeAsset(
                     inputs.single(),
                     outputDir,
@@ -1430,13 +1436,56 @@ class HeadlessService : Service() {
                     File(outputDir, "agent-real-full-timeline-preview.jpg"),
                     overwrite = true
                 )
+                val pendingReviewState = preview.lifecycle.state
+                val publishRejectedBeforeReview = runCatching {
+                    AndroidConfirmedLivePhotoPublisher(this).publish(preview)
+                }.exceptionOrNull() is IllegalArgumentException
+                require(publishRejectedBeforeReview) {
+                    "pending preview unexpectedly crossed the publish gate"
+                }
+                var acceptedReviewState: LocalPreviewReviewState? = null
+                var publishReadyAfterExplicitReview = false
+                val terminalReviewState = when (reviewAction) {
+                    "confirm_undo" -> {
+                        val accepted = previewInteraction.confirm()
+                        acceptedReviewState = accepted.lifecycle.state
+                        require(accepted.lifecycle.state ==
+                            LocalPreviewReviewState.ACCEPTED_FOR_REVIEW)
+                        require(!accepted.lifecycle.writebackAuthorized)
+                        require(packedPreview.isFile)
+                        publishReadyAfterExplicitReview =
+                            AndroidLocalPreviewPublishPolicy.requirePublishable(
+                                cacheDir,
+                                accepted.lifecycle,
+                                accepted.packedLivePhotoFile,
+                                accepted.packedLivePhotoSha256,
+                                accepted.timelineFrameCount,
+                                accepted.certificateFingerprint
+                            ) == packedPreview.canonicalFile
+                        previewInteraction.undo().lifecycle.state
+                    }
+                    else -> previewInteraction.cancel().lifecycle.state
+                }
+                previewInteraction.release()
+                val packedPreviewCleaned = !packedPreview.exists()
+                val sourceShaAfter = fileSha256(inputs.single())
+                val galleryRowsAfter = countAgentPublishedImages()
+                val lifecyclePassed = when (reviewAction) {
+                    "confirm_undo" -> acceptedReviewState ==
+                        LocalPreviewReviewState.ACCEPTED_FOR_REVIEW &&
+                        terminalReviewState == LocalPreviewReviewState.UNDONE &&
+                        publishReadyAfterExplicitReview
+                    else -> terminalReviewState == LocalPreviewReviewState.CANCELLED
+                }
                 val passed = terminalState?.status == AgentRunStatus.WAITING_USER &&
                     finalPlan?.intent == "local_content_preview_review" &&
                     compileStatuses == listOf("need_observation", "ready") &&
                     graphActions == listOf(LocalDeterministicChangePreviewAction.ACTION_ID) &&
                     expectedFrames > 1 && observedFrames == expectedFrames &&
                     preview.timelineFrameCount == expectedFrames &&
-                    packedPreviewCopy.isFile && errorMessage == null
+                    packedPreviewCopy.isFile && errorMessage == null && lifecyclePassed &&
+                    packedPreviewCleaned && sourceShaBefore == sourceShaAfter &&
+                    galleryRowsBefore == galleryRowsAfter
                 val evidence = JSONObject()
                     .put("schema_version", 1)
                     .put("status", if (passed) {
@@ -1460,13 +1509,28 @@ class HeadlessService : Service() {
                     .put("preview_sha256", fileSha256(previewFile))
                     .put("packed_livephoto_sha256", fileSha256(packedPreviewCopy))
                     .put("packed_livephoto_private_preview", true)
+                    .put("review_action", reviewAction)
+                    .put("pending_review_state", pendingReviewState.name)
+                    .put(
+                        "accepted_review_state",
+                        acceptedReviewState?.name ?: JSONObject.NULL
+                    )
+                    .put("terminal_review_state", terminalReviewState.name)
+                    .put("writeback_authorized", false)
+                    .put("publish_rejected_before_review", publishRejectedBeforeReview)
+                    .put("publish_ready_after_explicit_review", publishReadyAfterExplicitReview)
+                    .put("packed_artifact_content_bound", preview.packedLivePhotoSha256 != null)
+                    .put("publish_requires_second_user_authorization", true)
+                    .put("packed_preview_cleaned_after_release", packedPreviewCleaned)
+                    .put("source_sha256_before", sourceShaBefore)
+                    .put("source_sha256_after", sourceShaAfter)
+                    .put("gallery_rows_before", galleryRowsBefore)
+                    .put("gallery_rows_after", galleryRowsAfter)
                     .put("error_message", errorMessage ?: JSONObject.NULL)
                     .put("source_media_modified", false)
                     .put("published", false)
                 File(outputDir, "agent-real-full-timeline-preview-evidence.json")
                     .writeText(evidence.toString(2) + "\n")
-                previewInteraction.cancel()
-                previewInteraction.release()
                 require(passed) { "full dynamic timeline preview contract failed" }
                 log(
                     "PASS Agent full dynamic timeline preview: $observedFrames/$expectedFrames " +
@@ -2332,6 +2396,17 @@ class HeadlessService : Service() {
             resolver.delete(uri, null, null)
             throw error
         }
+    }
+
+    private fun countAgentPublishedImages(): Int {
+        if (Build.VERSION.SDK_INT < 29) return 0
+        return contentResolver.query(
+            MediaStore.Images.Media.EXTERNAL_CONTENT_URI,
+            arrayOf(MediaStore.Images.Media._ID),
+            "${MediaStore.Images.Media.RELATIVE_PATH} = ?",
+            arrayOf(MobileAgentRunner.OUTPUT_IMAGE_PATH + "/"),
+            null
+        )?.use { it.count } ?: 0
     }
 
     private fun fileSha256(file: File): String {
