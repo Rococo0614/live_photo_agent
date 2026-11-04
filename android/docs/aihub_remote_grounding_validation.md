@@ -547,8 +547,9 @@ EdgeTAM grounding探针首选float模型验证语义，随后才比较W8A8；这
 4. 把10%时序覆盖阈值扩展到更多尺度变化fixture；不充分时返回`NeedObservation`，不能静默接受。
 5. 联合评审OWLv2 433MiB与EdgeTAM 234MiB context包体；当前单独DLC compose的weight sharing不可用。
 6. 按实际PTS的持久GLES调色、MediaCodec编码、AAC sample保留与Live Photo repack已在`N=5`、
-   `N=53`和`N=181`素材通过；继续覆盖更多不同`N`/VFR输入、完整视频blur及触屏/Activity确认-undo
-   生命周期后才考虑写回；2.50/2.51继续禁用。
+   `N=53`和`N=181`素材通过；两阶段整数box blur也已在`N=5`通过无损shader差分、编码和完整Agent
+   review闭环。继续覆盖更多不同`N`/VFR blur输入及触屏/Activity生命周期后才考虑写回；2.50/2.51
+   继续禁用。
 
 本轮汇总证据：
 

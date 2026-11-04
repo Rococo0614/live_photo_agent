@@ -19,7 +19,6 @@ class AndroidFullTimelinePreviewRenderer(
         materialization: AgentShadowObservationMaterialization,
         change: LocalDeterministicChange
     ): AndroidEncodedTimelinePreview? {
-        val tint = change as? LocalDeterministicChange.ColorTint ?: return null
         val video = sourceAsset.videoFile ?: return null
         require(materialization.maskTrack.expectedFrameCount == timeline.frameCount)
         val root = File(
@@ -34,17 +33,34 @@ class AndroidFullTimelinePreviewRenderer(
                         .copyMaskValues())
                 }
             }
-            progress("正在生成完整动态调色视频…")
-            val encodedVideo = File(root, "tinted-motion.mp4")
-            val encoded = AndroidMaskedVideoEncoder().encodeTint(
-                video,
-                timeline,
-                maskFiles,
-                encodedVideo,
-                tint.colorHex,
-                tint.intensity,
-                cancelled
+            progress(
+                if (change is LocalDeterministicChange.Blur) {
+                    "正在生成完整动态模糊视频…"
+                } else {
+                    "正在生成完整动态调色视频…"
+                }
             )
+            val encodedVideo = File(root, "masked-${change.effectKind}-motion.mp4")
+            val encoder = AndroidMaskedVideoEncoder()
+            val encoded = when (change) {
+                is LocalDeterministicChange.ColorTint -> encoder.encodeTint(
+                    video,
+                    timeline,
+                    maskFiles,
+                    encodedVideo,
+                    change.colorHex,
+                    change.intensity,
+                    cancelled
+                )
+                is LocalDeterministicChange.Blur -> encoder.encodeBlur(
+                    video,
+                    timeline,
+                    maskFiles,
+                    encodedVideo,
+                    change.radiusPx,
+                    cancelled
+                )
+            }
             require(encoded.videoFrameCount == timeline.frameCount)
             val sourceAudio = AndroidMediaTrackInspector.fingerprint(video, "audio/")
             val encodedAudio = AndroidMediaTrackInspector.fingerprint(encodedVideo, "audio/")
@@ -60,25 +76,33 @@ class AndroidFullTimelinePreviewRenderer(
             val sourceAnchor = AndroidVideoFrameBatchReader(video, timeline).use { reader ->
                 reader.read(anchorIndex, 1).single().bitmap
             }
-            val tintedAnchor = try {
-                AndroidPersistentTintRenderer(
-                    sourceAnchor.width,
-                    sourceAnchor.height,
-                    tint.colorHex,
-                    tint.intensity
-                ).use { renderer ->
-                    renderer.render(sourceAnchor, maskFiles[anchorIndex].readBytes())
+            val renderedAnchor = try {
+                val renderer = when (change) {
+                    is LocalDeterministicChange.ColorTint -> AndroidPersistentTintRenderer(
+                        sourceAnchor.width,
+                        sourceAnchor.height,
+                        change.colorHex,
+                        change.intensity
+                    )
+                    is LocalDeterministicChange.Blur -> AndroidPersistentTintRenderer.forBlur(
+                        sourceAnchor.width,
+                        sourceAnchor.height,
+                        change.radiusPx
+                    )
+                }
+                renderer.use {
+                    it.render(sourceAnchor, maskFiles[anchorIndex].readBytes())
                 }
             } finally {
                 sourceAnchor.recycle()
             }
-            val cover = File(root, "tinted-cover.jpg")
+            val cover = File(root, "masked-${change.effectKind}-cover.jpg")
             try {
                 FileOutputStream(cover).use { stream ->
-                    require(tintedAnchor.compress(Bitmap.CompressFormat.JPEG, 95, stream))
+                    require(renderedAnchor.compress(Bitmap.CompressFormat.JPEG, 95, stream))
                 }
             } finally {
-                tintedAnchor.recycle()
+                renderedAnchor.recycle()
             }
             progress("正在打包临时Live Photo预览…")
             val packed = LivePhotoSdkAdapter(context).pack(

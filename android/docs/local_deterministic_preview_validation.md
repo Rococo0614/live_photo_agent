@@ -185,10 +185,10 @@ SHA-256 438a3d13bf0de46c9730fee89199ac0a104eefdd1cdade9fcbbd917120fc3dd4
 debug/release APK都不包含`libqnn_net_run.so`；只有显式实验构建包含：
 
 ```text
-default debug APK        75de85e1fd67f74ea07eb1f6e46a4c21b64a541e0bd8046df86713dd24e20635
-default release APK      7f4301ec40a785ef843e81896f8c81926d77d5f3fc0a1299f91f53a9c8368093
-full-timeline fallback   a0c3df1bd73580aa4d4cafb9509e543a3f71f1e8e1992a4fc6341de257a268ed
-persistent-QNN debug APK 008c9bd7d2776d9e9c001b7db686c9c5772860c4e1eebccbfbf6eee18bec2f8d
+default debug APK        21182c81db10ce2720b9cd17b0fd6e3a80d9e19c2dec55865aec20426db7b69b
+default release APK      391f0d8643dc8f14a6ece93ed15a73dc7d0c2b784bd1c2cd50b781e3df5a35a5
+full-timeline fallback   f76b188f2a0a696f4fe3c80dbffa1bb699a702532b10627760e85d839eaf38b8
+persistent-QNN debug APK 40261b1b3a3f438eb81ae78b5abdbe388cb6e695e556827fbd7220fef2958b4f
 ```
 
 所有自定义Gradle属性已注册为task inputs；同一worktree按“clean默认→实验→默认”构建，前后两个默认
@@ -458,8 +458,22 @@ pending MediaStore行、设置vivo `live_photo`标记，并以SHA-256
     SHA-256 fa16518e0d441a820b60f43852c82042637bfce5d3e6c24cd13455554ed9964f
 ```
 
-当前完整视频artifact仅开放`color_tint`；`blur`仍只生成单帧review，必须完成持久双pass shader与视频
-差分后才能进入完整时间线编码。
+完整时间线`blur`现与单帧renderer共享同一组整数域两阶段box-blur shader。5帧pbuffer差分中，单EGL
+context/双program处理全部帧，mask外变化0，mask内变化277,302像素，对CPU oracle最大通道误差0。
+同一renderer随后直接输出到MediaCodec surface：5/5 PTS保持，9个AAC sample payload与时间线完全
+一致，anchor帧对无损GLES结果PSNR为39.30dB，垂直翻转对照仅11.39dB；repack后photo timestamp仍为
+66,000µs。最终自然语言“请把草地上正在走的橘猫做局部模糊，模糊半径6像素”完成5/5双向mask、
+完整动态blur、私有Live Photo、确认→publish-ready→撤销与清理，源媒体及相册均未改变：
+
+```text
+/mnt/ssd/lpa-aihub-probe/artifacts/android-dynamic-frame-timeline/
+  persistent-blur-5/timeline-evidence.json
+    SHA-256 7a6be4888fa946f353ebebc81d7b5ac3d0a35f320d77bc4dd0a1e45adea4d580
+  persistent-blur-5/encode-evidence.json
+    SHA-256 1212ee01374d3e6bbf7ec259a79e99f729b453035a402922756e236a977c546d
+  persistent-blur-5-agent/evidence.json
+    SHA-256 e8e8732be2f074fd306b8f8e48f47497c82e1a96a253f8bb3485ab4d7cac61b5
+```
 
 ## 5. 逐帧跟踪调色显色证据
 
@@ -565,9 +579,9 @@ certificate到临时区域工具”Gate；以下仍阻止mutation：
 
 1. App-UID QAIRT 2.45持久JNI已在实际解码`N=5`、`N=53`和现有长序列`N=181`完成全时间线传播，
    子进程仍是回退；更多不同`N`/VFR/遮挡输入及重复soak仍需完成，因此路径继续由第三层实验开关保护；
-2. Android持久GLES→MediaCodec→AAC sample copy→Live Photo repack已在`N=5`、`N=53`和`N=181`
-   素材通过，QNN执行中取消也已通过；仍需更多不同`N`/VFR素材、重复soak和DSP资源峰值验证；完整
-   视频blur尚未实现；
+2. Android持久GLES→MediaCodec→AAC sample copy→Live Photo repack的`color_tint`已在`N=5`、
+   `N=53`和`N=181`通过，`blur`已在`N=5`通过无损shader、编码和完整Agent闭环；仍需把blur扩展到
+   不同`N`/VFR素材，QNN执行中取消已通过；
 3. 完整动态artifact的确认→publish-ready→撤销→清理已在headless真机通过，显式二次发布/删除入口已
    接入UI；仍需触屏自动化、实际二次发布授权、Activity/进程重建、会话恢复与旋转Gate；
 4. 持久QNN tracking五轮soak与释放已通过；完整pipeline的Qwen FastRPC/ION峰值及6次后台LMK证据
@@ -578,7 +592,7 @@ certificate到临时区域工具”Gate；以下仍阻止mutation：
 一致，且不包含实验`qnn-net-run`：
 
 ```text
-SHA-256 75de85e1fd67f74ea07eb1f6e46a4c21b64a541e0bd8046df86713dd24e20635
+SHA-256 21182c81db10ce2720b9cd17b0fd6e3a80d9e19c2dec55865aec20426db7b69b
 ```
 
 vivo百度输入法保持启用，ADBKeyboard为disabled-user，stay-awake为0，LPA进程已停止。

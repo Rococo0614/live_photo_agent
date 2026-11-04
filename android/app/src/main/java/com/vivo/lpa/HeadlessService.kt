@@ -490,17 +490,23 @@ class HeadlessService : Service() {
                 stopSelf()
                 return
             }
-            if (operation == "persistent_tint_timeline_probe") {
-                require(BuildConfig.DEBUG) { "persistent tint timeline probe is debug-only" }
+            if (operation in setOf(
+                    "persistent_tint_timeline_probe",
+                    "persistent_blur_timeline_probe"
+                )
+            ) {
+                val blurTimeline = operation == "persistent_blur_timeline_probe"
+                require(BuildConfig.DEBUG) { "persistent effect timeline probe is debug-only" }
                 require(inputs.size >= 3) {
-                    "persistent tint timeline probe requires Live Photo and at least two masks"
+                    "persistent effect timeline probe requires Live Photo and at least two masks"
                 }
+                val artifactPrefix = if (blurTimeline) "persistent-blur" else "persistent-tint"
                 val decoded = requireNotNull(
                     LivePhotoSdkAdapter(this).decode(
                         inputs[0],
-                        File(outputDir, "persistent-tint-decoded")
+                        File(outputDir, "$artifactPrefix-decoded")
                     )
-                ) { "persistent tint input is not a decodable Live Photo" }
+                ) { "persistent effect input is not a decodable Live Photo" }
                 val timeline = AndroidVideoFrameTimelineDecoder.decode(
                     decoded.video,
                     AtomicBoolean(false)
@@ -513,19 +519,31 @@ class HeadlessService : Service() {
                     else timeline.width
                 val visualHeight = if (timeline.rotationDegrees in setOf(90, 270)) timeline.width
                     else timeline.height
-                val change = LocalDeterministicChange.ColorTint("#008000", 1.0)
+                val change: LocalDeterministicChange = if (blurTimeline) {
+                    LocalDeterministicChange.Blur(imageParams.optDouble("blur_radius_px", 6.0))
+                } else {
+                    LocalDeterministicChange.ColorTint("#008000", 1.0)
+                }
                 var totalOutsideChanged = 0
                 var totalInsideChanged = 0
                 var maximumChannelError = 0
                 val rows = org.json.JSONArray()
                 val startedAt = android.os.SystemClock.elapsedRealtime()
                 AndroidVideoFrameBatchReader(decoded.video, timeline).use { reader ->
-                    AndroidPersistentTintRenderer(
-                        visualWidth,
-                        visualHeight,
-                        change.colorHex,
-                        change.intensity
-                    ).use { renderer ->
+                    val renderer = when (change) {
+                        is LocalDeterministicChange.ColorTint -> AndroidPersistentTintRenderer(
+                            visualWidth,
+                            visualHeight,
+                            change.colorHex,
+                            change.intensity
+                        )
+                        is LocalDeterministicChange.Blur -> AndroidPersistentTintRenderer.forBlur(
+                            visualWidth,
+                            visualHeight,
+                            change.radiusPx
+                        )
+                    }
+                    renderer.use {
                         timeline.frames.forEach { time ->
                             val source = reader.read(time.frameIndex, 1).single().bitmap
                             val mask = masks[time.frameIndex].readBytes()
@@ -589,7 +607,7 @@ class HeadlessService : Service() {
                             if (time.frameIndex == timeline.nearestFrameIndex(decoded.photoTimestampUs)) {
                                 FileOutputStream(File(
                                     outputDir,
-                                    "persistent-tint-cover-preview.png"
+                                    "$artifactPrefix-cover-preview.png"
                                 )).use { stream ->
                                     require(rendered.compress(Bitmap.CompressFormat.PNG, 100, stream))
                                 }
@@ -602,54 +620,78 @@ class HeadlessService : Service() {
                 }
                 val evidence = JSONObject()
                     .put("schema_version", 1)
-                    .put("status", "PASS_PERSISTENT_GLES_TINT_TIMELINE")
+                    .put(
+                        "status",
+                        if (blurTimeline) "PASS_PERSISTENT_GLES_BLUR_TIMELINE"
+                        else "PASS_PERSISTENT_GLES_TINT_TIMELINE"
+                    )
+                    .put("effect_kind", change.effectKind)
                     .put("decoded_frame_count", timeline.frameCount)
                     .put("rendered_frame_count", timeline.frameCount)
                     .put("egl_context_count", 1)
-                    .put("shader_program_count", 1)
+                    .put("shader_program_count", if (blurTimeline) 2 else 1)
                     .put("total_outside_mask_changed_pixels", totalOutsideChanged)
                     .put("total_inside_mask_changed_pixels", totalInsideChanged)
                     .put("maximum_channel_error_vs_cpu_oracle", maximumChannelError)
                     .put("wall_elapsed_ms", android.os.SystemClock.elapsedRealtime() - startedAt)
                     .put("frames", rows)
                     .put("media_modified", false)
-                File(outputDir, "persistent-tint-timeline-evidence.json")
+                File(outputDir, "$artifactPrefix-timeline-evidence.json")
                     .writeText(evidence.toString(2) + "\n")
                 log(
-                    "PASS persistent GLES tint: frames=${timeline.frameCount} " +
+                    "PASS persistent GLES ${change.effectKind}: frames=${timeline.frameCount} " +
                         "outside_changed=$totalOutsideChanged max_error=$maximumChannelError"
                 )
                 log("=== NATIVE ADAPTER TEST END ===")
                 stopSelf()
                 return
             }
-            if (operation == "persistent_tint_encode_probe") {
-                require(BuildConfig.DEBUG) { "persistent tint encode probe is debug-only" }
+            if (operation in setOf(
+                    "persistent_tint_encode_probe",
+                    "persistent_blur_encode_probe"
+                )
+            ) {
+                val blurEncode = operation == "persistent_blur_encode_probe"
+                require(BuildConfig.DEBUG) { "persistent effect encode probe is debug-only" }
                 require(inputs.size >= 3) {
-                    "persistent tint encode probe requires Live Photo and frame masks"
+                    "persistent effect encode probe requires Live Photo and frame masks"
                 }
+                val artifactPrefix = if (blurEncode) "persistent-blur" else "persistent-tint"
+                val blurRadiusPx = imageParams.optDouble("blur_radius_px", 6.0)
                 val decoded = requireNotNull(
                     LivePhotoSdkAdapter(this).decode(
                         inputs[0],
-                        File(outputDir, "persistent-tint-encode-decoded")
+                        File(outputDir, "$artifactPrefix-encode-decoded")
                     )
-                ) { "persistent tint encode input is not a decodable Live Photo" }
+                ) { "persistent effect encode input is not a decodable Live Photo" }
                 val timeline = AndroidVideoFrameTimelineDecoder.decode(
                     decoded.video,
                     AtomicBoolean(false)
                 )
                 val masks = inputs.drop(1)
                 require(masks.size == timeline.frameCount)
-                val encodedVideo = File(outputDir, "persistent-tint-encoded.mp4")
-                val encodeResult = AndroidMaskedVideoEncoder().encodeTint(
-                    decoded.video,
-                    timeline,
-                    masks,
-                    encodedVideo,
-                    "#008000",
-                    1.0,
-                    AtomicBoolean(false)
-                )
+                val encodedVideo = File(outputDir, "$artifactPrefix-encoded.mp4")
+                val videoEncoder = AndroidMaskedVideoEncoder()
+                val encodeResult = if (blurEncode) {
+                    videoEncoder.encodeBlur(
+                        decoded.video,
+                        timeline,
+                        masks,
+                        encodedVideo,
+                        blurRadiusPx,
+                        AtomicBoolean(false)
+                    )
+                } else {
+                    videoEncoder.encodeTint(
+                        decoded.video,
+                        timeline,
+                        masks,
+                        encodedVideo,
+                        "#008000",
+                        1.0,
+                        AtomicBoolean(false)
+                    )
+                }
                 val outputTimeline = AndroidVideoFrameTimelineDecoder.decode(
                     encodedVideo,
                     AtomicBoolean(false)
@@ -672,12 +714,21 @@ class HeadlessService : Service() {
                 val sourceAnchor = AndroidVideoFrameBatchReader(decoded.video, timeline).use { reader ->
                     reader.read(anchorIndex, 1).single().bitmap
                 }
-                val expectedAnchor = AndroidPersistentTintRenderer(
-                    sourceAnchor.width,
-                    sourceAnchor.height,
-                    "#008000",
-                    1.0
-                ).use { renderer ->
+                val anchorRenderer = if (blurEncode) {
+                    AndroidPersistentTintRenderer.forBlur(
+                        sourceAnchor.width,
+                        sourceAnchor.height,
+                        blurRadiusPx
+                    )
+                } else {
+                    AndroidPersistentTintRenderer(
+                        sourceAnchor.width,
+                        sourceAnchor.height,
+                        "#008000",
+                        1.0
+                    )
+                }
+                val expectedAnchor = anchorRenderer.use { renderer ->
                     renderer.render(sourceAnchor, masks[anchorIndex].readBytes())
                 }
                 val encodedAnchor = AndroidVideoFrameBatchReader(encodedVideo, outputTimeline).use { reader ->
@@ -718,9 +769,9 @@ class HeadlessService : Service() {
                 val flippedPsnr = if (flippedMse == 0.0) Double.POSITIVE_INFINITY
                     else 10.0 * kotlin.math.log10(255.0 * 255.0 / flippedMse)
                 require(directPsnr >= 25.0 && directPsnr > flippedPsnr) {
-                    "encoded tint frame failed orientation/quality gate: $directPsnr vs $flippedPsnr"
+                    "encoded masked frame failed orientation/quality gate: $directPsnr vs $flippedPsnr"
                 }
-                val cover = File(outputDir, "persistent-tint-cover.jpg")
+                val cover = File(outputDir, "$artifactPrefix-cover.jpg")
                 FileOutputStream(cover).use { stream ->
                     require(expectedAnchor.compress(Bitmap.CompressFormat.JPEG, 95, stream))
                 }
@@ -730,15 +781,15 @@ class HeadlessService : Service() {
                 val packed = LivePhotoSdkAdapter(this).pack(
                     cover,
                     encodedVideo,
-                    File(outputDir, "persistent-tint-livephoto-pack"),
+                    File(outputDir, "$artifactPrefix-livephoto-pack"),
                     decoded.photoTimestampUs
                 )
                 val verified = requireNotNull(
                     LivePhotoSdkAdapter(this).decode(
                         packed,
-                        File(outputDir, "persistent-tint-livephoto-verify")
+                        File(outputDir, "$artifactPrefix-livephoto-verify")
                     )
-                ) { "encoded tint Live Photo cannot be decoded" }
+                ) { "encoded masked Live Photo cannot be decoded" }
                 require(verified.photoTimestampUs == decoded.photoTimestampUs)
                 val verifiedTimeline = AndroidVideoFrameTimelineDecoder.decode(
                     verified.video,
@@ -748,7 +799,13 @@ class HeadlessService : Service() {
                     timeline.frames.map { it.presentationTimeUs })
                 val evidence = JSONObject()
                     .put("schema_version", 1)
-                    .put("status", "PASS_PERSISTENT_GLES_MEDIACODEC_LIVEPHOTO")
+                    .put(
+                        "status",
+                        if (blurEncode) "PASS_PERSISTENT_BLUR_MEDIACODEC_LIVEPHOTO"
+                        else "PASS_PERSISTENT_GLES_MEDIACODEC_LIVEPHOTO"
+                    )
+                    .put("effect_kind", if (blurEncode) "blur" else "color_tint")
+                    .put("blur_radius_px", if (blurEncode) blurRadiusPx else JSONObject.NULL)
                     .put("source_frame_count", timeline.frameCount)
                     .put("encoded_frame_count", encodeResult.videoFrameCount)
                     .put("presentation_timestamps_exact", true)
@@ -767,10 +824,11 @@ class HeadlessService : Service() {
                     .put("packed_livephoto_sha256", fileSha256(packed))
                     .put("source_media_modified", false)
                     .put("published", false)
-                File(outputDir, "persistent-tint-encode-evidence.json")
+                File(outputDir, "$artifactPrefix-encode-evidence.json")
                     .writeText(evidence.toString(2) + "\n")
                 log(
-                    "PASS persistent GLES -> MediaCodec -> LivePhoto: " +
+                    "PASS persistent ${if (blurEncode) "blur" else "tint"} -> " +
+                        "MediaCodec -> LivePhoto: " +
                         "frames=${encodeResult.videoFrameCount} audio=${encodeResult.audioSampleCount} " +
                         "psnr=$directPsnr"
                 )

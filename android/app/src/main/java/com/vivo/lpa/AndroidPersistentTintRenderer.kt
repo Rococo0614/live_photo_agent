@@ -13,13 +13,16 @@ import android.view.Surface
 import java.io.Closeable
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
+import kotlin.math.roundToInt
 
-/** One EGL context/program/texture set reused across a whole tint timeline. */
+/** One EGL context and texture set reused across a whole masked-effect timeline. */
 class AndroidPersistentTintRenderer private constructor(
     private val width: Int,
     private val height: Int,
-    colorHex: String,
-    intensity: Double,
+    private val effect: Effect,
+    colorHex: String?,
+    intensity: Double?,
+    radiusPx: Double?,
     private val encoderOutputSurface: Surface?
 ) : Closeable {
     constructor(
@@ -27,24 +30,38 @@ class AndroidPersistentTintRenderer private constructor(
         height: Int,
         colorHex: String,
         intensity: Double
-    ) : this(width, height, colorHex, intensity, null)
+    ) : this(width, height, Effect.TINT, colorHex, intensity, null, null)
     private val display: EGLDisplay = EGL14.eglGetDisplay(EGL14.EGL_DEFAULT_DISPLAY)
     private var context: EGLContext = EGL14.EGL_NO_CONTEXT
     private var surface: EGLSurface = EGL14.EGL_NO_SURFACE
-    private var program = 0
+    private var tintProgram = 0
+    private var horizontalBlurProgram = 0
+    private var verticalBlurProgram = 0
     private var sourceTexture = 0
     private var maskTexture = 0
+    private var horizontalTexture = 0
     private var outputTexture = 0
+    private var horizontalFramebuffer = 0
     private var framebuffer = 0
     private var closed = false
+    private val blurRadius = radiusPx?.roundToInt()?.coerceIn(1, 64)
 
     var renderedFrameCount: Int = 0
         private set
 
     init {
         require(width > 0 && height > 0)
-        require(Regex("#[0-9A-Fa-f]{6}").matches(colorHex))
-        require(intensity in 0.0..1.0)
+        when (effect) {
+            Effect.TINT -> {
+                require(colorHex != null && Regex("#[0-9A-Fa-f]{6}").matches(colorHex))
+                require(intensity != null && intensity in 0.0..1.0)
+                require(radiusPx == null)
+            }
+            Effect.BLUR -> {
+                require(colorHex == null && intensity == null)
+                require(radiusPx != null && radiusPx > 0.0)
+            }
+        }
         try {
             check(display != EGL14.EGL_NO_DISPLAY)
             val version = IntArray(2)
@@ -111,25 +128,38 @@ class AndroidPersistentTintRenderer private constructor(
             }
             check(surface != EGL14.EGL_NO_SURFACE)
             check(EGL14.eglMakeCurrent(display, surface, surface, context))
-            program = linkProgram(VERTEX_SHADER, TINT_SHADER)
             sourceTexture = createTexture()
             maskTexture = createTexture()
+            when (effect) {
+                Effect.TINT -> tintProgram = linkProgram(VERTEX_SHADER, TINT_SHADER)
+                Effect.BLUR -> {
+                    horizontalBlurProgram = linkProgram(VERTEX_SHADER, HORIZONTAL_BOX_BLUR_SHADER)
+                    verticalBlurProgram = linkProgram(
+                        VERTEX_SHADER,
+                        VERTICAL_BOX_BLUR_AND_MASK_SHADER
+                    )
+                    horizontalTexture = createTexture(allocateRgba = true)
+                    horizontalFramebuffer = createFramebuffer(horizontalTexture)
+                }
+            }
             if (encoderOutputSurface == null) {
                 outputTexture = createTexture(allocateRgba = true)
                 framebuffer = createFramebuffer(outputTexture)
             }
-            GLES20.glUseProgram(program)
-            val color = colorHex.removePrefix("#").toInt(16)
-            GLES20.glUniform3f(
-                GLES20.glGetUniformLocation(program, "uTint"),
-                (color ushr 16 and 0xff) / 255f,
-                (color ushr 8 and 0xff) / 255f,
-                (color and 0xff) / 255f
-            )
-            GLES20.glUniform1f(
-                GLES20.glGetUniformLocation(program, "uIntensity"),
-                intensity.toFloat()
-            )
+            if (effect == Effect.TINT) {
+                GLES20.glUseProgram(tintProgram)
+                val color = requireNotNull(colorHex).removePrefix("#").toInt(16)
+                GLES20.glUniform3f(
+                    GLES20.glGetUniformLocation(tintProgram, "uTint"),
+                    (color ushr 16 and 0xff) / 255f,
+                    (color ushr 8 and 0xff) / 255f,
+                    (color and 0xff) / 255f
+                )
+                GLES20.glUniform1f(
+                    GLES20.glGetUniformLocation(tintProgram, "uIntensity"),
+                    requireNotNull(intensity).toFloat()
+                )
+            }
         } catch (failure: Throwable) {
             close()
             throw failure
@@ -175,20 +205,66 @@ class AndroidPersistentTintRenderer private constructor(
             GLES20.GL_UNSIGNED_BYTE,
             mask
         )
-        if (encoderOutputSurface == null) {
-            GLES20.glBindFramebuffer(GLES20.GL_FRAMEBUFFER, framebuffer)
-            check(GLES20.glCheckFramebufferStatus(GLES20.GL_FRAMEBUFFER) ==
-                GLES20.GL_FRAMEBUFFER_COMPLETE)
-        } else {
-            GLES20.glBindFramebuffer(GLES20.GL_FRAMEBUFFER, 0)
+        when (effect) {
+            Effect.TINT -> drawTint()
+            Effect.BLUR -> drawBlur()
         }
-        GLES20.glViewport(0, 0, width, height)
-        GLES20.glUseProgram(program)
-        bindTexture("uSource", sourceTexture, 0)
-        bindTexture("uMask", maskTexture, 1)
-        drawQuad()
-        checkGl("persistent tint draw")
         renderedFrameCount += 1
+    }
+
+    private fun drawTint() {
+        bindOutputFramebuffer()
+        GLES20.glViewport(0, 0, width, height)
+        GLES20.glUseProgram(tintProgram)
+        bindTexture(tintProgram, "uSource", sourceTexture, 0)
+        bindTexture(tintProgram, "uMask", maskTexture, 1)
+        drawQuad(tintProgram, encoderCoordinates = encoderOutputSurface != null)
+        checkGl("persistent tint draw")
+    }
+
+    private fun drawBlur() {
+        GLES20.glViewport(0, 0, width, height)
+        GLES20.glBindFramebuffer(GLES20.GL_FRAMEBUFFER, horizontalFramebuffer)
+        checkFramebuffer()
+        GLES20.glUseProgram(horizontalBlurProgram)
+        bindTexture(horizontalBlurProgram, "uSource", sourceTexture, 0)
+        setBlurUniforms(horizontalBlurProgram)
+        drawQuad(horizontalBlurProgram, encoderCoordinates = false)
+        checkGl("persistent horizontal box blur")
+
+        bindOutputFramebuffer()
+        GLES20.glUseProgram(verticalBlurProgram)
+        bindTexture(verticalBlurProgram, "uSource", sourceTexture, 0)
+        bindTexture(verticalBlurProgram, "uHorizontal", horizontalTexture, 1)
+        bindTexture(verticalBlurProgram, "uMask", maskTexture, 2)
+        setBlurUniforms(verticalBlurProgram)
+        drawQuad(verticalBlurProgram, encoderCoordinates = encoderOutputSurface != null)
+        checkGl("persistent vertical box blur and mask blend")
+    }
+
+    private fun bindOutputFramebuffer() {
+        GLES20.glBindFramebuffer(
+            GLES20.GL_FRAMEBUFFER,
+            if (encoderOutputSurface == null) framebuffer else 0
+        )
+        if (encoderOutputSurface == null) checkFramebuffer()
+    }
+
+    private fun checkFramebuffer() {
+        check(GLES20.glCheckFramebufferStatus(GLES20.GL_FRAMEBUFFER) ==
+            GLES20.GL_FRAMEBUFFER_COMPLETE)
+    }
+
+    private fun setBlurUniforms(targetProgram: Int) {
+        GLES20.glUniform2f(
+            GLES20.glGetUniformLocation(targetProgram, "uTexelSize"),
+            1f / width,
+            1f / height
+        )
+        GLES20.glUniform1i(
+            GLES20.glGetUniformLocation(targetProgram, "uRadius"),
+            requireNotNull(blurRadius)
+        )
     }
 
     override fun close() {
@@ -198,9 +274,21 @@ class AndroidPersistentTintRenderer private constructor(
             surface != EGL14.EGL_NO_SURFACE
         ) {
             EGL14.eglMakeCurrent(display, surface, surface, context)
-            if (program != 0) GLES20.glDeleteProgram(program)
-            if (framebuffer != 0) GLES20.glDeleteFramebuffers(1, intArrayOf(framebuffer), 0)
-            val textures = intArrayOf(sourceTexture, maskTexture, outputTexture).filter { it != 0 }.toIntArray()
+            intArrayOf(tintProgram, horizontalBlurProgram, verticalBlurProgram)
+                .filter { it != 0 }
+                .forEach { GLES20.glDeleteProgram(it) }
+            val framebuffers = intArrayOf(horizontalFramebuffer, framebuffer)
+                .filter { it != 0 }
+                .toIntArray()
+            if (framebuffers.isNotEmpty()) {
+                GLES20.glDeleteFramebuffers(framebuffers.size, framebuffers, 0)
+            }
+            val textures = intArrayOf(
+                sourceTexture,
+                maskTexture,
+                horizontalTexture,
+                outputTexture
+            ).filter { it != 0 }.toIntArray()
             if (textures.isNotEmpty()) GLES20.glDeleteTextures(textures.size, textures, 0)
         }
         if (display != EGL14.EGL_NO_DISPLAY) {
@@ -249,15 +337,15 @@ class AndroidPersistentTintRenderer private constructor(
         return value[0]
     }
 
-    private fun bindTexture(name: String, texture: Int, unit: Int) {
+    private fun bindTexture(targetProgram: Int, name: String, texture: Int, unit: Int) {
         GLES20.glActiveTexture(GLES20.GL_TEXTURE0 + unit)
         GLES20.glBindTexture(GLES20.GL_TEXTURE_2D, texture)
-        GLES20.glUniform1i(GLES20.glGetUniformLocation(program, name), unit)
+        GLES20.glUniform1i(GLES20.glGetUniformLocation(targetProgram, name), unit)
     }
 
-    private fun drawQuad() {
-        val bottomV = if (encoderOutputSurface == null) 0f else 1f
-        val topV = if (encoderOutputSurface == null) 1f else 0f
+    private fun drawQuad(targetProgram: Int, encoderCoordinates: Boolean) {
+        val bottomV = if (encoderCoordinates) 1f else 0f
+        val topV = if (encoderCoordinates) 0f else 1f
         val vertices = ByteBuffer.allocateDirect(16 * Float.SIZE_BYTES)
             .order(ByteOrder.nativeOrder())
             .asFloatBuffer()
@@ -268,11 +356,11 @@ class AndroidPersistentTintRenderer private constructor(
                 1f, 1f, 1f, topV
             )).also { it.position(0) }
         vertices.position(0)
-        val position = GLES20.glGetAttribLocation(program, "aPosition")
+        val position = GLES20.glGetAttribLocation(targetProgram, "aPosition")
         GLES20.glEnableVertexAttribArray(position)
         GLES20.glVertexAttribPointer(position, 2, GLES20.GL_FLOAT, false, 16, vertices)
         vertices.position(2)
-        val texCoord = GLES20.glGetAttribLocation(program, "aTexCoord")
+        val texCoord = GLES20.glGetAttribLocation(targetProgram, "aTexCoord")
         GLES20.glEnableVertexAttribArray(texCoord)
         GLES20.glVertexAttribPointer(texCoord, 2, GLES20.GL_FLOAT, false, 16, vertices)
         GLES20.glDrawArrays(GLES20.GL_TRIANGLE_STRIP, 0, 4)
@@ -318,6 +406,8 @@ class AndroidPersistentTintRenderer private constructor(
         check(error == GLES20.GL_NO_ERROR) { "GLES error $error at $stage" }
     }
 
+    private enum class Effect { TINT, BLUR }
+
     companion object {
         private const val EGL_RECORDABLE_ANDROID = 0x3142
 
@@ -330,8 +420,39 @@ class AndroidPersistentTintRenderer private constructor(
         ): AndroidPersistentTintRenderer = AndroidPersistentTintRenderer(
             width,
             height,
+            Effect.TINT,
             colorHex,
             intensity,
+            null,
+            outputSurface
+        )
+
+        fun forBlur(
+            width: Int,
+            height: Int,
+            radiusPx: Double
+        ): AndroidPersistentTintRenderer = AndroidPersistentTintRenderer(
+            width,
+            height,
+            Effect.BLUR,
+            null,
+            null,
+            radiusPx,
+            null
+        )
+
+        fun forEncoderBlur(
+            width: Int,
+            height: Int,
+            radiusPx: Double,
+            outputSurface: Surface
+        ): AndroidPersistentTintRenderer = AndroidPersistentTintRenderer(
+            width,
+            height,
+            Effect.BLUR,
+            null,
+            null,
+            radiusPx,
             outputSurface
         )
 
@@ -355,6 +476,62 @@ class AndroidPersistentTintRenderer private constructor(
                 vec4 source = texture2D(uSource, vTexCoord);
                 float amount = clamp(texture2D(uMask, vTexCoord).r * uIntensity, 0.0, 1.0);
                 gl_FragColor = vec4(mix(source.rgb, uTint, amount), source.a);
+            }
+        """
+
+        const val HORIZONTAL_BOX_BLUR_SHADER = """
+            precision highp float;
+            uniform sampler2D uSource;
+            uniform vec2 uTexelSize;
+            uniform int uRadius;
+            varying vec2 vTexCoord;
+            void main() {
+                vec3 sum = vec3(0.0);
+                float count = 0.0;
+                for (int offset = -64; offset <= 64; ++offset) {
+                    if (offset >= -uRadius && offset <= uRadius) {
+                        vec2 coordinate = vTexCoord + vec2(float(offset) * uTexelSize.x, 0.0);
+                        if (coordinate.x >= 0.0 && coordinate.x <= 1.0) {
+                            vec3 sampleValue = texture2D(uSource, coordinate).rgb;
+                            sum += floor(sampleValue * 255.0 + 0.5);
+                            count += 1.0;
+                        }
+                    }
+                }
+                vec4 source = texture2D(uSource, vTexCoord);
+                gl_FragColor = vec4(floor(sum / count) / 255.0, source.a);
+            }
+        """
+
+        const val VERTICAL_BOX_BLUR_AND_MASK_SHADER = """
+            precision highp float;
+            uniform sampler2D uSource;
+            uniform sampler2D uHorizontal;
+            uniform sampler2D uMask;
+            uniform vec2 uTexelSize;
+            uniform int uRadius;
+            varying vec2 vTexCoord;
+            void main() {
+                vec3 sum = vec3(0.0);
+                float count = 0.0;
+                for (int offset = -64; offset <= 64; ++offset) {
+                    if (offset >= -uRadius && offset <= uRadius) {
+                        vec2 coordinate = vTexCoord + vec2(0.0, float(offset) * uTexelSize.y);
+                        if (coordinate.y >= 0.0 && coordinate.y <= 1.0) {
+                            vec3 sampleValue = texture2D(uHorizontal, coordinate).rgb;
+                            sum += floor(sampleValue * 255.0 + 0.5);
+                            count += 1.0;
+                        }
+                    }
+                }
+                vec4 sourceSample = texture2D(uSource, vTexCoord);
+                vec3 source = floor(sourceSample.rgb * 255.0 + 0.5);
+                vec3 blurred = floor(sum / count);
+                float mask = floor(texture2D(uMask, vTexCoord).r * 255.0 + 0.5);
+                vec3 outputValue = floor(
+                    (source * (255.0 - mask) + blurred * mask) / 255.0 + 0.5
+                );
+                gl_FragColor = vec4(outputValue / 255.0, sourceSample.a);
             }
         """
     }

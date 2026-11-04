@@ -20,7 +20,7 @@ data class AndroidMaskedVideoEncodeResult(
     val wallElapsedMs: Long
 )
 
-/** Persistent GLES tint -> MediaCodec AVC, followed by bitstream-level audio sample copy. */
+/** Persistent masked GLES effect -> MediaCodec AVC, followed by bitstream-level audio copy. */
 class AndroidMaskedVideoEncoder {
     fun encodeTint(
         sourceVideo: File,
@@ -30,6 +30,46 @@ class AndroidMaskedVideoEncoder {
         colorHex: String,
         intensity: Double,
         cancelled: AtomicBoolean
+    ): AndroidMaskedVideoEncodeResult = encode(
+        sourceVideo,
+        timeline,
+        maskFiles,
+        output,
+        cancelled
+    ) { width, height, surface ->
+        AndroidPersistentTintRenderer.forEncoder(
+            width,
+            height,
+            colorHex,
+            intensity,
+            surface
+        )
+    }
+
+    fun encodeBlur(
+        sourceVideo: File,
+        timeline: AndroidDecodedVideoTimeline,
+        maskFiles: List<File>,
+        output: File,
+        radiusPx: Double,
+        cancelled: AtomicBoolean
+    ): AndroidMaskedVideoEncodeResult = encode(
+        sourceVideo,
+        timeline,
+        maskFiles,
+        output,
+        cancelled
+    ) { width, height, surface ->
+        AndroidPersistentTintRenderer.forEncoderBlur(width, height, radiusPx, surface)
+    }
+
+    private fun encode(
+        sourceVideo: File,
+        timeline: AndroidDecodedVideoTimeline,
+        maskFiles: List<File>,
+        output: File,
+        cancelled: AtomicBoolean,
+        rendererFactory: (Int, Int, android.view.Surface) -> AndroidPersistentTintRenderer
     ): AndroidMaskedVideoEncodeResult {
         require(sourceVideo.isFile)
         require(maskFiles.size == timeline.frameCount && maskFiles.all(File::isFile))
@@ -106,13 +146,7 @@ class AndroidMaskedVideoEncoder {
             }
 
             AndroidVideoFrameBatchReader(sourceVideo, timeline).use { reader ->
-                AndroidPersistentTintRenderer.forEncoder(
-                    width,
-                    height,
-                    colorHex,
-                    intensity,
-                    requireNotNull(inputSurface)
-                ).use { renderer ->
+                rendererFactory(width, height, requireNotNull(inputSurface)).use { renderer ->
                     timeline.frames.forEach { frame ->
                         if (cancelled.get()) throw InterruptedException("masked video encode cancelled")
                         val bitmap = reader.read(frame.frameIndex, 1).single().bitmap

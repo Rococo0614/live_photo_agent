@@ -96,68 +96,11 @@ private object GlesLocalMaskRenderer {
         }
     """
 
-    /*
-     * The CPU oracle truncates after the horizontal pass. Recovering every sampled UNORM channel
-     * as an integer and explicitly flooring the average preserves that behavior before the result
-     * is stored in the RGBA8 intermediate texture.
-     */
-    private const val HORIZONTAL_BOX_BLUR_SHADER = """
-        precision highp float;
-        uniform sampler2D uSource;
-        uniform vec2 uTexelSize;
-        uniform int uRadius;
-        varying vec2 vTexCoord;
-        void main() {
-            vec3 sum = vec3(0.0);
-            float count = 0.0;
-            for (int offset = -64; offset <= 64; ++offset) {
-                if (offset >= -uRadius && offset <= uRadius) {
-                    vec2 coordinate = vTexCoord + vec2(float(offset) * uTexelSize.x, 0.0);
-                    if (coordinate.x >= 0.0 && coordinate.x <= 1.0) {
-                        vec3 sampleValue = texture2D(uSource, coordinate).rgb;
-                        sum += floor(sampleValue * 255.0 + 0.5);
-                        count += 1.0;
-                    }
-                }
-            }
-            vec4 source = texture2D(uSource, vTexCoord);
-            gl_FragColor = vec4(floor(sum / count) / 255.0, source.a);
-        }
-    """
-
-    /*
-     * The vertical pass also performs the final mask blend. Its integer-domain formula is the
-     * same as round(source * (1 - mask/255) + blurred * mask/255) in the CPU oracle.
-     */
-    private const val VERTICAL_BOX_BLUR_AND_MASK_SHADER = """
-        precision highp float;
-        uniform sampler2D uSource;
-        uniform sampler2D uHorizontal;
-        uniform sampler2D uMask;
-        uniform vec2 uTexelSize;
-        uniform int uRadius;
-        varying vec2 vTexCoord;
-        void main() {
-            vec3 sum = vec3(0.0);
-            float count = 0.0;
-            for (int offset = -64; offset <= 64; ++offset) {
-                if (offset >= -uRadius && offset <= uRadius) {
-                    vec2 coordinate = vTexCoord + vec2(0.0, float(offset) * uTexelSize.y);
-                    if (coordinate.y >= 0.0 && coordinate.y <= 1.0) {
-                        vec3 sampleValue = texture2D(uHorizontal, coordinate).rgb;
-                        sum += floor(sampleValue * 255.0 + 0.5);
-                        count += 1.0;
-                    }
-                }
-            }
-            vec4 sourceSample = texture2D(uSource, vTexCoord);
-            vec3 source = floor(sourceSample.rgb * 255.0 + 0.5);
-            vec3 blurred = floor(sum / count);
-            float mask = floor(texture2D(uMask, vTexCoord).r * 255.0 + 0.5);
-            vec3 outputValue = floor((source * (255.0 - mask) + blurred * mask) / 255.0 + 0.5);
-            gl_FragColor = vec4(outputValue / 255.0, sourceSample.a);
-        }
-    """
+    // Persistent single-frame and full-video blur deliberately share the exact shader sources.
+    private const val HORIZONTAL_BOX_BLUR_SHADER =
+        AndroidPersistentTintRenderer.HORIZONTAL_BOX_BLUR_SHADER
+    private const val VERTICAL_BOX_BLUR_AND_MASK_SHADER =
+        AndroidPersistentTintRenderer.VERTICAL_BOX_BLUR_AND_MASK_SHADER
 
     fun renderColorTint(
         source: Bitmap,
