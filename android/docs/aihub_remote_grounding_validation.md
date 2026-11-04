@@ -541,15 +541,15 @@ EdgeTAM grounding探针首选float模型验证语义，随后才比较W8A8；这
 
 1. 持久Android QNN JNI/context生命周期已通过17帧固定图银行、`N=5`、`N=53`、graph abort与取消后
    重载；继续消除JNI与Kotlin之间的大tensor文件I/O，并保留子进程回退。
-2. 在更多不同`N`、VFR和遮挡素材重复动态全序列，并增加进程重启soak和总host/DSP峰值内存观测；
-   持久JNI `N=181`已通过，子进程约684秒只保留为旧基线。
-3. 增加进程终止、Activity重建和Android bridge级context重载；底层QNN abort/重载已通过。
+2. 持久JNI动态全序列现已覆盖`N=5`、真VFR `N=7`、`N=53`和`N=181`；继续增加遮挡/重入fixture
+   与总host/DSP峰值观测，子进程约684秒只保留为旧基线。
+3. 待确认/已确认预览的Activity旋转、触屏撤销、进程终止、会话恢复和孤儿清理已通过；Android
+   bridge级context重载与底层QNN abort/重载也已通过。
 4. 把10%时序覆盖阈值扩展到更多尺度变化fixture；不充分时返回`NeedObservation`，不能静默接受。
 5. 联合评审OWLv2 433MiB与EdgeTAM 234MiB context包体；当前单独DLC compose的weight sharing不可用。
 6. 按实际PTS的持久GLES调色、MediaCodec编码、AAC sample保留与Live Photo repack已在`N=5`、
-   `N=53`和`N=181`素材通过；两阶段整数box blur也已在`N=5`通过无损shader差分、编码和完整Agent
-   review闭环。继续覆盖更多不同`N`/VFR blur输入及触屏/Activity生命周期后才考虑写回；2.50/2.51
-   继续禁用。
+   `N=53`和`N=181`素材通过；两阶段整数box blur已在`N=5`、真VFR `N=7`、`N=53`与`N=181`
+   通过完整Agent review闭环。真实发布仍需第二次用户授权；2.50/2.51继续禁用。
 
 本轮汇总证据：
 

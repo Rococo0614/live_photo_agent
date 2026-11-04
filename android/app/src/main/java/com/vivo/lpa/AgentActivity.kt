@@ -4,6 +4,7 @@ import android.app.Activity
 import android.app.AlertDialog
 import android.content.ContentUris
 import android.content.Intent
+import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.graphics.Color
 import android.graphics.drawable.GradientDrawable
@@ -88,6 +89,15 @@ class AgentActivity : Activity() {
     private val lastToolResults = mutableListOf<JSONObject>()
     private var taskStatus: String = "idle"
     private var activeLocalPreview: AndroidLocalPreviewInteraction? = null
+    private var activePublishedCopy: AndroidPublishedLocalPreview? = null
+    private var localPreviewRetainedForConfiguration = false
+    private var localPreviewWillBeRestored = false
+
+    private data class RetainedLocalPreview(
+        val sessionId: String,
+        val interaction: AndroidLocalPreviewInteraction,
+        val publishedCopy: AndroidPublishedLocalPreview?
+    )
 
     /**
      * Transient "thinking" bubble: a spinner plus a fixed-height box that is rewritten in place
@@ -115,9 +125,22 @@ class AgentActivity : Activity() {
         cleanupIntermediateVideos()
         scanSeedMedia()
         startLibrarySync()
+        val retainedPreview = lastNonConfigurationInstance as? RetainedLocalPreview
+        localPreviewWillBeRestored = retainedPreview != null
         val requestedSession = intent.getStringExtra("session_id")
         val sessions = database.sessions()
+        val debugDemoRequested = retainedPreview == null && BuildConfig.DEBUG &&
+            BuildConfig.LOCAL_TRACKED_PREVIEW &&
+            !intent.getStringExtra("demo_media_uri").isNullOrBlank() &&
+            !intent.getStringExtra("demo_query").isNullOrBlank()
         when {
+            retainedPreview != null && sessions.any { it.id == retainedPreview.sessionId } -> {
+                openSession(database, retainedPreview.sessionId)
+            }
+            debugDemoRequested -> {
+                // A demo must not inherit prior chat turns that can change planner semantics.
+                openSession(database, database.createSession())
+            }
             requestedSession != null && sessions.any { it.id == requestedSession } -> {
                 openSession(database, requestedSession)
             }
@@ -126,6 +149,41 @@ class AgentActivity : Activity() {
             }
             else -> showInitialSessionChoice(database, sessions.first().id)
         }
+        if (debugDemoRequested) applyDebugDemoIntent()
+        retainedPreview?.let { retained ->
+            runCatching {
+                showLocalPreview(retained.interaction, retained.publishedCopy)
+            }.onFailure {
+                releaseLocalPreviewInteraction(retained.interaction)
+                append("旋转后临时预览已安全清理：${it.message}")
+            }
+        }
+        localPreviewWillBeRestored = false
+    }
+
+    private fun applyDebugDemoIntent() {
+        check(BuildConfig.DEBUG && BuildConfig.LOCAL_TRACKED_PREVIEW)
+        val uri = Uri.parse(requireNotNull(intent.getStringExtra("demo_media_uri")))
+        val allowedAuthorities = setOf(
+            MediaStore.AUTHORITY,
+            packageName + DEBUG_FILE_AUTHORITY_SUFFIX
+        )
+        require(uri.scheme == "content" && uri.authority in allowedAuthorities) {
+            "demo_media_uri must be a permitted content URI"
+        }
+        val query = requireNotNull(intent.getStringExtra("demo_query")).trim()
+        require(query.isNotEmpty())
+        selectedUris.clear()
+        selectedUris += uri
+        preparedAssets = emptyList()
+        selectedAssetIds.clear()
+        input.setText(query)
+        mediaSummary.visibility = View.VISIBLE
+        mediaSummary.text = "演示素材：$uri"
+        renderUriPreviews(selectedUris)
+        taskStatus = "demo_ready"
+        persistSessionState()
+        append("演示素材与请求已载入，请点击发送运行真实闭环")
     }
 
     private fun buildUi() {
@@ -852,7 +910,8 @@ preparedAssets = prepared
                         .put("executed_count", runtimeState.executedCount)
                         .put("replan_count", runtimeState.replanCount)
                     uiFor(generation) {
-                        taskStatus = runtimeState.status.name.lowercase()
+                        taskStatus = activeLocalPreviewTaskStatus()
+                            ?: runtimeState.status.name.lowercase()
                         persistSessionState(message)
                         logAudit("TERMINAL", payload)
                     }
@@ -961,7 +1020,8 @@ preparedAssets = prepared
                     lastResult = uri
                     lastResultMessage = message
                     taskStatus = when {
-                        taskStatus in setOf("waiting_user", "waiting_observation") -> taskStatus
+                        LocalPreviewActivityLifecyclePolicy
+                            .preserveOnRunnerCompletion(taskStatus) -> taskStatus
                         uri == null && message == "用户已取消" -> "cancelled"
                         uri == null -> "completed_without_output"
                         else -> "completed"
@@ -993,13 +1053,25 @@ preparedAssets = prepared
         worker?.interrupt()
     }
 
-    private fun showLocalPreview(interaction: AndroidLocalPreviewInteraction) {
+    private fun showLocalPreview(
+        interaction: AndroidLocalPreviewInteraction,
+        restoredPublishedCopy: AndroidPublishedLocalPreview? = null
+    ) {
         clearActiveLocalPreview()
         val artifact = runCatching { interaction.snapshot() }.getOrElse { error ->
             append("临时预览不可用：${error.message}")
             return
         }
+        require(artifact.lifecycle.state in setOf(
+            LocalPreviewReviewState.PENDING_REVIEW,
+            LocalPreviewReviewState.ACCEPTED_FOR_REVIEW
+        )) { "terminal local preview cannot be displayed" }
         activeLocalPreview = interaction
+        activePublishedCopy = restoredPublishedCopy
+        taskStatus = requireNotNull(
+            LocalPreviewActivityLifecyclePolicy.activeTaskStatus(artifact.lifecycle.state)
+        )
+        persistSessionState()
         localPreviewPanel.removeAllViews()
         localPreviewPanel.visibility = View.VISIBLE
         val status = TextView(this).apply {
@@ -1064,8 +1136,6 @@ preparedAssets = prepared
         localPreviewPanel.addView(publishControls, LinearLayout.LayoutParams(-1, -2).apply {
             topMargin = dp(6)
         })
-        var publishedCopy: AndroidPublishedLocalPreview? = null
-
         confirm.setOnClickListener {
             runCatching { interaction.confirm() }.onSuccess { accepted ->
                 status.text = "已确认临时预览 · 写回仍未授权，可随时撤销"
@@ -1076,11 +1146,14 @@ preparedAssets = prepared
                     publishControls.visibility = View.VISIBLE
                     publishCopy.visibility = View.VISIBLE
                 }
+                taskStatus = LocalPreviewActivityLifecyclePolicy.ACCEPTED_REVIEW
+                persistSessionState("已确认临时预览，尚未授权发布")
                 logLocalPreviewReview(accepted)
             }.onFailure { append("确认预览失败：${it.message}") }
         }
         cancelPreview.setOnClickListener {
-            preview.setImageBitmap(artifact.sourceBitmap)
+            val terminalSource = copyForTerminalDisplay(artifact.sourceBitmap)
+            preview.setImageDrawable(null)
             runCatching {
                 val cancelledPreview = interaction.cancel()
                 logLocalPreviewReview(cancelledPreview)
@@ -1090,14 +1163,19 @@ preparedAssets = prepared
                 append("取消预览失败：${it.message}")
             }
             activeLocalPreview = null
+            terminalSource?.let(preview::setImageBitmap)
             status.text = "已取消临时预览 · 源媒体未改变"
             toggle.visibility = View.GONE
             confirm.visibility = View.GONE
             cancelPreview.visibility = View.GONE
             publishControls.visibility = View.GONE
+            activePublishedCopy = null
+            taskStatus = "cancelled_local_preview"
+            persistSessionState("已取消临时预览，源媒体未改变")
         }
         undo.setOnClickListener {
-            preview.setImageBitmap(artifact.sourceBitmap)
+            val terminalSource = copyForTerminalDisplay(artifact.sourceBitmap)
+            preview.setImageDrawable(null)
             runCatching {
                 val undone = interaction.undo()
                 logLocalPreviewReview(undone)
@@ -1107,14 +1185,17 @@ preparedAssets = prepared
                 append("撤销预览失败：${it.message}")
             }
             activeLocalPreview = null
+            terminalSource?.let(preview::setImageBitmap)
             status.text = "已撤销临时预览 · 源媒体未改变"
-            if (publishedCopy != null) {
+            if (activePublishedCopy != null) {
                 status.text = "已撤销临时预览 · 已发布副本仍保留"
             }
             toggle.visibility = View.GONE
             undo.visibility = View.GONE
             publishCopy.visibility = View.GONE
-            publishControls.visibility = if (publishedCopy == null) View.GONE else View.VISIBLE
+            publishControls.visibility = if (activePublishedCopy == null) View.GONE else View.VISIBLE
+            taskStatus = "local_preview_undone"
+            persistSessionState(status.text.toString())
         }
         publishCopy.setOnClickListener {
             val accepted = runCatching { interaction.snapshot() }.getOrElse {
@@ -1138,7 +1219,7 @@ preparedAssets = prepared
                             AndroidConfirmedLivePhotoPublisher(this).publish(accepted)
                         }.onSuccess { result ->
                             uiFor(generation) {
-                                publishedCopy = result
+                                activePublishedCopy = result
                                 lastResult = result.uri
                                 taskStatus = "published_local_preview_copy"
                                 persistSessionState("已发布动态照片副本")
@@ -1168,7 +1249,7 @@ preparedAssets = prepared
                 .show()
         }
         deletePublishedCopy.setOnClickListener {
-            val target = publishedCopy ?: return@setOnClickListener
+            val target = activePublishedCopy ?: return@setOnClickListener
             AlertDialog.Builder(this)
                 .setTitle("删除已发布副本")
                 .setMessage("只删除本次新建的相册副本，原片不会改变。是否继续？")
@@ -1183,14 +1264,14 @@ preparedAssets = prepared
                                 .deletePublishedCopy(target))
                         }.onSuccess {
                             uiFor(generation) {
-                                publishedCopy = null
+                                activePublishedCopy = null
                                 if (lastResult == target.uri) lastResult = null
                                 val stillAccepted = runCatching {
                                     interaction.snapshot().lifecycle.state ==
                                         LocalPreviewReviewState.ACCEPTED_FOR_REVIEW
                                 }.getOrDefault(false)
                                 taskStatus = if (stillAccepted) {
-                                    "accepted_local_preview"
+                                    LocalPreviewActivityLifecyclePolicy.ACCEPTED_REVIEW
                                 } else {
                                     "local_preview_undone"
                                 }
@@ -1219,6 +1300,21 @@ preparedAssets = prepared
                 }
                 .show()
         }
+        if (artifact.lifecycle.state == LocalPreviewReviewState.ACCEPTED_FOR_REVIEW) {
+            status.text = "已确认临时预览 · 写回仍未授权，可随时撤销"
+            confirm.visibility = View.GONE
+            cancelPreview.visibility = View.GONE
+            undo.visibility = View.VISIBLE
+            if (artifact.packedLivePhotoFile != null) {
+                publishControls.visibility = View.VISIBLE
+                publishCopy.visibility = if (activePublishedCopy == null) View.VISIBLE else View.GONE
+                deletePublishedCopy.visibility =
+                    if (activePublishedCopy == null) View.GONE else View.VISIBLE
+            }
+            activePublishedCopy?.let {
+                status.text = "已发布相册副本 · 原片未覆盖，可删除副本或撤销临时预览"
+            }
+        }
         logAudit("LOCAL_PREVIEW_READY", JSONObject()
             .put("artifact_id", artifact.artifactId)
             .put("effect_kind", artifact.effectKind)
@@ -1242,20 +1338,26 @@ preparedAssets = prepared
             .put("source_media_modified", false))
     }
 
+    private fun copyForTerminalDisplay(source: Bitmap): Bitmap? = runCatching {
+        source.copy(Bitmap.Config.ARGB_8888, false)
+    }.getOrNull()
+
+    private fun activeLocalPreviewTaskStatus(): String? = activeLocalPreview?.let { interaction ->
+        LocalPreviewActivityLifecyclePolicy.activeTaskStatus(
+            runCatching { interaction.snapshot().lifecycle.state }.getOrNull()
+        )
+    }
+
     private fun clearActiveLocalPreview() {
-        val interaction = activeLocalPreview ?: run {
-            if (::localPreviewPanel.isInitialized) {
-                localPreviewPanel.removeAllViews()
-                localPreviewPanel.visibility = View.GONE
-            }
-            return
-        }
-        releaseLocalPreviewInteraction(interaction)
-        activeLocalPreview = null
+        val interaction = activeLocalPreview
         if (::localPreviewPanel.isInitialized) {
+            // Detach every drawable before the store recycles its owned bitmaps.
             localPreviewPanel.removeAllViews()
             localPreviewPanel.visibility = View.GONE
         }
+        activeLocalPreview = null
+        activePublishedCopy = null
+        interaction?.let(::releaseLocalPreviewInteraction)
     }
 
     private fun releaseLocalPreviewInteraction(interaction: AndroidLocalPreviewInteraction) {
@@ -1642,6 +1744,17 @@ preparedAssets = prepared
             }
         }
         taskStatus = saved.optString("task_status", "idle")
+        if (LocalPreviewActivityLifecyclePolicy.expiresAfterProcessRestart(
+                taskStatus,
+                localPreviewWillBeRestored
+            )
+        ) {
+            taskStatus = LocalPreviewActivityLifecyclePolicy.EXPIRED_AFTER_RESTART
+            val message = "上次临时预览随进程结束已安全清理；未写回、未发布，可重新发送指令生成。"
+            append(message)
+            saved.put("task_status", taskStatus).put("last_error", message)
+            runCatching { database.saveSessionState(sessionId, saved) }
+        }
         saved.optJSONObject("runtime_checkpoint")?.let { checkpoint ->
             if (checkpoint.optString("status") == "running") {
                 // The first runtime-v2 release resumes only at a user decision, never by silently
@@ -2006,8 +2119,28 @@ preparedAssets = prepared
         super.onStop()
     }
 
+    override fun onRetainNonConfigurationInstance(): Any? {
+        val interaction = activeLocalPreview ?: return null
+        val state = runCatching { interaction.snapshot().lifecycle.state }.getOrNull()
+        if (state !in setOf(
+                LocalPreviewReviewState.PENDING_REVIEW,
+                LocalPreviewReviewState.ACCEPTED_FOR_REVIEW
+            )
+        ) {
+            return null
+        }
+        localPreviewRetainedForConfiguration = true
+        return RetainedLocalPreview(sessionId, interaction, activePublishedCopy)
+    }
+
     override fun onDestroy() {
-        clearActiveLocalPreview()
+        if (isChangingConfigurations && localPreviewRetainedForConfiguration) {
+            if (::localPreviewPanel.isInitialized) localPreviewPanel.removeAllViews()
+            activeLocalPreview = null
+            activePublishedCopy = null
+        } else {
+            clearActiveLocalPreview()
+        }
         if (worker != null) {
             cancelled.set(true)
             worker?.interrupt()
@@ -2016,5 +2149,9 @@ preparedAssets = prepared
         }
         persistBeforeLeaving()
         super.onDestroy()
+    }
+
+    companion object {
+        private const val DEBUG_FILE_AUTHORITY_SUFFIX = ".debugfiles"
     }
 }

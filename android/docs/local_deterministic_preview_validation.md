@@ -181,14 +181,15 @@ SHA-256 438a3d13bf0de46c9730fee89199ac0a104eefdd1cdade9fcbbd917120fc3dd4
                       SHA-256 4691654241a483d9c249f5300870daa124a96effd4cd0d0d0079147f9be6cec0
 ```
 
-当前debug/release单测均为132/132，`lintDebug`、`lintRelease`及debug/release assemble通过。默认
-debug/release APK都不包含`libqnn_net_run.so`；只有显式实验构建包含：
+当前debug/release单测均为135/135，`lintDebug`、`lintRelease`及debug/release assemble通过。默认
+debug/release APK都不包含`libqnn_net_run.so`；默认debug也不含演示Provider。只有显式实验Debug
+构建加入只读Provider与实验native：
 
 ```text
-default debug APK        47f17a8c274b9a84bfff0285159d2c6dcf0884d6f01b5d2586bc93f341acf752
-default release APK      f9e097cd39bb72a2bc20599ac7aca9c9280135aa8d346e9f745b9a498d0c5eeb
-full-timeline fallback   b3c1db41758b233ca021fe57adfaa6f8fbeb3b30be4a25afe64821a651e8ca7f
-persistent-QNN debug APK 60a92c165496842b4e39d2646c14007a5592755ccb07a2ff0df7e653380c11a2
+default debug APK        06a97395080816ec9431b019cb7b41512055c65ea6a6b9b9cd03473675cb6034
+default release APK      54fee37bad903003ea0f3fb8dd42ab3ca443d1b40f1bd523a0921926f52f7baf
+full-timeline fallback   e7cee0fea66f1fe9dfce12aa77b203ecb437ba2a585e2e1b7866eec48644ac6b
+persistent-QNN debug APK 0ed95cd057f112e7528e8409037cfd6d45413546ca44a8894c25c827376b669a
 ```
 
 所有自定义Gradle属性已注册为task inputs；同一worktree按“clean默认→实验→默认”构建，前后两个默认
@@ -484,6 +485,50 @@ context/双program处理全部帧，mask外变化0，mask内变化277,302像素�
     SHA-256 e8e8732be2f074fd306b8f8e48f47497c82e1a96a253f8bb3485ab4d7cac61b5
 ```
 
+随后把相同自然语言blur闭环扩展到`N=53`、真正VFR的`N=7`以及长时间线`N=181`。VFR输入的实际
+PTS为`0/40000/160000/240000/440000/520000/680000µs`，输出逐项相同，证明帧数与时间线都来自
+MediaCodec EOS而不是duration×fps。`N=181`完成181/181双向mask、blur编码与Live Photo repack；
+181个video packet PTS完全保持，281个AAC packet时间线及payload完全一致。三者都到达
+`publish_ready`后撤销，源SHA不变且未发布：
+
+```text
+  persistent-blur-53-agent/evidence.json
+    SHA-256 9b00547dcd0da59e403b47e6cd45ea6b40337ce04eb941b5ad39d23f39407fbc
+  persistent-blur-vfr-7/evidence.json
+    SHA-256 cc02d79950126554a8106a00fcbe5f5fcead64a51cbfdc4c5b930f2cd3c1a4fa
+  persistent-blur-vfr-7/pts.json
+    SHA-256 2b9175b0d0cb9f94138542e5f60638d345d85302a90ba039208412924e267f5a
+  persistent-blur-181-agent/evidence.json
+    SHA-256 a173b6dfc4f53399579d3ca7dc8e36e90f684e0171a61338adce747a9599c379
+  persistent-blur-181-agent/packet-validation.json
+    SHA-256 0a02d29f5ccf89422270065aa78db80fb8728e06cbf50eccb83a71a44c0e9899
+```
+
+真实Activity触屏Gate也已通过。待确认与已确认预览分别跨越一次`portrait→landscape→portrait`，
+同一PID内保留process-local interaction；确认后仍显示独立“发布副本”门禁。撤销前先将ImageView与
+Store拥有的Bitmap解绑定，修复了自动化发现的recycled-bitmap崩溃；撤销后进程存活、临时根为0。
+另一次测试在`waiting_local_preview_review`时强杀进程：重启同一会话后1,606,752B临时根被清为0，
+状态变为`local_preview_expired_after_restart`并明确显示“未写回、未发布”；源SHA不变，MediaStore
+Live Photo查询为151→151：
+
+```text
+  activity-rotation-vfr-blur/evidence.json
+    SHA-256 af68edafe0beb71cd62fdd56438d34d5a0bb8b62ed014170edb415b095deff80
+  ui-process-restart-pending/evidence.json
+    SHA-256 94baffc07c061ea7aff559e7a837effe15592bb66dc997af35351b4575109967
+```
+
+可直接展示的35秒UI精剪、8秒动态局部对比、四阶段看板和未发布私有Live Photo位于：
+
+```text
+  demo-success-vfr-blur/ui-demo-highlight.mp4
+    SHA-256 44e3badf7fff4848f05137c2a8c6f58d367e23637d581054d0217f64ab7688bc
+  demo-success-vfr-blur/before-after-blur-zoom.mp4
+    SHA-256 12fe8a418ff802e47ee13f8fbd5d538dae6729d465867ab6060a3c8398212bda
+  demo-success-vfr-blur/success-board.png
+    SHA-256 64426ec92f32af0cb30e3675579906be22c949bb93802590badd9604487b116a
+```
+
 ## 5. 逐帧跟踪调色显色证据
 
 在已经通过vivo QAIRT 2.45 Gate的17帧固定图跟踪链上，使用每帧`device-mask.png`对中间面板目标猫
@@ -586,13 +631,13 @@ alpha变化或RGB误差大于1都会返回FAIL。
 本结果关闭“单帧renderer数值等价”“真实语言到真实关键帧mask”“动态N双向时序QNN”和“完整track
 certificate到临时区域工具”Gate；以下仍阻止mutation：
 
-1. App-UID QAIRT 2.45持久JNI已在实际解码`N=5`、`N=53`和现有长序列`N=181`完成全时间线传播，
-   子进程仍是回退；更多不同`N`/VFR/遮挡输入及重复soak仍需完成，因此路径继续由第三层实验开关保护；
+1. App-UID QAIRT 2.45持久JNI已在实际解码`N=5`、VFR `N=7`、`N=53`和长序列`N=181`完成全时间线
+   传播，子进程仍是回退；遮挡/重入等更多困难素材仍属于后续硬化，因此路径继续由第三层实验开关保护；
 2. Android持久GLES→MediaCodec→AAC sample copy→Live Photo repack的`color_tint`已在`N=5`、
-   `N=53`和`N=181`通过，`blur`已在`N=5`通过无损shader、编码和完整Agent闭环；仍需把blur扩展到
-   不同`N`/VFR素材，QNN执行中取消已通过；
-3. 完整动态artifact的确认→publish-ready→撤销→清理及进程死亡后的孤儿清理已在headless真机通过，
-   显式二次发布/删除入口已接入UI；仍需触屏自动化、实际二次发布授权、Activity旋转与会话恢复Gate；
+   `N=53`和`N=181`通过；`blur`已在`N=5`、VFR `N=7`、`N=53`和`N=181`通过完整Agent闭环，
+   QNN执行中取消也已通过；
+3. 完整动态artifact的确认→publish-ready→撤销→清理、Activity旋转、UI触屏和进程/会话恢复Gate均已
+   通过。实际新副本发布/删除仍必须等待用户第二次明确授权，本轮未代替用户执行；
 4. 持久QNN tracking五轮soak与释放已通过；完整pipeline的Qwen FastRPC/ION峰值及6次后台LMK证据
    保留，但产品决策接受16GB目标机上的该资源代价，不再把它列为当前功能闭环阻塞项；
 5. 固定context银行包体仍未解决；任何确认仍只接受临时预览，不能写回。
@@ -601,7 +646,7 @@ certificate到临时区域工具”Gate；以下仍阻止mutation：
 一致，且不包含实验`qnn-net-run`：
 
 ```text
-SHA-256 47f17a8c274b9a84bfff0285159d2c6dcf0884d6f01b5d2586bc93f341acf752
+SHA-256 06a97395080816ec9431b019cb7b41512055c65ea6a6b9b9cd03473675cb6034
 ```
 
 vivo百度输入法保持启用，ADBKeyboard为disabled-user，stay-awake为0，LPA进程已停止。

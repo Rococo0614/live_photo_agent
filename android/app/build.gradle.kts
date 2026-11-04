@@ -150,6 +150,12 @@ android {
                 jniLibs.srcDir("src/localTrackedPreview/jniLibs")
             }
         }
+        getByName("debug") {
+            if (localTrackedPreview == "true") {
+                java.srcDir("src/localTrackedPreviewDebug/java")
+                manifest.srcFile("src/localTrackedPreviewDebug/AndroidManifest.xml")
+            }
+        }
     }
 
     if (persistentQnn == "true") {
