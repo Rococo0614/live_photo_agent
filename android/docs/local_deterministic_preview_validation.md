@@ -181,17 +181,17 @@ SHA-256 438a3d13bf0de46c9730fee89199ac0a104eefdd1cdade9fcbbd917120fc3dd4
                       SHA-256 4691654241a483d9c249f5300870daa124a96effd4cd0d0d0079147f9be6cec0
 ```
 
-当前debug/release单测均为172/172，`lintDebug`、`lintRelease`及debug/release assemble通过。默认
+当前debug/release单测均为174/174，`lintDebug`、`lintRelease`及debug/release assemble通过。默认
 debug/release APK都不包含`libqnn_net_run.so`或`liblpa_sdcpp.so`；默认debug也不含演示Provider。
 只有显式实验Debug构建加入只读Provider与实验native：
 
 ```text
-default debug APK          af617f05f78eda2a5cfbfbd774967c2454fe7f8e0b7e41ee30043ab362f49db2
-default release APK        dd218ca61fed9f1c5c38f0ec9c0f4f124b009d420a45477117cab54f5f323c6d
-full-timeline fallback     fcee87015a6b05dec0995484a500b633fe8e2c73f611ff9f5b85dfc0a8732ef6
-persistent-QNN debug APK   717e707a250ed61808bf94e8686d44b6f8f08b803f4d299a55f1c7ca4aa0cf86
-generation-fixture APK     ba8fb98abaeb5bd0cdbfcc5ef1fae2f33889218e6d9d67d09f1f41f12043ba26
-on-device generation APK   eab018b9e58dcf6c978e94f531b9d8a6521df3f13c546513c1a8364c642d2798
+default debug APK          2d0888583ce6165efd8855af5ef91ed761164fe58690447b0fa125052c98631b
+default release APK        1c7137c5a99d2898e7356025551447e5ba1788edc7cde967198aa47ae038392d
+full-timeline fallback     58c27b74267a6e10cbb4177cf087af90a83bb76fd229fede0d313717f102bccf
+persistent-QNN debug APK   a7eddf19f2a1c7569c54eb4d9d089aec97d1b864ce0d918f92024ae72850ce96
+generation-fixture APK     e5955155b426ac226f0702cf62532ecac6b217c9443cdf60963c0602332684ac
+on-device generation APK   a6ae184d41ae99e7acc1d23553ed0451360921e4da2ef0ae27945862ab23be94
 ```
 
 所有自定义Gradle属性已注册为task inputs；同一worktree按“clean默认→实验→默认”构建，前后两个默认
@@ -703,6 +703,14 @@ Vulkan执行；默认320×320/20步生成耗时113.22秒。组件包络、锚变
 最终证据目录为`generation-sd2-ondevice-vulkan-interactive-final-5/`；完整说明见
 `android/docs/on_device_livephoto_inpainting.md`。
 
+用户界面随后完成同一真实闭环，而不再只依赖headless probe：语言请求进入20步端侧生成时显示确定进度
+与中止按钮；完成后直接循环播放私有运动轨道，可切换原图；确认后明确显示“不可发布”，且旋转Activity
+后仍保持review状态；撤销会停止播放器并删除整个临时预览根目录。最终UI证据位于
+`android-interactive-generation-ui/livephoto-generate-v2-final/`，对应实验APK
+`8413b86eb3cb5a354fac6821ff0d2a6cbe7376d7225e345998b21656fb589da0`。撤销后的动态播放提示清理
+另以最终代码完成smoke；最终clean-build APK为
+`a6ae184d41ae99e7acc1d23553ed0451360921e4da2ef0ae27945862ab23be94`。
+
 ## 5. 逐帧跟踪调色显色证据
 
 在已经通过vivo QAIRT 2.45 Gate的17帧固定图跟踪链上，使用每帧`device-mask.png`对中间面板目标猫
@@ -824,7 +832,7 @@ certificate到临时区域工具”Gate；以下仍阻止mutation：
 模型位于应用私有目录，所有结果不可发布。默认构建不含`liblpa_sdcpp.so`。
 
 ```text
-SHA-256 eab018b9e58dcf6c978e94f531b9d8a6521df3f13c546513c1a8364c642d2798
+SHA-256 a6ae184d41ae99e7acc1d23553ed0451360921e4da2ef0ae27945862ab23be94
 ```
 
 vivo百度输入法保持启用，ADBKeyboard为disabled-user，stay-awake为0，LPA进程已停止。

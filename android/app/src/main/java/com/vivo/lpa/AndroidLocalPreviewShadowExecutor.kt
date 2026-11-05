@@ -28,13 +28,14 @@ data class AndroidTemporaryLocalPreviewArtifact(
     val certificateFingerprint: String,
     val backendEvidenceFingerprint: String? = null,
     val packedLivePhotoFile: java.io.File? = null,
+    val motionVideoFile: java.io.File? = null,
     val packedLivePhotoSha256: String? = null,
     val timelineFrameCount: Int? = null,
     val publishEligible: Boolean = false,
     val lifecycle: LocalPreviewLifecycle
 )
 
-/** Process-local preview storage. It owns preview bitmaps but never source frames or media files. */
+/** Owns process-local preview bitmaps and generated timeline roots, but never source media. */
 class AndroidTemporaryLocalPreviewStore(
     private val clockMs: () -> Long = android.os.SystemClock::elapsedRealtime
 ) {
@@ -76,24 +77,25 @@ class AndroidTemporaryLocalPreviewStore(
         val artifactId = "local-preview-${now}-${sequence.incrementAndGet()}"
         val lifecycle = LocalPreviewLifecycleReducer.create(artifactId, now)
         val artifact = AndroidTemporaryLocalPreviewArtifact(
-            artifactId,
-            sourceAssetId,
-            frameIndex,
-            timestampMs,
-            sourceBitmap,
-            previewBitmap,
-            effectKind,
-            rendererBackendId,
-            certificateFingerprint,
-            backendEvidenceFingerprint,
-            encodedTimeline?.packedLivePhoto,
-            encodedTimeline?.packedLivePhoto?.let(
+            artifactId = artifactId,
+            sourceAssetId = sourceAssetId,
+            frameIndex = frameIndex,
+            timestampMs = timestampMs,
+            sourceBitmap = sourceBitmap,
+            previewBitmap = previewBitmap,
+            effectKind = effectKind,
+            rendererBackendId = rendererBackendId,
+            certificateFingerprint = certificateFingerprint,
+            backendEvidenceFingerprint = backendEvidenceFingerprint,
+            packedLivePhotoFile = encodedTimeline?.packedLivePhoto,
+            motionVideoFile = encodedTimeline?.motionVideo,
+            packedLivePhotoSha256 = encodedTimeline?.packedLivePhoto?.let(
                 AndroidLocalPreviewPublishPolicy::contentSha256
             ),
-            encodedTimeline?.frameCount,
-            publishEligible ?: (encodedTimeline != null &&
+            timelineFrameCount = encodedTimeline?.frameCount,
+            publishEligible = publishEligible ?: (encodedTimeline != null &&
                 effectKind in setOf("color_tint", "blur")),
-            lifecycle
+            lifecycle = lifecycle
         )
         holders[artifactId] = Holder(
             artifact,

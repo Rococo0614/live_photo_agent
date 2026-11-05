@@ -22,6 +22,7 @@ import android.view.View
 import android.view.ViewGroup
 import android.widget.Button
 import android.widget.EditText
+import android.widget.FrameLayout
 import android.widget.HorizontalScrollView
 import android.widget.ImageView
 import android.widget.LinearLayout
@@ -29,6 +30,7 @@ import android.widget.ProgressBar
 import android.widget.ScrollView
 import android.widget.TextView
 import android.widget.Toast
+import android.widget.VideoView
 import java.io.File
 import java.util.concurrent.atomic.AtomicBoolean
 import org.json.JSONArray
@@ -91,6 +93,7 @@ class AgentActivity : Activity() {
     private var taskStatus: String = "idle"
     private var activeLocalPreview: AndroidLocalPreviewInteraction? = null
     private var activePublishedCopy: AndroidPublishedLocalPreview? = null
+    private var activePreviewVideo: VideoView? = null
     private var localPreviewRetainedForConfiguration = false
     private var localPreviewWillBeRestored = false
     private var workerOrientationLocked = false
@@ -284,7 +287,7 @@ class AgentActivity : Activity() {
         root.addView(templateScroll, LinearLayout.LayoutParams(-1, dp(108)))
 
         input = EditText(this).apply {
-            hint = "告诉我你想怎么处理：调色、裁剪、拼接或增强"
+            hint = "例如：把滑板变成悬浮板，或给目标局部调色"
             textSize = 15f
             minLines = 2
             maxLines = 3
@@ -1049,10 +1052,13 @@ preparedAssets = prepared
     }
 
     private fun cancelQuery() {
+        if (cancelled.get()) return
         cancelled.set(true)
         resetProgressBar()
         append("正在请求中止当前任务")
         state.text = "正在中止"
+        actionButton.text = "取消中…"
+        actionButton.isEnabled = false
         worker?.interrupt()
     }
 
@@ -1105,24 +1111,88 @@ preparedAssets = prepared
             setTextColor(Color.rgb(26, 61, 52))
         }
         localPreviewPanel.addView(status)
+        var showingPreview = true
+        var videoPrepared = false
         val preview = ImageView(this).apply {
             scaleType = ImageView.ScaleType.FIT_CENTER
             adjustViewBounds = true
             setBackgroundColor(Color.rgb(239, 242, 238))
             setImageBitmap(artifact.previewBitmap)
         }
-        localPreviewPanel.addView(preview, LinearLayout.LayoutParams(-1, dp(230)).apply {
+        val previewFrame = FrameLayout(this).apply {
+            setBackgroundColor(Color.rgb(239, 242, 238))
+            addView(preview, FrameLayout.LayoutParams(-1, -1))
+        }
+        val motionVideo = artifact.motionVideoFile?.takeIf { it.isFile }
+        var dynamicCaption: TextView? = null
+        val video = motionVideo?.let { file ->
+            VideoView(this).apply {
+                visibility = View.INVISIBLE
+                setVideoPath(file.absolutePath)
+                setOnPreparedListener { player ->
+                    videoPrepared = true
+                    player.isLooping = true
+                    player.setVolume(0f, 0f)
+                    if (showingPreview) {
+                        preview.visibility = View.GONE
+                        visibility = View.VISIBLE
+                        start()
+                    }
+                }
+                setOnErrorListener { _, what, extra ->
+                    videoPrepared = false
+                    visibility = View.GONE
+                    preview.visibility = View.VISIBLE
+                    preview.setImageBitmap(
+                        if (showingPreview) artifact.previewBitmap else artifact.sourceBitmap
+                    )
+                    dynamicCaption?.text = "动态预览不可用，当前显示生成锚帧"
+                    append("动态预览播放失败，已回退到生成锚帧（$what/$extra）")
+                    true
+                }
+                setOnClickListener {
+                    if (isPlaying) pause() else if (videoPrepared && showingPreview) start()
+                }
+            }.also { player ->
+                previewFrame.addView(player, FrameLayout.LayoutParams(-1, -1))
+                activePreviewVideo = player
+            }
+        }
+        localPreviewPanel.addView(previewFrame, LinearLayout.LayoutParams(-1, dp(230)).apply {
             topMargin = dp(6)
         })
+        if (video != null) {
+            dynamicCaption = TextView(this).apply {
+                text = "动态预览循环播放（静音）· 点击画面暂停或继续"
+                textSize = 11f
+                gravity = Gravity.CENTER
+                setTextColor(Color.rgb(71, 91, 84))
+                setPadding(0, dp(4), 0, 0)
+            }
+            localPreviewPanel.addView(dynamicCaption)
+        }
         val controls = LinearLayout(this).apply {
             gravity = Gravity.CENTER_VERTICAL
             orientation = LinearLayout.HORIZONTAL
         }
-        var showingPreview = true
         val toggle = button("查看原图") {}
         toggle.setOnClickListener {
             showingPreview = !showingPreview
-            preview.setImageBitmap(if (showingPreview) artifact.previewBitmap else artifact.sourceBitmap)
+            if (showingPreview) {
+                preview.setImageBitmap(artifact.previewBitmap)
+                if (videoPrepared && video != null) {
+                    preview.visibility = View.GONE
+                    video.visibility = View.VISIBLE
+                    video.start()
+                } else {
+                    preview.visibility = View.VISIBLE
+                }
+            } else {
+                video?.pause()
+                video?.visibility = View.GONE
+                preview.visibility = View.VISIBLE
+                preview.setImageBitmap(artifact.sourceBitmap)
+            }
             toggle.text = if (showingPreview) "查看原图" else "查看预览"
         }
         val confirm = button("确认预览") {}
@@ -1160,7 +1230,11 @@ preparedAssets = prepared
         })
         confirm.setOnClickListener {
             runCatching { interaction.confirm() }.onSuccess { accepted ->
-                status.text = "已确认临时预览 · 写回仍未授权，可随时撤销"
+                status.text = if (accepted.effectKind == LocalGenerativeChange.EFFECT_KIND) {
+                    "已确认端侧生成预览 · 仅私有review，不可发布，可随时撤销"
+                } else {
+                    "已确认临时预览 · 写回仍未授权，可随时撤销"
+                }
                 confirm.visibility = View.GONE
                 cancelPreview.visibility = View.GONE
                 undo.visibility = View.VISIBLE
@@ -1174,6 +1248,7 @@ preparedAssets = prepared
             }.onFailure { append("确认预览失败：${it.message}") }
         }
         cancelPreview.setOnClickListener {
+            stopActivePreviewPlayback()
             val terminalSource = copyForTerminalDisplay(artifact.sourceBitmap)
             preview.setImageDrawable(null)
             runCatching {
@@ -1187,6 +1262,7 @@ preparedAssets = prepared
             activeLocalPreview = null
             terminalSource?.let(preview::setImageBitmap)
             status.text = "已取消临时预览 · 源媒体未改变"
+            dynamicCaption?.visibility = View.GONE
             toggle.visibility = View.GONE
             confirm.visibility = View.GONE
             cancelPreview.visibility = View.GONE
@@ -1196,6 +1272,7 @@ preparedAssets = prepared
             persistSessionState("已取消临时预览，源媒体未改变")
         }
         undo.setOnClickListener {
+            stopActivePreviewPlayback()
             val terminalSource = copyForTerminalDisplay(artifact.sourceBitmap)
             preview.setImageDrawable(null)
             runCatching {
@@ -1212,6 +1289,7 @@ preparedAssets = prepared
             if (activePublishedCopy != null) {
                 status.text = "已撤销临时预览 · 已发布副本仍保留"
             }
+            dynamicCaption?.visibility = View.GONE
             toggle.visibility = View.GONE
             undo.visibility = View.GONE
             publishCopy.visibility = View.GONE
@@ -1323,7 +1401,11 @@ preparedAssets = prepared
                 .show()
         }
         if (artifact.lifecycle.state == LocalPreviewReviewState.ACCEPTED_FOR_REVIEW) {
-            status.text = "已确认临时预览 · 写回仍未授权，可随时撤销"
+            status.text = if (artifact.effectKind == LocalGenerativeChange.EFFECT_KIND) {
+                "已确认端侧生成预览 · 仅私有review，不可发布，可随时撤销"
+            } else {
+                "已确认临时预览 · 写回仍未授权，可随时撤销"
+            }
             confirm.visibility = View.GONE
             cancelPreview.visibility = View.GONE
             undo.visibility = View.VISIBLE
@@ -1344,6 +1426,7 @@ preparedAssets = prepared
             .put("frame_index", artifact.frameIndex)
             .put("timeline_frame_count", artifact.timelineFrameCount ?: JSONObject.NULL)
             .put("packed_livephoto_private", artifact.packedLivePhotoFile != null)
+            .put("motion_preview_available", artifact.motionVideoFile?.isFile == true)
             .put(
                 "backend_evidence_fingerprint",
                 artifact.backendEvidenceFingerprint ?: JSONObject.NULL
@@ -1380,6 +1463,7 @@ preparedAssets = prepared
 
     private fun clearActiveLocalPreview() {
         val interaction = activeLocalPreview
+        stopActivePreviewPlayback()
         if (::localPreviewPanel.isInitialized) {
             // Detach every drawable before the store recycles its owned bitmaps.
             localPreviewPanel.removeAllViews()
@@ -1400,6 +1484,19 @@ preparedAssets = prepared
             }
             interaction.release()
         }
+    }
+
+    private fun stopActivePreviewPlayback() {
+        activePreviewVideo?.let { video ->
+            runCatching {
+                video.setOnPreparedListener(null)
+                video.setOnErrorListener(null)
+                video.setOnClickListener(null)
+                video.pause()
+                video.stopPlayback()
+            }
+        }
+        activePreviewVideo = null
     }
 
     private fun finishWorker() {
@@ -1442,6 +1539,7 @@ preparedAssets = prepared
             if (busy) Color.rgb(180, 60, 60) else Color.rgb(31, 105, 85),
             dp(18)
         )
+        actionButton.isEnabled = !busy || !cancelled.get()
         selectButton.isEnabled = !busy
         sessionButton.isEnabled = !busy
     }
@@ -1476,7 +1574,14 @@ preparedAssets = prepared
     }
 
     private fun extractProgressPercent(message: String): Int {
-        val match = Regex("""(\d{1,3})%""").find(message) ?: Regex("""导出中(\d{1,3})""").find(message) ?: return -1
+        Regex("""端侧SD2生成\s+(\d+)/(\d+)""").find(message)?.let { match ->
+            val step = match.groupValues[1].toIntOrNull() ?: return@let
+            val total = match.groupValues[2].toIntOrNull()?.takeIf { it > 0 } ?: return@let
+            return (step * 100 / total).coerceIn(0, 100)
+        }
+        val match = Regex("""(\d{1,3})%""").find(message)
+            ?: Regex("""导出中(\d{1,3})""").find(message)
+            ?: return -1
         return match.groupValues[1].toIntOrNull()?.coerceIn(0, 100) ?: -1
     }
 
@@ -2186,6 +2291,7 @@ preparedAssets = prepared
 
     override fun onDestroy() {
         if (isChangingConfigurations && localPreviewRetainedForConfiguration) {
+            stopActivePreviewPlayback()
             if (::localPreviewPanel.isInitialized) localPreviewPanel.removeAllViews()
             activeLocalPreview = null
             activePublishedCopy = null

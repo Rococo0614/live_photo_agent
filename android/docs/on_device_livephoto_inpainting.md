@@ -90,6 +90,8 @@ SDCPP_INFERENCE_SIZE=512 SDCPP_STEPS=20 tools/install_sdcpp_inpaint_model.sh
 - 锚帧和动态包络均做4px向内羽化，永不扩张到授权区域外。
 - 空Mask、区域过大、组件包络超过Mask 3倍、数值全白/全黑、超时均fail-closed。
 - UI显示20步进度；取消调用`sd_cancel_generation`并等待native context释放。
+- 动态结果直接从应用私有运动轨道循环播放；可在动态结果和原图间切换，播放器不读取公开存储。
+- 确认只进入私有review，生成结果不显示发布入口；Activity旋转后仍保持该状态。
 - Cancel/undo/process cleanup删除临时artifact；模型本身保留在应用私有目录。
 
 OpenCL实验能执行UNet，但fp16/Q4_0均输出全白，因此被数值Gate拒绝。Vulkan在512无VAE tiling或
@@ -139,6 +141,40 @@ timeline-validation.json
 ```text
 cancellation-evidence.json
   SHA-256 f519403ccd8b95cf5d6542883c18dbd8e8ce8c4f374e852585efad6783cbe461
+```
+
+### 用户界面真实闭环
+
+最终实验APK通过主界面而非headless入口再次执行相同语言请求：
+
+```text
+20步UI验证APK        8413b86eb3cb5a354fac6821ff0d2a6cbe7376d7225e345998b21656fb589da0
+最终clean-build APK  a6ae184d41ae99e7acc1d23553ed0451360921e4da2ef0ae27945862ab23be94
+端侧生成             320×320 / 20步 / 99.02s
+界面进度             已观察到5/20，运行中提供中止按钮
+动态预览             H.264 1080×608，5帧，静音循环播放
+PTS                  0 / 0.04 / 0.08 / 0.12 / 0.16s
+原图切换             通过
+确认                 私有review；无发布按钮
+Activity旋转         review状态与动态播放器恢复
+撤销                 播放停止、临时根目录删除、源SHA不变
+thermal status       0
+```
+
+证据目录：
+
+```text
+/mnt/ssd/lpa-aihub-probe/artifacts/android-interactive-generation-ui/
+  livephoto-generate-v2-final/
+
+evidence.json
+  SHA-256 e1c4067516fdff85322d62e9b29df977a0c29b02b8f39f4c39182b2aeb9603ab
+generated-rigid-motion.mp4
+  SHA-256 0a744d0b96e7efd19de27b218a74d3b2f451247c70ca96bba9f50748c4e0163b
+03-progress.png
+  SHA-256 6323da933427942dd81d0a15641a05a2f1fd2a62c183db3c7ca1e9398d7f9257
+04-dynamic-preview.png
+  SHA-256 8843aace9a209583d76f05ad902c101d47d6c226f1ca1e2cb69cbff4e43912b5
 ```
 
 ## 尚未关闭

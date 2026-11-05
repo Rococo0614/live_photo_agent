@@ -129,10 +129,11 @@ class AndroidFullTimelineGenerationPreviewRenderer(
             maskRoot.deleteRecursively()
             File(root, "verified").deleteRecursively()
             return AndroidEncodedTimelinePreview(
-                packed,
-                root,
-                timeline.frameCount,
-                photoTimestampUs
+                packedLivePhoto = packed,
+                motionVideo = encodedVideo,
+                cleanupRoot = root,
+                frameCount = timeline.frameCount,
+                photoTimestampUs = photoTimestampUs
             )
         } catch (failure: Throwable) {
             root.deleteRecursively()

@@ -111,8 +111,9 @@ N=5手机闭环通过`http_masked_generation_v1/sd2_diffusers_inpaint`，生成�
 ## 短动态刚性传播
 
 首版动态能力不是视频扩散模型。它将真实生成锚帧纹理按每帧认证Mask包围盒做平移/缩放，限制为最多
-60帧，并要求所有Mask非空、面积和宽高比变化通过刚性Gate。每帧先删除非主体小连通域，再做24px
-扩展。输出可打包为私有Live Photo，但artifact永久`publishEligible=false`。
+60帧，并要求所有Mask非空、面积和宽高比变化通过刚性Gate。每帧保留达到主组件1%且至少4px的显著
+断开部件，删除微小speckle，再做24px扩展；传播还受面积包络和锚变化支持集限制。输出可打包为私有
+Live Photo，但artifact永久`publishEligible=false`。
 
 验证产物：
 
@@ -132,4 +133,5 @@ Vulkan，完全不访问网络。模型不进入APK，必须从应用私有目�
 20步；256为快速档，512为高质量档。
 
 N=5最终闭环完成端侧锚帧生成、完整Mask Track、刚性传播、私有Live Photo打包与中途取消。详细构建、
-安全策略、性能和证据见`android/docs/on_device_livephoto_inpainting.md`。
+安全策略、性能和证据见`android/docs/on_device_livephoto_inpainting.md`。主界面现可直接循环播放私有
+运动轨道、切换原图、确认私有review并撤销；确认生成结果不会出现发布入口。

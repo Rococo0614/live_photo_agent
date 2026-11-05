@@ -22,10 +22,21 @@ sealed interface AgentLocalObservationResolution {
 
 data class AndroidEncodedTimelinePreview(
     val packedLivePhoto: java.io.File,
+    val motionVideo: java.io.File,
     val cleanupRoot: java.io.File,
     val frameCount: Int,
     val photoTimestampUs: Long
-)
+) {
+    init {
+        require(packedLivePhoto.isFile)
+        require(motionVideo.isFile)
+        require(cleanupRoot.isDirectory)
+        require(frameCount > 0 && photoTimestampUs >= 0L)
+        val canonicalRoot = cleanupRoot.canonicalFile.toPath()
+        require(packedLivePhoto.canonicalFile.toPath().startsWith(canonicalRoot))
+        require(motionVideo.canonicalFile.toPath().startsWith(canonicalRoot))
+    }
+}
 
 fun interface AndroidTimelinePreviewRenderer {
     fun render(
