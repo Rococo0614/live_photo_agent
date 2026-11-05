@@ -77,6 +77,9 @@ internal object AndroidLocalPreviewPublishPolicy {
  */
 internal class AndroidConfirmedLivePhotoPublisher(private val context: Context) {
     fun publish(artifact: AndroidTemporaryLocalPreviewArtifact): AndroidPublishedLocalPreview {
+        require(artifact.publishEligible) {
+            "this preview backend is not eligible for MediaStore publication"
+        }
         require(Build.VERSION.SDK_INT >= 29) {
             "confirmed Live Photo publishing requires scoped MediaStore"
         }

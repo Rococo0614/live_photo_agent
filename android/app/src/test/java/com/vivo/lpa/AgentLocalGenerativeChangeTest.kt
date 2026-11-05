@@ -25,15 +25,27 @@ class AgentLocalGenerativeChangeTest {
     fun generationMaskPaddingIsDeterministicAndClippedToFrame() {
         val mask = ByteArray(25)
         mask[2 * 5 + 2] = 0xff.toByte()
-        val expanded = AndroidLocalGenerationPreviewShadowExecutor.dilateBinaryMask(
+        val expanded = AndroidGenerationRegionPolicy.dilateBinaryMask(
             mask, 5, 5, 1
         )
 
         assertEquals(9, expanded.count { (it.toInt() and 0xff) > 0 })
         assertTrue((expanded[1 * 5 + 1].toInt() and 0xff) > 0)
-        assertEquals(1, AndroidLocalGenerationPreviewShadowExecutor.dilateBinaryMask(
+        assertEquals(1, AndroidGenerationRegionPolicy.dilateBinaryMask(
             byteArrayOf(0xff.toByte()), 1, 1, 24
         ).count { (it.toInt() and 0xff) > 0 })
+    }
+
+    @Test
+    fun disconnectedGenerationArtifactsAreRemovedBeforePadding() {
+        val mask = ByteArray(25)
+        for (y in 1..2) for (x in 1..2) mask[y * 5 + x] = 0xff.toByte()
+        mask[4 * 5 + 4] = 0xff.toByte()
+
+        val cleaned = AndroidGenerationRegionPolicy.retainLargestComponent(mask, 5, 5)
+
+        assertEquals(4, cleaned.count { (it.toInt() and 0xff) > 0 })
+        assertEquals(0, cleaned[4 * 5 + 4].toInt() and 0xff)
     }
 
     private fun operation(

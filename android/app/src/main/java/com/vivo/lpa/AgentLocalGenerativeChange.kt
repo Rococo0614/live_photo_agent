@@ -174,5 +174,5 @@ object LocalMaskedGenerationShadowCompiler {
         ).compile(goal)
     }
 
-    const val GENERATION_MASK_PADDING_PX = 24
+    const val GENERATION_MASK_PADDING_PX = AndroidGenerationRegionPolicy.DEFAULT_PADDING_PX
 }

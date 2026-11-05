@@ -181,16 +181,16 @@ SHA-256 438a3d13bf0de46c9730fee89199ac0a104eefdd1cdade9fcbbd917120fc3dd4
                       SHA-256 4691654241a483d9c249f5300870daa124a96effd4cd0d0d0079147f9be6cec0
 ```
 
-当前debug/release单测均为161/161，`lintDebug`、`lintRelease`及debug/release assemble通过。默认
+当前debug/release单测均为164/164，`lintDebug`、`lintRelease`及debug/release assemble通过。默认
 debug/release APK都不包含`libqnn_net_run.so`；默认debug也不含演示Provider。只有显式实验Debug
 构建加入只读Provider与实验native：
 
 ```text
-default debug APK          724e5c78d4b0bebe25c2820c26e7be39e895c80c3a582bd5e86ebd0034e084bd
-default release APK        58de012f339337e2255d9aa54e69462189d8c9f895b122544aee53aafdff4b60
-full-timeline fallback     86858f6cc5451f289d6263c06783bd500075ff8432ee904393f4080010d03408
-persistent-QNN debug APK   902f151532522ce1098ef45bc48679176e44d3994ddc000b76fb60f246b47a2b
-generation-fixture APK     3c231fdb209bf690d1486e04c79c527d67e2ab2f64776e589f735070bf01e555
+default debug APK          738b591adbccaa3935c2c26da9093363a92431ca46eb8fc141e7b416c9229331
+default release APK        e744e584c737d914cfd8061df3a2a8b4a178690e440cce31e1ad38e6b5e5cb02
+full-timeline fallback     633f2ac04d5e679fdca21bd80d3bcfaf0e66b7d1f68a1873fdc45093f541db30
+persistent-QNN debug APK   b92731875b312c0fac03d0dfba3a8e515b46629a3aff8829e8cfc49506366e93
+generation-fixture APK     0078fc78e259daf6959990f79530dcba473ebedcccd1263e9fd60831bed0c3ee
 ```
 
 所有自定义Gradle属性已注册为task inputs；同一worktree按“clean默认→实验→默认”构建，前后两个默认
@@ -670,6 +670,30 @@ backend证据绑定派生Mask。扩展区域仍仅用于单帧私有preview，�
 这关闭了真实单帧masked inpaint backend Gate；完整动态生成、padding保护区语义、跨帧一致性、模型安全
 和生产许可仍未关闭。
 
+随后加入首版短动态传播器（不是视频扩散）：只接受最多60帧、每帧Mask非空且包围盒面积/宽高比满足
+刚性Gate的目标。每帧先保留最大4邻域连通域、再做证书绑定的24px扩展；锚帧真实SD2纹理按当前Mask
+包围盒平移/缩放，CPU合成后直接送MediaCodec surface。任何遮挡、空Mask、大尺度或宽高比变化都会
+fail-closed并保留单帧生成边界。
+
+N=5滑板素材完成锚帧生成→5/5传播→AVC编码→私有Live Photo repack；PTS逐项保持
+`0/0.04/0.08/0.12/0.16s`。初版Mask小连通伪影造成首尾帧竖条，最大连通域清理后消失；最终悬浮板
+纹理随目标运动。artifact固定`publishEligible=false`，UI无发布入口，Publisher在pending与accepted
+状态都硬拒绝：
+
+```text
+  generation-sd2-hoverboard-dynamic-5-clean/evidence.json
+    SHA-256 697daf73f50cdccb655d81d7f8156da14266ea03a89a8e9a5ce7023cd26a9845
+  generation-sd2-hoverboard-dynamic-5-clean/private-livephoto.jpg
+    SHA-256 bad2a323428a1d34ee03ab789811e2ab285e09e2fd187afaf1651bf766a563ae
+  generation-sd2-hoverboard-dynamic-5-clean/preview.mp4
+    SHA-256 0caa3e2f94ad0dfc8cb752b633381b7cbe8e0c1d94394bc8183558295b41c9d7
+  generation-sd2-hoverboard-dynamic-5-clean/timeline-validation.json
+    SHA-256 f7a277b28e04caf6efac8e1fbe91c7738ba4a193f64ca17df71ab8f595f3db6e
+```
+
+该结果只关闭短时刚性目标的锚纹理传播Gate；它不声称解决旋转、形变、遮挡重入、光照变化或真正的
+时序生成。
+
 ## 5. 逐帧跟踪调色显色证据
 
 在已经通过vivo QAIRT 2.45 Gate的17帧固定图跟踪链上，使用每帧`device-mask.png`对中间面板目标猫
@@ -781,8 +805,9 @@ certificate到临时区域工具”Gate；以下仍阻止mutation：
    通过。实际新副本发布/删除仍必须等待用户第二次明确授权，本轮未代替用户执行；
 4. 持久QNN tracking五轮soak与释放已通过；完整pipeline的Qwen FastRPC/ION峰值及6次后台LMK证据
    保留，但产品决策接受16GB目标机上的该资源代价，不再把它列为当前功能闭环阻塞项；
-5. 局部生成已完成fixture、HTTP合同与主机SD2真实单帧inpaint闭环；该OpenRAIL++研究后端尚未完成
-   生产许可/安全评审，完整动态替换、padding保护语义和时序一致性仍未通过，生成预览不能发布；
+5. 局部生成已完成fixture、HTTP合同、主机SD2真实单帧inpaint及N=5刚性目标短动态传播；该
+   OpenRAIL++研究后端尚未完成生产许可/安全评审，视频扩散、遮挡重入、非刚性形变和一般时序一致性
+   仍未通过，生成预览不能发布；
 6. 固定context银行包体仍未解决；任何确认仍只接受临时预览，不能写回。
 
 常规验收结束时仍应恢复默认APK；本轮为继续验证可插拔生成backend，设备暂时保留显式实验
@@ -790,7 +815,7 @@ certificate到临时区域工具”Gate；以下仍阻止mutation：
 其中生成结果只来自不可发布fixture；设备base.apk与host逐字节一致：
 
 ```text
-SHA-256 3c231fdb209bf690d1486e04c79c527d67e2ab2f64776e589f735070bf01e555
+SHA-256 0078fc78e259daf6959990f79530dcba473ebedcccd1263e9fd60831bed0c3ee
 ```
 
 vivo百度输入法保持启用，ADBKeyboard为disabled-user，stay-awake为0，LPA进程已停止。

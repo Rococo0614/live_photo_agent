@@ -125,6 +125,14 @@ class AndroidFullTimelineMaskTracker(
                 photoTimestampUs,
                 cancelled,
                 progress
+            ),
+            AndroidFullTimelineGenerationPreviewRenderer(
+                context,
+                sourceAsset,
+                timeline,
+                photoTimestampUs,
+                cancelled,
+                progress
             )
         )
     }

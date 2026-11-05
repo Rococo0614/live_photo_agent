@@ -9,6 +9,7 @@ class AndroidLocalGenerationPreviewShadowExecutor(
     private val sourceFrames: AndroidShadowSourceFrameProvider,
     private val previewStore: AndroidTemporaryLocalPreviewStore,
     private val backend: AndroidMaskedGenerationBackend,
+    private val timelinePreviewRenderer: AndroidGenerationTimelinePreviewRenderer? = null,
     private val cancelled: AtomicBoolean,
     private val currentStateFingerprint: () -> String,
     private val onPreviewReady: (AndroidLocalPreviewInteraction) -> Unit = {}
@@ -76,9 +77,15 @@ class AndroidLocalGenerationPreviewShadowExecutor(
         } ?: error("mask track has no visible validated frame for generation")
         val maskFrame = requireNotNull(materialization.maskTrack.frame(observation.frameIndex))
         require(maskFrame.rawMaskPixels == observation.rawMaskPixels)
-        val maskAreaRatio = maskFrame.rawMaskPixels.toDouble() /
+        val cleanedMask = AndroidGenerationRegionPolicy.retainLargestComponent(
+            maskFrame.copyMaskValues(),
+            maskFrame.width,
+            maskFrame.height
+        )
+        val cleanedPixels = cleanedMask.count { (it.toInt() and 0xff) > 0 }
+        val maskAreaRatio = cleanedPixels.toDouble() /
             (maskFrame.width.toLong() * maskFrame.height).toDouble()
-        require(maskAreaRatio >= MIN_GENERATION_MASK_AREA_RATIO) {
+        require(maskAreaRatio >= AndroidGenerationRegionPolicy.MIN_MASK_AREA_RATIO) {
             "generation mask area $maskAreaRatio is too small for a reviewable preview"
         }
         val sourceFrame = requireNotNull(sourceFrames.resolve(
@@ -94,8 +101,8 @@ class AndroidLocalGenerationPreviewShadowExecutor(
             sourceFrame.bitmap.height == maskFrame.height)
 
         val generated = try {
-            val generationMask = dilateBinaryMask(
-                maskFrame.copyMaskValues(),
+            val generationMask = AndroidGenerationRegionPolicy.dilateBinaryMask(
+                cleanedMask,
                 maskFrame.width,
                 maskFrame.height,
                 generationMaskPaddingPx
@@ -113,6 +120,19 @@ class AndroidLocalGenerationPreviewShadowExecutor(
             }
             throw failure
         }
+        val encodedTimeline = try {
+            timelinePreviewRenderer?.render(
+                materialization,
+                change,
+                generated.bitmap
+            )
+        } catch (failure: Throwable) {
+            generated.bitmap.recycle()
+            if (sourceFrame.ownedByPreview && !sourceFrame.bitmap.isRecycled) {
+                sourceFrame.bitmap.recycle()
+            }
+            throw failure
+        }
         val interaction = try {
             previewStore.create(
                 sourceAssetId = sourceAssetId,
@@ -124,10 +144,13 @@ class AndroidLocalGenerationPreviewShadowExecutor(
                 rendererBackendId = generated.backendId,
                 certificateFingerprint = certificate.evidenceFingerprint,
                 backendEvidenceFingerprint = generated.evidenceFingerprint,
-                ownsSourceBitmap = sourceFrame.ownedByPreview
+                ownsSourceBitmap = sourceFrame.ownedByPreview,
+                encodedTimeline = encodedTimeline,
+                publishEligible = false
             )
         } catch (failure: Throwable) {
             generated.bitmap.recycle()
+            encodedTimeline?.cleanupRoot?.deleteRecursively()
             if (sourceFrame.ownedByPreview && !sourceFrame.bitmap.isRecycled) {
                 sourceFrame.bitmap.recycle()
             }
@@ -151,46 +174,4 @@ class AndroidLocalGenerationPreviewShadowExecutor(
         )
     }
 
-    companion object {
-        private const val MIN_GENERATION_MASK_AREA_RATIO = 0.001
-
-        internal fun dilateBinaryMask(
-            mask: ByteArray,
-            width: Int,
-            height: Int,
-            radius: Int
-        ): ByteArray {
-            require(width > 0 && height > 0 && mask.size == width * height)
-            require(radius in 0..32)
-            if (radius == 0) return mask.copyOf()
-            val horizontal = ByteArray(mask.size)
-            val prefix = IntArray(maxOf(width, height) + 1)
-            for (y in 0 until height) {
-                prefix[0] = 0
-                val row = y * width
-                for (x in 0 until width) {
-                    prefix[x + 1] = prefix[x] + if ((mask[row + x].toInt() and 0xff) > 0) 1 else 0
-                }
-                for (x in 0 until width) {
-                    val left = (x - radius).coerceAtLeast(0)
-                    val right = (x + radius + 1).coerceAtMost(width)
-                    if (prefix[right] > prefix[left]) horizontal[row + x] = 0xff.toByte()
-                }
-            }
-            val output = ByteArray(mask.size)
-            for (x in 0 until width) {
-                prefix[0] = 0
-                for (y in 0 until height) {
-                    prefix[y + 1] = prefix[y] +
-                        if ((horizontal[y * width + x].toInt() and 0xff) > 0) 1 else 0
-                }
-                for (y in 0 until height) {
-                    val top = (y - radius).coerceAtLeast(0)
-                    val bottom = (y + radius + 1).coerceAtMost(height)
-                    if (prefix[bottom] > prefix[top]) output[y * width + x] = 0xff.toByte()
-                }
-            }
-            return output
-        }
-    }
 }

@@ -1080,7 +1080,10 @@ preparedAssets = prepared
         val status = TextView(this).apply {
             text = when (artifact.effectKind) {
                 LocalGenerativeChange.EFFECT_KIND -> if (
-                    artifact.rendererBackendId == AndroidFixtureMaskedGenerationBackend.BACKEND_ID
+                    artifact.packedLivePhotoFile != null
+                ) {
+                    "短动态生成传播预览 · 锚帧真实生成，非视频扩散且不可发布"
+                } else if (artifact.rendererBackendId == AndroidFixtureMaskedGenerationBackend.BACKEND_ID
                 ) {
                     "局部生成fixture · 仅单帧私有预览，不是真实生成模型，尚未写回"
                 } else {
@@ -1155,7 +1158,7 @@ preparedAssets = prepared
                 confirm.visibility = View.GONE
                 cancelPreview.visibility = View.GONE
                 undo.visibility = View.VISIBLE
-                if (accepted.packedLivePhotoFile != null) {
+                if (accepted.packedLivePhotoFile != null && accepted.publishEligible) {
                     publishControls.visibility = View.VISIBLE
                     publishCopy.visibility = View.VISIBLE
                 }
@@ -1318,7 +1321,7 @@ preparedAssets = prepared
             confirm.visibility = View.GONE
             cancelPreview.visibility = View.GONE
             undo.visibility = View.VISIBLE
-            if (artifact.packedLivePhotoFile != null) {
+            if (artifact.packedLivePhotoFile != null && artifact.publishEligible) {
                 publishControls.visibility = View.VISIBLE
                 publishCopy.visibility = if (activePublishedCopy == null) View.VISIBLE else View.GONE
                 deletePublishedCopy.visibility =

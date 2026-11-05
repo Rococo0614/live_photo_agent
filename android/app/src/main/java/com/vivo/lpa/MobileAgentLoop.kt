@@ -607,6 +607,7 @@ class MobileAgentLoop(
                     sourceFrames = observation.sourceFrames,
                     previewStore = store,
                     backend = localGenerationBackend,
+                    timelinePreviewRenderer = observation.generationTimelinePreviewRenderer,
                     cancelled = cancelled,
                     currentStateFingerprint = { AgentStateFingerprint.of(state) },
                     onPreviewReady = listener::onLocalPreview
@@ -619,8 +620,11 @@ class MobileAgentLoop(
                 execution.runState.lastError.orEmpty()
         }
         val generated = LocalMaskedGenerationPreviewAction.ACTION_ID in actionIds
+        val dynamicGenerated = generated && observation.generationTimelinePreviewRenderer != null
         val message = if (generated) {
-            if (localGenerationBackend is AndroidFixtureMaskedGenerationBackend) {
+            if (dynamicGenerated) {
+                "真实生成锚帧已传播为短动态私有预览；这不是视频扩散结果且不可发布。源媒体尚未写回。"
+            } else if (localGenerationBackend is AndroidFixtureMaskedGenerationBackend) {
                 "局部生成fixture单帧预览已生成；这不是真实生成模型，也不是完整动态结果。源媒体尚未写回。"
             } else {
                 "局部生成单帧私有预览已生成；这不是完整动态结果。源媒体尚未写回。"
@@ -634,7 +638,9 @@ class MobileAgentLoop(
             trace,
             message,
             AgentRunStatus.WAITING_USER,
-            if (generated && localGenerationBackend is AndroidFixtureMaskedGenerationBackend) {
+            if (dynamicGenerated) {
+                "local_generation_dynamic_preview_review"
+            } else if (generated && localGenerationBackend is AndroidFixtureMaskedGenerationBackend) {
                 "local_generation_fixture_preview_review"
             } else if (generated) "local_generation_preview_review"
             else "local_content_preview_review",

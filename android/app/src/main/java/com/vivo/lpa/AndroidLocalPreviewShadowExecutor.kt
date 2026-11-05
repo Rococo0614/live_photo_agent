@@ -30,6 +30,7 @@ data class AndroidTemporaryLocalPreviewArtifact(
     val packedLivePhotoFile: java.io.File? = null,
     val packedLivePhotoSha256: String? = null,
     val timelineFrameCount: Int? = null,
+    val publishEligible: Boolean = false,
     val lifecycle: LocalPreviewLifecycle
 )
 
@@ -59,7 +60,8 @@ class AndroidTemporaryLocalPreviewStore(
         certificateFingerprint: String,
         backendEvidenceFingerprint: String? = null,
         ownsSourceBitmap: Boolean = false,
-        encodedTimeline: AndroidEncodedTimelinePreview? = null
+        encodedTimeline: AndroidEncodedTimelinePreview? = null,
+        publishEligible: Boolean? = null
     ): AndroidLocalPreviewInteraction {
         require(sourceAssetId.isNotBlank())
         require(frameIndex >= 0 && timestampMs >= 0)
@@ -89,6 +91,8 @@ class AndroidTemporaryLocalPreviewStore(
                 AndroidLocalPreviewPublishPolicy::contentSha256
             ),
             encodedTimeline?.frameCount,
+            publishEligible ?: (encodedTimeline != null &&
+                effectKind in setOf("color_tint", "blur")),
             lifecycle
         )
         holders[artifactId] = Holder(

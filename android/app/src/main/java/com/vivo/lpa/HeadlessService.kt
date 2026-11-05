@@ -2568,7 +2568,11 @@ class HeadlessService : Service() {
         require(preview.effectKind == LocalGenerativeChange.EFFECT_KIND)
         require(preview.rendererBackendId == AndroidFixtureMaskedGenerationBackend.BACKEND_ID ||
             preview.rendererBackendId.startsWith(AndroidHttpMaskedGenerationBackend.BACKEND_ID + "/"))
-        require(preview.packedLivePhotoFile == null && preview.timelineFrameCount == null)
+        val packedPreview = requireNotNull(preview.packedLivePhotoFile) {
+            "dynamic generation propagation did not produce a packed Live Photo"
+        }
+        require(preview.timelineFrameCount == expectedFrames)
+        require(!preview.publishEligible)
         require(Regex("[0-9a-f]{64}").matches(
             requireNotNull(preview.backendEvidenceFingerprint)
         ))
@@ -2590,6 +2594,10 @@ class HeadlessService : Service() {
         FileOutputStream(previewFile).use { stream ->
             require(preview.previewBitmap.compress(Bitmap.CompressFormat.PNG, 100, stream))
         }
+        val packedPreviewCopy = packedPreview.copyTo(
+            File(outputDir, "agent-generation-dynamic-preview.jpg"),
+            overwrite = true
+        )
         val pendingPublishRejected = runCatching {
             AndroidConfirmedLivePhotoPublisher(this).publish(preview)
         }.isFailure
@@ -2605,11 +2613,13 @@ class HeadlessService : Service() {
         val passed = terminalState?.status == AgentRunStatus.WAITING_USER &&
             finalPlan?.intent in setOf(
                 "local_generation_fixture_preview_review",
-                "local_generation_preview_review"
+                "local_generation_preview_review",
+                "local_generation_dynamic_preview_review"
             ) &&
             compileStatuses == listOf("need_observation", "ready") &&
             graphActions == listOf(LocalMaskedGenerationPreviewAction.ACTION_ID) &&
             expectedFrames > 1 && observedFrames == expectedFrames &&
+            packedPreviewCopy.isFile && !preview.publishEligible &&
             changedPixels > 0 && changedAlphaPixels == 0 &&
             accepted.lifecycle.state == LocalPreviewReviewState.ACCEPTED_FOR_REVIEW &&
             terminalReviewState == LocalPreviewReviewState.UNDONE &&
@@ -2619,8 +2629,8 @@ class HeadlessService : Service() {
             .put("schema_version", 1)
             .put(
                 "status",
-                if (passed && backendIsFixture) "PASS_LOCAL_GENERATION_FIXTURE_PREVIEW"
-                else if (passed) "PASS_LOCAL_GENERATION_HTTP_PREVIEW"
+                if (passed && backendIsFixture) "PASS_LOCAL_GENERATION_DYNAMIC_FIXTURE_PREVIEW"
+                else if (passed) "PASS_LOCAL_GENERATION_DYNAMIC_HTTP_PREVIEW"
                 else "FAIL_LOCAL_GENERATION_FIXTURE_PREVIEW"
             )
             .put("query", query)
@@ -2635,12 +2645,15 @@ class HeadlessService : Service() {
                 "backend_is_fixture_not_model",
                 backendIsFixture
             )
-            .put("single_frame_only", true)
+            .put("anchor_generation_single_frame", true)
+            .put("dynamic_propagation", true)
             .put(
                 "generation_mask_padding_px",
                 LocalMaskedGenerationShadowCompiler.GENERATION_MASK_PADDING_PX
             )
-            .put("packed_livephoto_created", false)
+            .put("packed_livephoto_created", true)
+            .put("publish_eligible", false)
+            .put("packed_livephoto_sha256", fileSha256(packedPreviewCopy))
             .put("backend_evidence_fingerprint", preview.backendEvidenceFingerprint)
             .put("changed_pixels", changedPixels)
             .put("changed_alpha_pixels", changedAlphaPixels)
@@ -2659,7 +2672,7 @@ class HeadlessService : Service() {
             .writeText(evidence.toString(2) + "\n")
         require(passed) { "local generation fixture preview contract failed" }
         log(
-            "PASS local generation fixture: changed=$changedPixels " +
+            "PASS local generation dynamic preview: changed=$changedPixels " +
                 "frames=$observedFrames/$expectedFrames backend=${preview.rendererBackendId}"
         )
     }

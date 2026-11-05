@@ -15,7 +15,8 @@ sealed interface AgentLocalObservationResolution {
     data class Ready(
         val materialization: AgentShadowObservationMaterialization,
         val sourceFrames: AndroidShadowSourceFrameProvider,
-        val timelinePreviewRenderer: AndroidTimelinePreviewRenderer? = null
+        val timelinePreviewRenderer: AndroidTimelinePreviewRenderer? = null,
+        val generationTimelinePreviewRenderer: AndroidGenerationTimelinePreviewRenderer? = null
     ) : AgentLocalObservationResolution
 }
 
@@ -30,6 +31,14 @@ fun interface AndroidTimelinePreviewRenderer {
     fun render(
         materialization: AgentShadowObservationMaterialization,
         change: LocalDeterministicChange
+    ): AndroidEncodedTimelinePreview?
+}
+
+fun interface AndroidGenerationTimelinePreviewRenderer {
+    fun render(
+        materialization: AgentShadowObservationMaterialization,
+        change: LocalGenerativeChange,
+        generatedAnchor: Bitmap
     ): AndroidEncodedTimelinePreview?
 }
 

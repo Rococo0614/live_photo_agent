@@ -106,3 +106,20 @@ N=5手机闭环通过`http_masked_generation_v1/sd2_diffusers_inpaint`，生成�
 ```
 
 结果仍是单帧私有preview；完整动态生成、padding保护区语义、模型安全与生产许可尚未通过。
+
+## 短动态刚性传播
+
+首版动态能力不是视频扩散模型。它将真实生成锚帧纹理按每帧认证Mask包围盒做平移/缩放，限制为最多
+60帧，并要求所有Mask非空、面积和宽高比变化通过刚性Gate。每帧先删除非主体小连通域，再做24px
+扩展。输出可打包为私有Live Photo，但artifact永久`publishEligible=false`。
+
+验证产物：
+
+```text
+/mnt/ssd/lpa-aihub-probe/artifacts/android-dynamic-frame-timeline/
+  generation-sd2-hoverboard-dynamic-5-clean/private-livephoto.jpg
+  generation-sd2-hoverboard-dynamic-5-clean/preview.mp4
+  generation-sd2-hoverboard-dynamic-5-clean/timeline-validation.json
+```
+
+该路径只适合短时刚性目标；旋转、形变、遮挡/重入和光照变化必须返回不支持，不能降级成静止贴图。

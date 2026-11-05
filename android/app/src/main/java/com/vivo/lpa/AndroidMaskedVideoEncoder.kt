@@ -5,6 +5,7 @@ import android.media.MediaCodecInfo
 import android.media.MediaExtractor
 import android.media.MediaFormat
 import android.media.MediaMuxer
+import android.graphics.Bitmap
 import java.io.File
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
@@ -63,12 +64,71 @@ class AndroidMaskedVideoEncoder {
         AndroidPersistentTintRenderer.forEncoderBlur(width, height, radiusPx, surface)
     }
 
+    fun encodeGeneratedPatch(
+        sourceVideo: File,
+        timeline: AndroidDecodedVideoTimeline,
+        generationMaskFiles: List<File>,
+        output: File,
+        generatedAnchor: Bitmap,
+        anchorFrameIndex: Int,
+        cancelled: AtomicBoolean
+    ): AndroidMaskedVideoEncodeResult {
+        val width = if (timeline.rotationDegrees in setOf(90, 270)) timeline.height else timeline.width
+        val height = if (timeline.rotationDegrees in setOf(90, 270)) timeline.width else timeline.height
+        require(!generatedAnchor.isRecycled && generatedAnchor.width == width &&
+            generatedAnchor.height == height)
+        require(anchorFrameIndex in timeline.frames.indices)
+        require(timeline.frameCount <= MAX_GENERATION_TIMELINE_FRAMES) {
+            "generated patch propagation is limited to $MAX_GENERATION_TIMELINE_FRAMES frames"
+        }
+        require(generationMaskFiles.size == timeline.frameCount)
+        val masks = generationMaskFiles.map(File::readBytes)
+        val bounds = masks.mapIndexed { index, mask ->
+            requireNotNull(AndroidGenerationRegionPolicy.bounds(mask, width, height)) {
+                "generation mask frame $index is empty"
+            }
+        }
+        AndroidGenerationRegionPolicy.requireRigidTrajectory(bounds, anchorFrameIndex)
+        val anchorPixels = IntArray(width * height)
+        generatedAnchor.getPixels(anchorPixels, 0, width, 0, 0, width, height)
+        return encode(
+            sourceVideo,
+            timeline,
+            generationMaskFiles,
+            output,
+            cancelled,
+            frameTransform = { source, mask, frameIndex ->
+                val sourcePixels = IntArray(width * height)
+                source.getPixels(sourcePixels, 0, width, 0, 0, width, height)
+                val outputPixels = AndroidGeneratedPatchPropagator.renderArgb(
+                    width,
+                    height,
+                    sourcePixels,
+                    anchorPixels,
+                    mask,
+                    bounds[anchorFrameIndex],
+                    bounds[frameIndex]
+                )
+                Bitmap.createBitmap(outputPixels, width, height, Bitmap.Config.ARGB_8888)
+            }
+        ) { rendererWidth, rendererHeight, surface ->
+            AndroidPersistentTintRenderer.forEncoder(
+                rendererWidth,
+                rendererHeight,
+                "#000000",
+                0.0,
+                surface
+            )
+        }
+    }
+
     private fun encode(
         sourceVideo: File,
         timeline: AndroidDecodedVideoTimeline,
         maskFiles: List<File>,
         output: File,
         cancelled: AtomicBoolean,
+        frameTransform: (Bitmap, ByteArray, Int) -> Bitmap? = { _, _, _ -> null },
         rendererFactory: (Int, Int, android.view.Surface) -> AndroidPersistentTintRenderer
     ): AndroidMaskedVideoEncodeResult {
         require(sourceVideo.isFile)
@@ -150,13 +210,20 @@ class AndroidMaskedVideoEncoder {
                     timeline.frames.forEach { frame ->
                         if (cancelled.get()) throw InterruptedException("masked video encode cancelled")
                         val bitmap = reader.read(frame.frameIndex, 1).single().bitmap
+                        val maskValues = maskFiles[frame.frameIndex].readBytes()
+                        var transformed: Bitmap? = null
                         try {
+                            transformed = frameTransform(bitmap, maskValues, frame.frameIndex)
+                            require(transformed !== bitmap) {
+                                "frame transform must return a new bitmap or null"
+                            }
                             renderer.renderToEncoder(
-                                bitmap,
-                                maskFiles[frame.frameIndex].readBytes(),
+                                transformed ?: bitmap,
+                                maskValues,
                                 frame.presentationTimeUs
                             )
                         } finally {
+                            transformed?.recycle()
                             bitmap.recycle()
                         }
                         drain(endOfStream = false)
@@ -271,6 +338,10 @@ class AndroidMaskedVideoEncoder {
 
     private fun MediaFormat.integerOrNull(key: String): Int? =
         if (containsKey(key)) runCatching { getInteger(key) }.getOrNull() else null
+
+    private companion object {
+        const val MAX_GENERATION_TIMELINE_FRAMES = 60
+    }
 }
 
 data class AndroidMediaTrackFingerprint(
