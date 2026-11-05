@@ -26,8 +26,13 @@ class MobileAgentLoop(
         },
     private val localGenerationBackend: AndroidMaskedGenerationBackend =
         if (BuildConfig.DEBUG && BuildConfig.LOCAL_GENERATED_PREVIEW) {
-            AndroidHttpMaskedGenerationBackend.fromPrivateConfig(context)
-                ?: AndroidFixtureMaskedGenerationBackend()
+            if (BuildConfig.ON_DEVICE_GENERATED_PREVIEW) {
+                AndroidStableDiffusionCppMaskedGenerationBackend.fromPrivateConfig(context)
+                    ?: UnavailableAndroidMaskedGenerationBackend
+            } else {
+                AndroidHttpMaskedGenerationBackend.fromPrivateConfig(context)
+                    ?: AndroidFixtureMaskedGenerationBackend()
+            }
         } else {
             UnavailableAndroidMaskedGenerationBackend
         }
@@ -609,12 +614,14 @@ class MobileAgentLoop(
                     backend = localGenerationBackend,
                     timelinePreviewRenderer = observation.generationTimelinePreviewRenderer,
                     cancelled = cancelled,
+                    progress = listener::onProgress,
                     currentStateFingerprint = { AgentStateFingerprint.of(state) },
                     onPreviewReady = listener::onLocalPreview
                 )
             else -> error("unsupported local preview actions: $actionIds")
         }
         val execution = AgentDagExecutionEngine.runToTerminal(ready.compilation, executor)
+        if (cancelled.get()) throw InterruptedException("local preview cancelled")
         require(execution.runState.status == AgentDagRunStatus.FINISHED) {
             "局部preview DAG执行失败：${execution.runState.status}: " +
                 execution.runState.lastError.orEmpty()
@@ -623,7 +630,12 @@ class MobileAgentLoop(
         val dynamicGenerated = generated && observation.generationTimelinePreviewRenderer != null
         val message = if (generated) {
             if (dynamicGenerated) {
-                "真实生成锚帧已传播为短动态私有预览；这不是视频扩散结果且不可发布。源媒体尚未写回。"
+                if (localGenerationBackend is
+                    AndroidStableDiffusionCppMaskedGenerationBackend) {
+                    "端侧Vulkan生成锚帧已传播为短动态私有预览；这不是视频扩散结果且不可发布。源媒体尚未写回。"
+                } else {
+                    "真实生成锚帧已传播为短动态私有预览；这不是视频扩散结果且不可发布。源媒体尚未写回。"
+                }
             } else if (localGenerationBackend is AndroidFixtureMaskedGenerationBackend) {
                 "局部生成fixture单帧预览已生成；这不是真实生成模型，也不是完整动态结果。源媒体尚未写回。"
             } else {

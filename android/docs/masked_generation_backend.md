@@ -2,9 +2,9 @@
 
 ## 边界
 
-- 只生成photo timestamp对应条件帧的私有单帧预览。
-- Android始终以本地source和认证mask重新合成，远端不能修改mask外像素。
-- 不生成或发布Live Photo；确认review也不授权写回。
+- Backend只生成photo timestamp对应的私有锚帧；受限传播器可生成短动态私有Live Photo。
+- Android始终以本地source和认证mask重新合成，任何Backend都不能修改mask外像素。
+- 动态生成artifact永久不可发布；确认review也不授权写回。
 - fixture与SD2均不是生产后端，模型许可、安全、质量与时序一致性需另行评审。
 
 ## Android开关
@@ -15,7 +15,8 @@
   -PlocalTrackedPreview=true \
   -PfullTimelineTrackedPreview=true \
   -PpersistentQnn=true \
-  -PlocalGeneratedPreview=true
+  -PlocalGeneratedPreview=true \
+  -PonDeviceGeneratedPreview=true
 ```
 
 无HTTP配置时使用`fixture_masked_generation_v1`。HTTP配置位于应用私有目录：
@@ -123,3 +124,12 @@ N=5手机闭环通过`http_masked_generation_v1/sd2_diffusers_inpaint`，生成�
 ```
 
 该路径只适合短时刚性目标；旋转、形变、遮挡/重入和光照变化必须返回不支持，不能降级成静止贴图。
+
+## 端侧Vulkan Backend
+
+`sdcpp_vulkan_masked_generation_v1`使用固定stable-diffusion.cpp、Q4_0 SD2 inpaint和Adreno
+Vulkan，完全不访问网络。模型不进入APK，必须从应用私有目录通过字节数与SHA-256 Gate。默认320×320、
+20步；256为快速档，512为高质量档。
+
+N=5最终闭环完成端侧锚帧生成、完整Mask Track、刚性传播、私有Live Photo打包与中途取消。详细构建、
+安全策略、性能和证据见`android/docs/on_device_livephoto_inpainting.md`。

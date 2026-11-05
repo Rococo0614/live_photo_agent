@@ -71,7 +71,8 @@ class AndroidMaskedVideoEncoder {
         output: File,
         generatedAnchor: Bitmap,
         anchorFrameIndex: Int,
-        cancelled: AtomicBoolean
+        cancelled: AtomicBoolean,
+        providedTransformBounds: List<AndroidMaskBounds>? = null
     ): AndroidMaskedVideoEncodeResult {
         val width = if (timeline.rotationDegrees in setOf(90, 270)) timeline.height else timeline.width
         val height = if (timeline.rotationDegrees in setOf(90, 270)) timeline.width else timeline.height
@@ -83,14 +84,35 @@ class AndroidMaskedVideoEncoder {
         }
         require(generationMaskFiles.size == timeline.frameCount)
         val masks = generationMaskFiles.map(File::readBytes)
-        val bounds = masks.mapIndexed { index, mask ->
+        val maskBounds = masks.mapIndexed { index, mask ->
             requireNotNull(AndroidGenerationRegionPolicy.bounds(mask, width, height)) {
                 "generation mask frame $index is empty"
             }
         }
-        AndroidGenerationRegionPolicy.requireRigidTrajectory(bounds, anchorFrameIndex)
+        val transformBounds = providedTransformBounds ?: masks.mapIndexed { index, mask ->
+                val dominant = AndroidGenerationRegionPolicy.retainLargestComponent(
+                    mask,
+                    width,
+                    height
+                )
+                requireNotNull(AndroidGenerationRegionPolicy.bounds(dominant, width, height)) {
+                    "generation mask frame $index has no dominant component"
+                }
+            }
+        require(transformBounds.size == timeline.frameCount)
+        AndroidGenerationRegionPolicy.requireRigidTrajectory(transformBounds, anchorFrameIndex)
         val anchorPixels = IntArray(width * height)
         generatedAnchor.getPixels(anchorPixels, 0, width, 0, 0, width, height)
+        val anchorSourcePixels = AndroidVideoFrameBatchReader(sourceVideo, timeline).use { reader ->
+            val bitmap = reader.read(anchorFrameIndex, 1).single().bitmap
+            try {
+                IntArray(width * height).also { pixels ->
+                    bitmap.getPixels(pixels, 0, width, 0, 0, width, height)
+                }
+            } finally {
+                bitmap.recycle()
+            }
+        }
         return encode(
             sourceVideo,
             timeline,
@@ -106,8 +128,10 @@ class AndroidMaskedVideoEncoder {
                     sourcePixels,
                     anchorPixels,
                     mask,
-                    bounds[anchorFrameIndex],
-                    bounds[frameIndex]
+                    transformBounds[anchorFrameIndex],
+                    transformBounds[frameIndex],
+                    maskBounds[frameIndex],
+                    anchorSourcePixels
                 )
                 Bitmap.createBitmap(outputPixels, width, height, Bitmap.Config.ARGB_8888)
             }

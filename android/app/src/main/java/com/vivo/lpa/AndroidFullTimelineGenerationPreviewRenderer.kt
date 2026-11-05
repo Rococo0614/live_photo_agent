@@ -28,10 +28,11 @@ class AndroidFullTimelineGenerationPreviewRenderer(
         ).apply { mkdirs() }
         try {
             val maskRoot = File(root, "generation-masks").apply { mkdirs() }
+            val trajectoryBounds = mutableListOf<AndroidMaskBounds>()
             val maskFiles = timeline.frames.map { frame ->
                 val sourceMask = requireNotNull(materialization.maskTrack.frame(frame.frameIndex))
                     .copyMaskValues()
-                val cleanedMask = AndroidGenerationRegionPolicy.retainLargestComponent(
+                val cleanedMask = AndroidGenerationRegionPolicy.retainSignificantComponents(
                     sourceMask,
                     generatedAnchor.width,
                     generatedAnchor.height
@@ -42,8 +43,35 @@ class AndroidFullTimelineGenerationPreviewRenderer(
                     generatedAnchor.height,
                     LocalMaskedGenerationShadowCompiler.GENERATION_MASK_PADDING_PX
                 )
+                val dominant = AndroidGenerationRegionPolicy.retainLargestComponent(
+                    cleanedMask,
+                    generatedAnchor.width,
+                    generatedAnchor.height
+                )
+                val dominantExpanded = AndroidGenerationRegionPolicy.dilateBinaryMask(
+                    dominant,
+                    generatedAnchor.width,
+                    generatedAnchor.height,
+                    LocalMaskedGenerationShadowCompiler.GENERATION_MASK_PADDING_PX
+                )
+                trajectoryBounds += requireNotNull(AndroidGenerationRegionPolicy.bounds(
+                    dominantExpanded,
+                    generatedAnchor.width,
+                    generatedAnchor.height
+                ))
+                val propagationEnvelope = AndroidGenerationRegionPolicy.rectangularEnvelope(
+                    expanded,
+                    generatedAnchor.width,
+                    generatedAnchor.height
+                )
+                val featheredEnvelope = AndroidGenerationRegionPolicy.featherInsideMask(
+                    propagationEnvelope,
+                    generatedAnchor.width,
+                    generatedAnchor.height,
+                    radius = 4
+                )
                 File(maskRoot, "mask-${frame.frameIndex.toString().padStart(6, '0')}.raw").apply {
-                    writeBytes(expanded)
+                    writeBytes(featheredEnvelope)
                 }
             }
             val anchorIndex = materialization.maskTrack.preferredPreviewFrameIndex
@@ -57,7 +85,8 @@ class AndroidFullTimelineGenerationPreviewRenderer(
                 encodedVideo,
                 generatedAnchor,
                 anchorIndex,
-                cancelled
+                cancelled,
+                trajectoryBounds
             )
             require(encoded.videoFrameCount == timeline.frameCount)
             val sourceAudio = AndroidMediaTrackInspector.fingerprint(video, "audio/")

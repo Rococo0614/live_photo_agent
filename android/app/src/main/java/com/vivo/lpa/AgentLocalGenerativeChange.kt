@@ -47,7 +47,7 @@ object LocalMaskedGenerationPreviewAction {
     val spec = MobileToolSpec(
         id = ACTION_ID,
         family = ToolFamily.REPLACE,
-        description = "Generate a fixture-backed replacement inside a certified mask",
+        description = "Generate a private replacement anchor inside a certified mask",
         contract = AgentActionContract(
             phase = AgentActionPhase.TRANSFORM,
             inputPorts = listOf(
@@ -144,7 +144,7 @@ object LocalMaskedGenerationShadowCompiler {
             graphVersion = graphVersion,
             goalId = goal.goalId,
             stateFingerprint = goal.stateFingerprint,
-            revisionReason = "masked generation fixture preview"
+            revisionReason = "masked generation private preview"
         ).addAction(
             nodeId,
             operationId,

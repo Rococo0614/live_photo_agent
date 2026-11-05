@@ -11,6 +11,7 @@ class AndroidLocalGenerationPreviewShadowExecutor(
     private val backend: AndroidMaskedGenerationBackend,
     private val timelinePreviewRenderer: AndroidGenerationTimelinePreviewRenderer? = null,
     private val cancelled: AtomicBoolean,
+    private val progress: (String) -> Unit = {},
     private val currentStateFingerprint: () -> String,
     private val onPreviewReady: (AndroidLocalPreviewInteraction) -> Unit = {}
 ) : AgentDagNodeExecutor {
@@ -77,7 +78,7 @@ class AndroidLocalGenerationPreviewShadowExecutor(
         } ?: error("mask track has no visible validated frame for generation")
         val maskFrame = requireNotNull(materialization.maskTrack.frame(observation.frameIndex))
         require(maskFrame.rawMaskPixels == observation.rawMaskPixels)
-        val cleanedMask = AndroidGenerationRegionPolicy.retainLargestComponent(
+        val cleanedMask = AndroidGenerationRegionPolicy.retainSignificantComponents(
             maskFrame.copyMaskValues(),
             maskFrame.width,
             maskFrame.height
@@ -112,7 +113,8 @@ class AndroidLocalGenerationPreviewShadowExecutor(
                 generationMask,
                 change,
                 certificate.evidenceFingerprint,
-                cancelled
+                cancelled,
+                progress
             )
         } catch (failure: Throwable) {
             if (sourceFrame.ownedByPreview && !sourceFrame.bitmap.isRecycled) {
@@ -170,7 +172,7 @@ class AndroidLocalGenerationPreviewShadowExecutor(
                     AgentDataKind.MEDIA_ARTIFACT
                 )
             )),
-            message = "single-frame fixture generation preview is ready"
+            message = "private generated anchor preview is ready"
         )
     }
 

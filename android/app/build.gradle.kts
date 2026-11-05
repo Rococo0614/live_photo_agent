@@ -57,6 +57,23 @@ require(localGeneratedPreview in setOf("true", "false")) {
 require(localGeneratedPreview == "false" || localTrackedPreview == "true") {
     "localGeneratedPreview requires -PlocalTrackedPreview=true"
 }
+val onDeviceGeneratedPreview = providers.gradleProperty("onDeviceGeneratedPreview")
+    .orElse("false")
+    .get()
+require(onDeviceGeneratedPreview in setOf("true", "false")) {
+    "onDeviceGeneratedPreview must be true or false"
+}
+require(onDeviceGeneratedPreview == "false" || localGeneratedPreview == "true") {
+    "onDeviceGeneratedPreview requires -PlocalGeneratedPreview=true"
+}
+require(onDeviceGeneratedPreview == "false" || fullTimelineTrackedPreview == "true") {
+    "onDeviceGeneratedPreview requires -PfullTimelineTrackedPreview=true"
+}
+if (onDeviceGeneratedPreview == "true") {
+    require(file("src/onDeviceGeneration/jniLibs/arm64-v8a/liblpa_sdcpp.so").isFile) {
+        "run android/tools/build_sdcpp_android.sh before enabling onDeviceGeneratedPreview"
+    }
+}
 val qwenModelPack = providers.gradleProperty("qwenModelPack")
     .orElse("instruct")
     .get()
@@ -116,6 +133,9 @@ android {
         // Separately gated masked-generation preview. Its first implementation is a deterministic
         // fixture backend; it cannot write or publish media.
         buildConfigField("boolean", "LOCAL_GENERATED_PREVIEW", localGeneratedPreview)
+        // Research-only stable-diffusion.cpp Vulkan backend. The model is never embedded in the
+        // APK and must pass a pinned SHA check from the app-private model directory.
+        buildConfigField("boolean", "ON_DEVICE_GENERATED_PREVIEW", onDeviceGeneratedPreview)
         // Native-thinking experiments use a separate model directory and never overwrite the
         // production Instruct-2507 pack. `route` keeps constrained bind classification direct.
         buildConfigField("String", "QWEN_MODEL_PACK", "\"$qwenModelPack\"")
@@ -167,6 +187,10 @@ android {
                 java.srcDir("src/localTrackedPreviewDebug/java")
                 manifest.srcFile("src/localTrackedPreviewDebug/AndroidManifest.xml")
             }
+            if (onDeviceGeneratedPreview == "true") {
+                jniLibs.srcDir("src/onDeviceGeneration/jniLibs")
+                assets.srcDir("src/onDeviceGeneration/assets")
+            }
         }
     }
 
@@ -204,6 +228,7 @@ tasks.configureEach {
         inputs.property("lpa.fullTimelineTrackedPreview", fullTimelineTrackedPreview)
         inputs.property("lpa.persistentQnn", persistentQnn)
         inputs.property("lpa.localGeneratedPreview", localGeneratedPreview)
+        inputs.property("lpa.onDeviceGeneratedPreview", onDeviceGeneratedPreview)
         inputs.property("lpa.qwenModelPack", qwenModelPack)
         inputs.property("lpa.qwenThinking", qwenThinking)
         inputs.property("lpa.qwenThinkingTokens", qwenThinkingTokens)

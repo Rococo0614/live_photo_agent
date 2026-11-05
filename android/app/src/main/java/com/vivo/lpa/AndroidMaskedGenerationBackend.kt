@@ -22,7 +22,8 @@ interface AndroidMaskedGenerationBackend {
         maskValues: ByteArray,
         change: LocalGenerativeChange,
         certificateFingerprint: String,
-        cancelled: AtomicBoolean
+        cancelled: AtomicBoolean,
+        progress: (String) -> Unit = {}
     ): AndroidMaskedGenerationResult
 }
 
@@ -35,7 +36,8 @@ object UnavailableAndroidMaskedGenerationBackend : AndroidMaskedGenerationBacken
         maskValues: ByteArray,
         change: LocalGenerativeChange,
         certificateFingerprint: String,
-        cancelled: AtomicBoolean
+        cancelled: AtomicBoolean,
+        progress: (String) -> Unit
     ): AndroidMaskedGenerationResult = error("masked generation backend is unavailable")
 }
 
@@ -49,12 +51,14 @@ class AndroidFixtureMaskedGenerationBackend : AndroidMaskedGenerationBackend {
         maskValues: ByteArray,
         change: LocalGenerativeChange,
         certificateFingerprint: String,
-        cancelled: AtomicBoolean
+        cancelled: AtomicBoolean,
+        progress: (String) -> Unit
     ): AndroidMaskedGenerationResult {
         require(BuildConfig.DEBUG && BuildConfig.LOCAL_GENERATED_PREVIEW)
         require(!source.isRecycled)
         require(maskValues.size == source.width * source.height)
         require(Regex("[0-9a-f]{64}").matches(certificateFingerprint))
+        progress("正在生成局部fixture预览…")
         val sourcePixels = IntArray(maskValues.size)
         source.getPixels(sourcePixels, 0, source.width, 0, 0, source.width, source.height)
         val outputPixels = renderArgb(

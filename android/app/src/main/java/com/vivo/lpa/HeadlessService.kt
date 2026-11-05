@@ -1456,6 +1456,19 @@ class HeadlessService : Service() {
                 stopSelf()
                 return
             }
+            if (operation == "agent_local_generation_cancel_probe") {
+                require(BuildConfig.DEBUG && BuildConfig.LOCAL_TRACKED_PREVIEW &&
+                    BuildConfig.LOCAL_GENERATED_PREVIEW &&
+                    BuildConfig.ON_DEVICE_GENERATED_PREVIEW
+                ) { "on-device generation cancel probe requires all explicit debug gates" }
+                require(inputs.size == 1 && !agentQuery.isNullOrBlank()) {
+                    "on-device generation cancel probe requires one Live Photo and agent_query"
+                }
+                runLocalGenerationCancelProbe(inputs.single(), agentQuery, outputDir)
+                log("=== NATIVE ADAPTER TEST END ===")
+                stopSelf()
+                return
+            }
             if (operation == "agent_real_full_timeline_preview_probe") {
                 require(BuildConfig.DEBUG && BuildConfig.LOCAL_TRACKED_PREVIEW) {
                     "full timeline preview probe requires the opt-in debug build"
@@ -2567,7 +2580,9 @@ class HeadlessService : Service() {
         val preview = previewInteraction.snapshot()
         require(preview.effectKind == LocalGenerativeChange.EFFECT_KIND)
         require(preview.rendererBackendId == AndroidFixtureMaskedGenerationBackend.BACKEND_ID ||
-            preview.rendererBackendId.startsWith(AndroidHttpMaskedGenerationBackend.BACKEND_ID + "/"))
+            preview.rendererBackendId.startsWith(AndroidHttpMaskedGenerationBackend.BACKEND_ID + "/") ||
+            preview.rendererBackendId.startsWith(
+                AndroidStableDiffusionCppMaskedGenerationBackend.BACKEND_ID + "/"))
         val packedPreview = requireNotNull(preview.packedLivePhotoFile) {
             "dynamic generation propagation did not produce a packed Live Photo"
         }
@@ -2610,6 +2625,8 @@ class HeadlessService : Service() {
         val sourceShaAfter = fileSha256(packed)
         val galleryRowsAfter = countAgentPublishedImages()
         val backendIsFixture = preview.rendererBackendId.contains("fixture")
+        val backendIsOnDevice = preview.rendererBackendId.startsWith(
+            AndroidStableDiffusionCppMaskedGenerationBackend.BACKEND_ID + "/")
         val passed = terminalState?.status == AgentRunStatus.WAITING_USER &&
             finalPlan?.intent in setOf(
                 "local_generation_fixture_preview_review",
@@ -2630,6 +2647,9 @@ class HeadlessService : Service() {
             .put(
                 "status",
                 if (passed && backendIsFixture) "PASS_LOCAL_GENERATION_DYNAMIC_FIXTURE_PREVIEW"
+                else if (passed && backendIsOnDevice) {
+                    "PASS_LOCAL_GENERATION_DYNAMIC_ON_DEVICE_PREVIEW"
+                }
                 else if (passed) "PASS_LOCAL_GENERATION_DYNAMIC_HTTP_PREVIEW"
                 else "FAIL_LOCAL_GENERATION_FIXTURE_PREVIEW"
             )
@@ -2645,6 +2665,7 @@ class HeadlessService : Service() {
                 "backend_is_fixture_not_model",
                 backendIsFixture
             )
+            .put("backend_is_on_device", backendIsOnDevice)
             .put("anchor_generation_single_frame", true)
             .put("dynamic_propagation", true)
             .put(
@@ -2675,6 +2696,115 @@ class HeadlessService : Service() {
             "PASS local generation dynamic preview: changed=$changedPixels " +
                 "frames=$observedFrames/$expectedFrames backend=${preview.rendererBackendId}"
         )
+    }
+
+    private fun runLocalGenerationCancelProbe(
+        packed: File,
+        query: String,
+        outputDir: File
+    ) {
+        val sourceShaBefore = fileSha256(packed)
+        val galleryRowsBefore = countAgentPublishedImages()
+        val asset = prepareGoalProbeAsset(
+            packed,
+            outputDir,
+            "generation-cancel-decoded"
+        )
+        val rootsBefore = File(cacheDir, "full-generation-previews")
+            .listFiles().orEmpty().map { it.canonicalPath }.toSet()
+        val cancelled = AtomicBoolean(false)
+        val cancellationArmed = AtomicBoolean(false)
+        var armedAtMs = 0L
+        var terminalStatus: AgentRunStatus? = null
+        var terminalMessage = ""
+        var finishedMessage = ""
+        var interactionProduced = false
+        var errorMessage: String? = null
+        MobileAgentLoop(
+            this,
+            AndroidQnnLocalObservationBackend(
+                this,
+                AndroidFullTimelineMaskTracker(this)
+            )
+        ).run(
+            query = query,
+            uris = emptyList(),
+            layoutContext = null,
+            cancelled = cancelled,
+            listener = object : MobileAgentRunner.Listener {
+                override fun onProgress(message: String) {
+                    log(message)
+                    val match = Regex("端侧SD2生成 (\\d+)/(\\d+)").find(message)
+                    val step = match?.groupValues?.getOrNull(1)?.toIntOrNull() ?: -1
+                    val total = match?.groupValues?.getOrNull(2)?.toIntOrNull() ?: -1
+                    if (step >= 1 && total >= 2 &&
+                        cancellationArmed.compareAndSet(false, true)) {
+                        armedAtMs = android.os.SystemClock.elapsedRealtime()
+                        cancelled.set(true)
+                    }
+                }
+
+                override fun onLocalPreview(value: AndroidLocalPreviewInteraction) {
+                    interactionProduced = true
+                    releaseLocalPreviewForProbe(value)
+                }
+
+                override fun onRuntimeTerminal(state: AgentRuntimeState, message: String) {
+                    terminalStatus = state.status
+                    terminalMessage = message
+                }
+
+                override fun onPlan(plan: MobilePlan) = Unit
+                override fun onResult(result: MobileToolResult) = Unit
+                override fun onFinished(uri: Uri?, message: String) {
+                    require(uri == null)
+                    finishedMessage = message
+                }
+                override fun onError(message: String) {
+                    errorMessage = message
+                }
+            },
+            preparedAssets = listOf(asset),
+            dagShadow = true
+        )
+        val completedAtMs = android.os.SystemClock.elapsedRealtime()
+        val cancellationLatencyMs = if (armedAtMs == 0L) -1L else completedAtMs - armedAtMs
+        val newPreviewRoots = File(cacheDir, "full-generation-previews")
+            .listFiles().orEmpty().map { it.canonicalPath }.filterNot { it in rootsBefore }
+        val sourceShaAfter = fileSha256(packed)
+        val galleryRowsAfter = countAgentPublishedImages()
+        val passed = cancellationArmed.get() && cancelled.get() &&
+            terminalStatus == AgentRunStatus.CANCELLED &&
+            terminalMessage == "用户已取消" && finishedMessage == "用户已取消" &&
+            !interactionProduced && errorMessage == null &&
+            cancellationLatencyMs in 0..60_000 && newPreviewRoots.isEmpty() &&
+            sourceShaBefore == sourceShaAfter && galleryRowsBefore == galleryRowsAfter
+        val evidence = JSONObject()
+            .put("schema_version", 1)
+            .put(
+                "status",
+                if (passed) "PASS_ON_DEVICE_GENERATION_INFLIGHT_CANCEL"
+                else "FAIL_ON_DEVICE_GENERATION_INFLIGHT_CANCEL"
+            )
+            .put("cancellation_armed", cancellationArmed.get())
+            .put("cancelled_signal", cancelled.get())
+            .put("cancellation_latency_ms", cancellationLatencyMs)
+            .put("terminal_status", terminalStatus?.name ?: JSONObject.NULL)
+            .put("terminal_message", terminalMessage)
+            .put("finished_message", finishedMessage)
+            .put("interaction_produced", interactionProduced)
+            .put("new_preview_root_count", newPreviewRoots.size)
+            .put("error_message", errorMessage ?: JSONObject.NULL)
+            .put("source_sha256_before", sourceShaBefore)
+            .put("source_sha256_after", sourceShaAfter)
+            .put("gallery_rows_before", galleryRowsBefore)
+            .put("gallery_rows_after", galleryRowsAfter)
+            .put("source_media_modified", false)
+            .put("published", false)
+        File(outputDir, "agent-local-generation-cancel-evidence.json")
+            .writeText(evidence.toString(2) + "\n")
+        require(passed) { "on-device generation cancellation contract failed" }
+        log("PASS on-device generation cancellation: latency=${cancellationLatencyMs}ms")
     }
 
     private fun releaseLocalPreviewForProbe(interaction: AndroidLocalPreviewInteraction) {

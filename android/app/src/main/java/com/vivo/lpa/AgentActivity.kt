@@ -1082,7 +1082,13 @@ preparedAssets = prepared
                 LocalGenerativeChange.EFFECT_KIND -> if (
                     artifact.packedLivePhotoFile != null
                 ) {
-                    "短动态生成传播预览 · 锚帧真实生成，非视频扩散且不可发布"
+                    if (artifact.rendererBackendId.startsWith(
+                            AndroidStableDiffusionCppMaskedGenerationBackend.BACKEND_ID
+                        )) {
+                        "端侧短动态inpainting预览 · Vulkan锚帧生成，非视频扩散且不可发布"
+                    } else {
+                        "短动态生成传播预览 · 锚帧真实生成，非视频扩散且不可发布"
+                    }
                 } else if (artifact.rendererBackendId == AndroidFixtureMaskedGenerationBackend.BACKEND_ID
                 ) {
                     "局部生成fixture · 仅单帧私有预览，不是真实生成模型，尚未写回"

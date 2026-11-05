@@ -73,7 +73,8 @@ class AndroidHttpMaskedGenerationBackend private constructor(
         maskValues: ByteArray,
         change: LocalGenerativeChange,
         certificateFingerprint: String,
-        cancelled: AtomicBoolean
+        cancelled: AtomicBoolean,
+        progress: (String) -> Unit
     ): AndroidMaskedGenerationResult {
         require(BuildConfig.DEBUG && BuildConfig.LOCAL_GENERATED_PREVIEW)
         require(!source.isRecycled)
@@ -81,6 +82,7 @@ class AndroidHttpMaskedGenerationBackend private constructor(
         require(Regex("[0-9a-f]{64}").matches(certificateFingerprint))
         check(!cancelled.get()) { "HTTP generation cancelled before request" }
 
+        progress("正在请求受控的远程局部生成后端…")
         val sourceBytes = encodePng(source)
         val maskBytes = encodeMaskPng(source.width, source.height, maskValues)
         val requestSha = requestSha256(

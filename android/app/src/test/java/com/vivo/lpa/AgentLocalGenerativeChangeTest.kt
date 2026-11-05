@@ -48,6 +48,69 @@ class AgentLocalGenerativeChangeTest {
         assertEquals(0, cleaned[4 * 5 + 4].toInt() and 0xff)
     }
 
+    @Test
+    fun significantDisconnectedObjectPartsAreRetained() {
+        val width = 20
+        val height = 10
+        val mask = ByteArray(width * height)
+        for (y in 1..5) for (x in 1..10) mask[y * width + x] = 0xff.toByte()
+        for (y in 7..8) for (x in 15..17) mask[y * width + x] = 0xff.toByte()
+        mask[9 * width + 19] = 0xff.toByte()
+
+        val cleaned = AndroidGenerationRegionPolicy.retainSignificantComponents(
+            mask,
+            width,
+            height
+        )
+
+        assertEquals(56, cleaned.count { (it.toInt() and 0xff) > 0 })
+        assertEquals(255, cleaned[7 * width + 15].toInt() and 0xff)
+        assertEquals(0, cleaned[9 * width + 19].toInt() and 0xff)
+    }
+
+    @Test
+    fun boundedPropagationEnvelopeConnectsCertifiedObjectParts() {
+        val width = 20
+        val height = 10
+        val mask = ByteArray(width * height)
+        for (y in 3..5) for (x in 3..6) mask[y * width + x] = 0xff.toByte()
+        for (y in 3..5) for (x in 10..13) mask[y * width + x] = 0xff.toByte()
+
+        val envelope = AndroidGenerationRegionPolicy.rectangularEnvelope(
+            mask,
+            width,
+            height,
+            maximumFrameAreaRatio = 0.2,
+            maximumMaskAreaMultiple = 2.0
+        )
+
+        assertEquals(33, envelope.count { (it.toInt() and 0xff) > 0 })
+        assertEquals(255, envelope[4 * width + 8].toInt() and 0xff)
+    }
+
+    @Test
+    fun generationFeatheringNeverExpandsOutsideCertifiedMask() {
+        val width = 9
+        val height = 9
+        val mask = ByteArray(width * height)
+        for (y in 1..7) for (x in 1..7) mask[y * width + x] = 0xff.toByte()
+
+        val feathered = AndroidGenerationRegionPolicy.featherInsideMask(
+            mask,
+            width,
+            height,
+            radius = 2
+        )
+
+        assertEquals(0, feathered[0].toInt() and 0xff)
+        assertEquals(85, feathered[1 * width + 1].toInt() and 0xff)
+        assertEquals(170, feathered[2 * width + 2].toInt() and 0xff)
+        assertEquals(255, feathered[4 * width + 4].toInt() and 0xff)
+        assertEquals(0, feathered.indices.count {
+            (mask[it].toInt() and 0xff) == 0 && (feathered[it].toInt() and 0xff) != 0
+        })
+    }
+
     private fun operation(
         promptSourceText: String? = "蓝色机械猫",
         extraParameter: Boolean = false

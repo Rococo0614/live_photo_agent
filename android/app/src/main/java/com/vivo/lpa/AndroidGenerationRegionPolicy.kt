@@ -1,6 +1,8 @@
 package com.vivo.lpa
 
 import kotlin.math.abs
+import kotlin.math.ceil
+import kotlin.math.roundToInt
 
 data class AndroidMaskBounds(
     val left: Int,
@@ -44,11 +46,43 @@ object AndroidGenerationRegionPolicy {
     }
 
     fun retainLargestComponent(mask: ByteArray, width: Int, height: Int): ByteArray {
+        return retainComponents(
+            mask,
+            width,
+            height,
+            minimumRelativeArea = 1.0,
+            minimumAbsoluteArea = 1
+        )
+    }
+
+    /** Keeps real disconnected object parts while rejecting tiny segmentation speckles. */
+    fun retainSignificantComponents(
+        mask: ByteArray,
+        width: Int,
+        height: Int,
+        minimumRelativeArea: Double = 0.01
+    ): ByteArray = retainComponents(
+        mask,
+        width,
+        height,
+        minimumRelativeArea,
+        minimumAbsoluteArea = 4
+    )
+
+    private fun retainComponents(
+        mask: ByteArray,
+        width: Int,
+        height: Int,
+        minimumRelativeArea: Double,
+        minimumAbsoluteArea: Int
+    ): ByteArray {
         require(width > 0 && height > 0 && mask.size == width * height)
+        require(minimumRelativeArea in 0.0..1.0)
+        require(minimumAbsoluteArea > 0)
         val labels = IntArray(mask.size)
         val queue = IntArray(mask.size)
+        val counts = IntArray(mask.size + 1)
         var label = 0
-        var bestLabel = 0
         var bestCount = 0
         for (start in mask.indices) {
             if ((mask[start].toInt() and 0xff) == 0 || labels[start] != 0) continue
@@ -74,14 +108,18 @@ object AndroidGenerationRegionPolicy {
                 if (y > 0) add(index - width)
                 if (y + 1 < height) add(index + width)
             }
+            counts[label] = count
             if (count > bestCount) {
                 bestCount = count
-                bestLabel = label
             }
         }
-        require(bestLabel != 0) { "generation mask has no connected component" }
+        require(bestCount > 0) { "generation mask has no connected component" }
+        val minimumCount = maxOf(
+            minimumAbsoluteArea,
+            ceil(bestCount * minimumRelativeArea).toInt()
+        )
         return ByteArray(mask.size) { index ->
-            if (labels[index] == bestLabel) 0xff.toByte() else 0
+            if (counts[labels[index]] >= minimumCount) 0xff.toByte() else 0
         }
     }
 
@@ -120,6 +158,84 @@ object AndroidGenerationRegionPolicy {
         return output
     }
 
+    fun rectangularEnvelope(
+        mask: ByteArray,
+        width: Int,
+        height: Int,
+        maximumFrameAreaRatio: Double = 0.08,
+        maximumMaskAreaMultiple: Double = 3.0
+    ): ByteArray {
+        require(width > 0 && height > 0 && mask.size == width * height)
+        require(maximumFrameAreaRatio in 0.0..1.0)
+        require(maximumMaskAreaMultiple >= 1.0)
+        val bounds = requireNotNull(bounds(mask, width, height)) {
+            "generation mask is empty"
+        }
+        val selected = mask.count { (it.toInt() and 0xff) > 0 }
+        val frameArea = width.toLong() * height
+        require(bounds.area.toDouble() / frameArea <= maximumFrameAreaRatio) {
+            "generation propagation envelope is too large for the frame"
+        }
+        require(bounds.area.toDouble() / selected <= maximumMaskAreaMultiple) {
+            "generation propagation envelope expands the certified mask too far"
+        }
+        return ByteArray(mask.size).also { output ->
+            for (y in bounds.top until bounds.bottomExclusive) {
+                output.fill(
+                    0xff.toByte(),
+                    y * width + bounds.left,
+                    y * width + bounds.rightExclusive
+                )
+            }
+        }
+    }
+
+    fun featherInsideMask(
+        mask: ByteArray,
+        width: Int,
+        height: Int,
+        radius: Int
+    ): ByteArray {
+        require(width > 0 && height > 0 && mask.size == width * height)
+        require(radius in 0..16)
+        if (radius == 0) return mask.copyOf()
+        val active = ByteArray(mask.size) { index ->
+            if ((mask[index].toInt() and 0xff) > 0) 1 else 0
+        }
+        val output = ByteArray(mask.size) { index ->
+            if (active[index].toInt() != 0) 0xff.toByte() else 0
+        }
+        val remove = IntArray(mask.size)
+        for (layer in 1..radius) {
+            var removeCount = 0
+            for (index in active.indices) {
+                if (active[index].toInt() == 0) continue
+                val x = index % width
+                val y = index / width
+                var boundary = x == 0 || y == 0 || x + 1 == width || y + 1 == height
+                if (!boundary) {
+                    for (dy in -1..1) {
+                        for (dx in -1..1) {
+                            if ((dx != 0 || dy != 0) &&
+                                active[(y + dy) * width + x + dx].toInt() == 0) {
+                                boundary = true
+                            }
+                        }
+                    }
+                }
+                if (boundary) remove[removeCount++] = index
+            }
+            val alpha = (255 * layer / (radius + 1)).toByte()
+            for (removeIndex in 0 until removeCount) {
+                val index = remove[removeIndex]
+                active[index] = 0
+                output[index] = alpha
+            }
+            if (removeCount == 0) break
+        }
+        return output
+    }
+
     fun requireRigidTrajectory(bounds: List<AndroidMaskBounds>, anchorIndex: Int) {
         require(anchorIndex in bounds.indices && bounds.isNotEmpty())
         val anchor = bounds[anchorIndex]
@@ -145,27 +261,45 @@ object AndroidGeneratedPatchPropagator {
         source: IntArray,
         generatedAnchor: IntArray,
         currentMask: ByteArray,
-        anchorBounds: AndroidMaskBounds,
-        currentBounds: AndroidMaskBounds
+        anchorTransformBounds: AndroidMaskBounds,
+        currentTransformBounds: AndroidMaskBounds,
+        currentMaskBounds: AndroidMaskBounds? = null,
+        anchorSource: IntArray? = null
     ): IntArray {
         require(width > 0 && height > 0)
         require(source.size == width * height && generatedAnchor.size == source.size)
         require(currentMask.size == source.size)
+        require(anchorSource == null || anchorSource.size == source.size)
+        val loopBounds = currentMaskBounds ?: requireNotNull(
+            AndroidGenerationRegionPolicy.bounds(currentMask, width, height)
+        )
         val output = source.copyOf()
-        for (y in currentBounds.top until currentBounds.bottomExclusive) {
-            val v = if (currentBounds.height == 1) 0.5 else
-                (y - currentBounds.top).toDouble() / (currentBounds.height - 1)
-            val anchorY = (anchorBounds.top + v * (anchorBounds.height - 1)).toInt()
-                .coerceIn(anchorBounds.top, anchorBounds.bottomExclusive - 1)
-            for (x in currentBounds.left until currentBounds.rightExclusive) {
+        for (y in loopBounds.top until loopBounds.bottomExclusive) {
+            val anchorY = if (currentTransformBounds.height == 1) {
+                anchorTransformBounds.top + anchorTransformBounds.height / 2
+            } else {
+                (anchorTransformBounds.top +
+                    (y - currentTransformBounds.top).toDouble() *
+                    (anchorTransformBounds.height - 1) /
+                    (currentTransformBounds.height - 1)).roundToInt()
+            }.coerceIn(0, height - 1)
+            for (x in loopBounds.left until loopBounds.rightExclusive) {
                 val index = y * width + x
                 val alpha = currentMask[index].toInt() and 0xff
                 if (alpha == 0) continue
-                val u = if (currentBounds.width == 1) 0.5 else
-                    (x - currentBounds.left).toDouble() / (currentBounds.width - 1)
-                val anchorX = (anchorBounds.left + u * (anchorBounds.width - 1)).toInt()
-                    .coerceIn(anchorBounds.left, anchorBounds.rightExclusive - 1)
-                val replacement = generatedAnchor[anchorY * width + anchorX]
+                val anchorX = if (currentTransformBounds.width == 1) {
+                    anchorTransformBounds.left + anchorTransformBounds.width / 2
+                } else {
+                    (anchorTransformBounds.left +
+                        (x - currentTransformBounds.left).toDouble() *
+                        (anchorTransformBounds.width - 1) /
+                        (currentTransformBounds.width - 1)).roundToInt()
+                }.coerceIn(0, width - 1)
+                val anchorIndex = anchorY * width + anchorX
+                val replacement = generatedAnchor[anchorIndex]
+                if (anchorSource != null && !visiblyChanged(anchorSource[anchorIndex], replacement)) {
+                    continue
+                }
                 val original = source[index]
                 fun blend(shift: Int): Int {
                     val left = original ushr shift and 0xff
@@ -178,4 +312,11 @@ object AndroidGeneratedPatchPropagator {
         }
         return output
     }
+
+    private fun visiblyChanged(source: Int, generated: Int): Boolean =
+        maxOf(
+            kotlin.math.abs((source ushr 16 and 0xff) - (generated ushr 16 and 0xff)),
+            kotlin.math.abs((source ushr 8 and 0xff) - (generated ushr 8 and 0xff)),
+            kotlin.math.abs((source and 0xff) - (generated and 0xff))
+        ) > 4
 }

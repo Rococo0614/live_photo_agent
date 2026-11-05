@@ -181,16 +181,17 @@ SHA-256 438a3d13bf0de46c9730fee89199ac0a104eefdd1cdade9fcbbd917120fc3dd4
                       SHA-256 4691654241a483d9c249f5300870daa124a96effd4cd0d0d0079147f9be6cec0
 ```
 
-当前debug/release单测均为164/164，`lintDebug`、`lintRelease`及debug/release assemble通过。默认
-debug/release APK都不包含`libqnn_net_run.so`；默认debug也不含演示Provider。只有显式实验Debug
-构建加入只读Provider与实验native：
+当前debug/release单测均为172/172，`lintDebug`、`lintRelease`及debug/release assemble通过。默认
+debug/release APK都不包含`libqnn_net_run.so`或`liblpa_sdcpp.so`；默认debug也不含演示Provider。
+只有显式实验Debug构建加入只读Provider与实验native：
 
 ```text
-default debug APK          738b591adbccaa3935c2c26da9093363a92431ca46eb8fc141e7b416c9229331
-default release APK        e744e584c737d914cfd8061df3a2a8b4a178690e440cce31e1ad38e6b5e5cb02
-full-timeline fallback     633f2ac04d5e679fdca21bd80d3bcfaf0e66b7d1f68a1873fdc45093f541db30
-persistent-QNN debug APK   b92731875b312c0fac03d0dfba3a8e515b46629a3aff8829e8cfc49506366e93
-generation-fixture APK     0078fc78e259daf6959990f79530dcba473ebedcccd1263e9fd60831bed0c3ee
+default debug APK          af617f05f78eda2a5cfbfbd774967c2454fe7f8e0b7e41ee30043ab362f49db2
+default release APK        dd218ca61fed9f1c5c38f0ec9c0f4f124b009d420a45477117cab54f5f323c6d
+full-timeline fallback     fcee87015a6b05dec0995484a500b633fe8e2c73f611ff9f5b85dfc0a8732ef6
+persistent-QNN debug APK   717e707a250ed61808bf94e8686d44b6f8f08b803f4d299a55f1c7ca4aa0cf86
+generation-fixture APK     ba8fb98abaeb5bd0cdbfcc5ef1fae2f33889218e6d9d67d09f1f41f12043ba26
+on-device generation APK   eab018b9e58dcf6c978e94f531b9d8a6521df3f13c546513c1a8364c642d2798
 ```
 
 所有自定义Gradle属性已注册为task inputs；同一worktree按“clean默认→实验→默认”构建，前后两个默认
@@ -694,6 +695,14 @@ N=5滑板素材完成锚帧生成→5/5传播→AVC编码→私有Live Photo rep
 该结果只关闭短时刚性目标的锚纹理传播Gate；它不声称解决旋转、形变、遮挡重入、光照变化或真正的
 时序生成。
 
+随后关闭首个端侧交互inpainting闭环。固定stable-diffusion.cpp commit
+`58bb3c1b1cd4749e94e39f537e9adfce295dcaee`与Q4_0 SD2模型
+`7d154a1f52167da45bb86f34ded41feb3b3f4f2f0f3e729a7997c8bb394bf44b`在SM8850 Adreno 840
+Vulkan执行；默认320×320/20步生成耗时113.22秒。组件包络、锚变化支持集和4px向内羽化消除了
+断开轮子误删、传播灰块和硬边。最终5/5帧保持完整悬浮板，PTS逐项一致，源和相册不变，发布仍硬拒绝。
+最终证据目录为`generation-sd2-ondevice-vulkan-interactive-final-5/`；完整说明见
+`android/docs/on_device_livephoto_inpainting.md`。
+
 ## 5. 逐帧跟踪调色显色证据
 
 在已经通过vivo QAIRT 2.45 Gate的17帧固定图跟踪链上，使用每帧`device-mask.png`对中间面板目标猫
@@ -805,17 +814,17 @@ certificate到临时区域工具”Gate；以下仍阻止mutation：
    通过。实际新副本发布/删除仍必须等待用户第二次明确授权，本轮未代替用户执行；
 4. 持久QNN tracking五轮soak与释放已通过；完整pipeline的Qwen FastRPC/ION峰值及6次后台LMK证据
    保留，但产品决策接受16GB目标机上的该资源代价，不再把它列为当前功能闭环阻塞项；
-5. 局部生成已完成fixture、HTTP合同、主机SD2真实单帧inpaint及N=5刚性目标短动态传播；该
-   OpenRAIL++研究后端尚未完成生产许可/安全评审，视频扩散、遮挡重入、非刚性形变和一般时序一致性
-   仍未通过，生成预览不能发布；
+5. 局部生成已完成fixture、HTTP合同、主机SD2、端侧Vulkan SD2锚帧inpaint及N=5刚性目标短动态
+   Live Photo；该OpenRAIL++研究后端尚未完成生产许可/安全评审，视频扩散、遮挡重入、非刚性形变和
+   一般时序一致性仍未通过，生成预览不能发布；
 6. 固定context银行包体仍未解决；任何确认仍只接受临时预览，不能写回。
 
-常规验收结束时仍应恢复默认APK；本轮为继续验证可插拔生成backend，设备暂时保留显式实验
-`dag/localTrackedPreview/fullTimeline/persistentQnn/localGeneratedPreview` Debug APK。该包不是生产构建，
-其中生成结果只来自不可发布fixture；设备base.apk与host逐字节一致：
+常规验收结束时仍应恢复默认APK；端侧生成仅存在于显式
+`dag/localTrackedPreview/fullTimeline/persistentQnn/localGeneratedPreview/onDeviceGeneratedPreview` Debug包，
+模型位于应用私有目录，所有结果不可发布。默认构建不含`liblpa_sdcpp.so`。
 
 ```text
-SHA-256 0078fc78e259daf6959990f79530dcba473ebedcccd1263e9fd60831bed0c3ee
+SHA-256 eab018b9e58dcf6c978e94f531b9d8a6521df3f13c546513c1a8364c642d2798
 ```
 
 vivo百度输入法保持启用，ADBKeyboard为disabled-user，stay-awake为0，LPA进程已停止。
